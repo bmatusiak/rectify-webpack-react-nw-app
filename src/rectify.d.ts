@@ -15,6 +15,10 @@ export interface App {
     io?: any;
     appPackage?: AppPackage;
 
+    //the window and tray controller, present only under nw.js. src/core/nw
+    //wraps it as the `nw` service
+    nw?: any;
+
     //rectify's own event bus. server halves clean up on 'destroy'
     on(name: string, cb: (...args: any[]) => void): void;
     once(name: string, cb: (...args: any[]) => void): void;
@@ -42,6 +46,22 @@ export type TypeStoreFactory = <T extends object>(name: string, defaults: T) => 
 
 //---- theme --------------------------------------------------------------
 
+export interface TrayItem { remove(): void }
+
+export interface Nw {
+    readonly url: string;
+    readonly hasWindow: boolean;
+    open(): void;
+    hide(): void;
+    openInBrowser(): void;
+    quit(reason?: string): void;
+    tray: {
+        //options are nw.MenuItem's: label, click, type, checked, enabled, ...
+        add(options: Record<string, any>): TrayItem;
+        labels(): string[];
+    };
+}
+
 export interface Theme {
     bs: any;//the kit itself
     $: any;//the kit's dom helper, jquery here
@@ -62,6 +82,7 @@ export interface Services {
     io: any;
     appPackage: AppPackage;
     theme: Theme | undefined;
+    nw: Nw | undefined;
 }
 
 //what a plugin's setup receives, given what it consumes:

@@ -46,6 +46,40 @@ const host = {
     }
 };
 
+//the window and the tray outlive the server bundle, so they are owned here and
+//handed over as a controller. src/core/nw wraps this as a service and takes
+//back whatever it added when a reload tears it down.
+//
+//only under nw.js: `npm run dev` runs the same bundle under plain node, where
+//there is no window and no tray, and a plugin should see the service missing
+//rather than one that silently swallows what it is given.
+if (typeof nw != 'undefined') {
+    host.nw = {
+        get url() { return appUrl; },
+        get hasWindow() { return !!win; },
+        open: function () { showWindow(); },
+        show: function () { showWindow(); },
+        hide: function () { if (win) win.hide(); },
+        openInBrowser: function () { if (appUrl) nw.Shell.openExternal(appUrl); },
+        quit: function (reason) { shutdown(reason || 'asked to quit'); },
+        tray: {
+            //returns a handle so a plugin can take its own item back
+            add: function (options) {
+                var entry = { options: options };
+                trayItems.push(entry);
+                rebuildTrayMenu();
+                return {
+                    remove: function () {
+                        var i = trayItems.indexOf(entry);
+                        if (i >= 0) { trayItems.splice(i, 1); rebuildTrayMenu(); }
+                    }
+                };
+            },
+            labels: function () { return trayItems.map(function (e) { return e.options.label; }); }
+        }
+    };
+}
+
 const clientCompiler = webpack(clientConfig);
 app.use(devMiddleware(clientCompiler, { publicPath: clientConfig.output.publicPath }));
 app.use(hotMiddleware(clientCompiler));
@@ -108,9 +142,15 @@ function watchServerBundle(onBuild) {
 //---- lifecycle -------------------------------------------------------------
 
 let win = null;
+let tray = null;//module scope on purpose: a collected Tray takes its icon with it
+let trayItems = [];//what the plugins added, replayed into the menu on every rebuild
+let appUrl = null;
 let shuttingDown = false;
 
-//strict: the view is the app. when it goes, this process goes with it.
+//the window is a view onto a server that outlives it. closing it leaves the
+//node half running behind the tray icon, so the state, the sockets and the
+//watchers survive; quitting is a deliberate act from the tray.
+//
 //nw.App.quit() on its own can leave the node context alive, because the
 //server, socket.io and webpack's watchers are all still open handles.
 function shutdown(reason) {
@@ -119,6 +159,7 @@ function shutdown(reason) {
     shuttingDown = true;
 
     console.log('shutting down: ' + reason);
+    try { if (tray) tray.remove(); tray = null; } catch (e) { /* already gone */ }
     try { io.close(); } catch (e) { /* already gone */ }
     try { server.close(); } catch (e) { /* already gone */ }
     if (typeof nw != 'undefined') {
@@ -129,8 +170,8 @@ function shutdown(reason) {
     if (t && t.unref) t.unref();//a browser timer id has no unref, see the readme
 }
 
-function openWindow(url) {
-    nw.Window.open(url, {
+function openWindow() {
+    nw.Window.open(appUrl, {
         id: 'main',
         width: 1024,
         height: 768
@@ -141,11 +182,67 @@ function openWindow(url) {
         if (process.versions['nw-flavor'].indexOf('sdk') >= 0)
             win.showDevTools();//the normal flavor opens an empty devtools window
 
+        //nw quits when the last window closes, tray or not. so with a tray the
+        //close is intercepted and the window is only hidden: the node half
+        //keeps running, and reopening is instant with the page state intact.
+        //listening to `close` at all suppresses nw's default close, which is
+        //why the other two paths have to close(true) by hand.
+        win.on('close', function () {
+            if (shuttingDown || !tray) return this.close(true);
+            this.hide();
+            console.log('window hidden, still running. reopen it from the tray.');
+        });
+
+        //only reached when there is no tray to reopen from, so the old rule
+        //stands: no view, no app
         win.on('closed', function () {
             win = null;
             shutdown('the window was closed');
         });
     });
+}
+
+function showWindow() {
+    if (win) {
+        try { return win.show(), win.focus(); } catch (e) { win = null; }
+    }
+    openWindow();
+}
+
+//rebuilt whole rather than patched: plugins come and go on every reload, and
+//removing by index is how menus end up with the wrong item on them
+function rebuildTrayMenu() {
+    if (!tray) return;//items added before the tray exists are applied when it does
+
+    var menu = new nw.Menu();
+
+    trayItems.forEach(function (entry) {
+        menu.append(new nw.MenuItem(entry.options));
+    });
+    if (trayItems.length) menu.append(new nw.MenuItem({ type: 'separator' }));
+
+    menu.append(new nw.MenuItem({ label: 'Open window', click: function () { showWindow(); } }));
+    menu.append(new nw.MenuItem({
+        label: 'Open in browser',
+        click: function () { nw.Shell.openExternal(appUrl); }
+    }));
+    menu.append(new nw.MenuItem({ type: 'separator' }));
+    menu.append(new nw.MenuItem({ label: 'Quit', click: function () { shutdown('quit from the tray'); } }));
+
+    tray.menu = menu;
+    console.log('tray menu: ' + menu.items.map(function (i) { return i.label || '--'; }).join(' | '));
+}
+
+//left click opens the window on windows and linux; on mac the menu is the
+//only interaction, so the same actions live in it
+function createTray() {
+    tray = new nw.Tray({
+        title: host.appPackage.title,
+        icon: path.join(__dirname, 'icon.png')
+    });
+    tray.tooltip = host.appPackage.title + ' — ' + appUrl;//see nw.js issue 1903
+    tray.on('click', function () { showWindow(); });
+    rebuildTrayMenu();
 }
 
 //in nw's node context an uncaught throw takes the app down with no window and
@@ -174,19 +271,23 @@ watchServerBundle(function (err) {
     }
 
     server.listen(PORT, HOST, function () {
-        const url = 'http://' + HOST + ':' + server.address().port + '/';
-        console.log('listening on ' + url);
+        appUrl = 'http://' + HOST + ':' + server.address().port + '/';
+        console.log('listening on ' + appUrl);
 
         //plain node, ie `npm run dev`, there is no window to open
         if (typeof nw == 'undefined') return;
 
-        openWindow(url);
+        //if there is no status area to put it in, the window stays the app
+        try {
+            createTray();
+        } catch (e) {
+            console.error('no tray available, the window closing will quit: ' + (e && e.message || e));
+        }
+
+        openWindow();
 
         //nw.js is single instance: a second `npm start` wakes this one instead
         //of starting its own. bring the window back rather than doing nothing.
-        nw.App.on('open', function () {
-            if (win) { try { return win.show(), win.focus(); } catch (e) { win = null; } }
-            openWindow(url);
-        });
+        nw.App.on('open', function () { showWindow(); });
     });
 });

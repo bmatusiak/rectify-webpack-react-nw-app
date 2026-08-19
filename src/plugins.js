@@ -8,6 +8,7 @@ module.exports = [
     require('./core/react'),
     require('./core/storage'),
     require('./core/io'),
+    require('./core/nw'),
     require('./core/theme'),
 
     //app

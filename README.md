@@ -132,15 +132,52 @@ exactly that.
 runs them, in reverse dependency order, catching so one bad cleanup cannot
 strand the rest. It works for any plugin, including one that provides nothing.
 
-### the view is the app
+### the window is a view, the tray is the app
 
-Closing the window exits the process. `nw.App.quit()` alone does not always
-manage that — the http server, socket.io and webpack's watchers are open
-handles, and the node context can outlive the window holding them, which leaves
-a copy running with nothing on screen and the port taken. So `shutdown()` in
-`main.js` closes the server, closes the windows, quits, and then hard exits.
+Closing the window does not quit. It hides, the node half keeps running behind
+the tray icon, and reopening is instant with the page state intact — nw quits
+when the last window closes whether or not there is a tray, so `main.js`
+intercepts `close` and hides instead. Reopen from the tray, by left-clicking it,
+or by running `npm start` again; quit from the tray's Quit.
 
-Closing the devtools window does not quit; only the app window does.
+If the tray cannot be created (no status area), the old rule stands: closing
+the window quits.
+
+Quitting has to be thorough. `nw.App.quit()` alone does not always manage it —
+the http server, socket.io and webpack's watchers are open handles, and the
+node context can outlive the window holding them, which leaves a copy running
+with nothing on screen and the port taken. So `shutdown()` closes the server,
+removes the tray, closes the windows, quits, and then hard exits.
+
+Closing the devtools window does nothing to the app.
+
+### the tray belongs to the app too
+
+`src/core/nw` provides an `nw` service so a plugin can put its own items on the
+tray menu:
+
+```js
+if (app.isServer && nw) {
+    var item = nw.tray.add({
+        label: 'Say hello in the log',
+        click: function () { console.log('hello'); }
+    });
+
+    //nw.MenuItem options all work: type, checked, enabled, submenu, icon, key
+}
+```
+
+The item comes back off the menu when the plugin is torn down, so a server
+reload does not leave a second copy behind — the menu is rebuilt from scratch
+each time rather than patched by index. `nw` also carries `url`, `hasWindow`,
+`open()`, `hide()`, `openInBrowser()` and `quit()`.
+
+The window and the tray themselves live in `main.js`, not in the plugin: they
+have to outlive the server bundle, which is thrown away on every reload. The
+plugin wraps that controller and hands back only what it added.
+
+Under `npm run dev` there is no nw.js at all, so the `nw` service is
+`undefined` — check for it, the example plugin does.
 
 Two things you will see if a copy is somehow still up:
 

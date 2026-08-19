@@ -53,7 +53,7 @@ after(() => {
 
 test('the plugin graph resolves on the server side', () => {
     const services = loaded.app.services;
-    for (const name of ['app', 'react', 'session', 'config', 'io', 'appPackage', 'theme'])
+    for (const name of ['app', 'react', 'session', 'config', 'io', 'appPackage', 'theme', 'nw'])
         assert.ok(name in services, 'missing service: ' + name);
 });
 
@@ -61,6 +61,7 @@ test('browser only services register as stubs, not as failures', () => {
     const services = loaded.app.services;
     assert.equal(services.react, undefined);
     assert.equal(services.theme, undefined);
+    assert.equal(services.nw, undefined, 'no nw.js in this process, so no nw service');
     assert.equal(typeof services.config, 'function');//storage hands back an empty factory
 });
 
