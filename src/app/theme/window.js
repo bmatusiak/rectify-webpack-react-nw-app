@@ -24,15 +24,11 @@
 var navbar = require('./components/navbar');
 var dialog = require('./components/dialog');
 
-plugin.consumes = ['app', 'react', 'config', 'appPackage'];
+plugin.consumes = ['react', 'config', 'appPackage'];
 plugin.provides = ['theme'];
 //`config` here is the third argument rectify passes: src/config.js, keyed by
 //the service name. `imports.config` is the storage plugin, a different thing.
 async function plugin(imports, register, config) {
-    //every require below is browser only, so they sit inside the branch, the
-    //node bundle parses them and never loads them
-    if (imports.app.isServer) return register(null, { theme: void 0 })
-
     var $ = require('jquery');
     var scss = require('./index.scss');// eslint-disable-line no-unused-vars
 

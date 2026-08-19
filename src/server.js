@@ -1,22 +1,25 @@
 
 var Config = require("./config");
-
-var app_config = require('./plugins');
-
-//rectify reads this off the list and hands each plugin its own slice as the
-//third argument to setup
-app_config.config = Config();
-
 var rectify = require('@bmatusiak/rectify');
 
-//the node half of the same list src/index.js runs in the window.
-//main.js calls this with the express host, which rectify merges into the
-//`app` service, so any plugin can reach it with consumes: ['app'].
+//every src/app/<plugin>/server.js. webpack turns this into a context, so the
+//node bundle carries the server halves and nothing else.
+var found = require.context('./app', true, /^\.\/[^_.][^/]*\/server\.(js|ts)$/);
+var plugins = found.keys().map(found);
+
+plugins.config = Config();
+
+//the node half of the app. src/main.js builds this bundle, hands it the host,
+//and rebuilds it whenever a file under src changes.
 //
-//the returned destroy() is what makes the server half reloadable: main.js
-//calls it before loading a freshly built bundle.
+//the returned destroy() is what makes that reloadable: rectify runs the
+//onDestroy each plugin handed to register(), backwards.
 module.exports = async function server(host) {
-  var app = rectify.build(app_config, Object.assign({ isServer: true }, host));
+    //the host goes under one key rather than spread across `app`. rectify's own
+  //services.app already carries `window` (the dom window, or `global` in node),
+  //`services`, `on`, `emit` and the is* flags -- so anything spread in there is
+  //one name away from a collision that looks like it works.
+  var app = rectify.build(plugins, { isServer: true, host: host });
 
   var failed = null;
   app.on('error', function (err) {
@@ -29,9 +32,5 @@ module.exports = async function server(host) {
 
   app.services.app.emit("start");
 
-  return {
-    app: app,
-    //rectify runs the onDestroy each plugin handed to register(), backwards
-    destroy: function () { return app.destroy(); }
-  };
+  return { app: app, destroy: function () { return app.destroy(); } };
 };

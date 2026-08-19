@@ -18,7 +18,7 @@ async function plugin(imports, register) {
     var lifecycle = {
         get isShuttingDown() { return shuttingDown; },
 
-        //the view is not the app, so this is the only way out
+        //the window is not the app, so this is the only way out
         shutdown: function (reason) {
             if (shuttingDown) return;//the window closing and a failing server both land here
             shuttingDown = true;

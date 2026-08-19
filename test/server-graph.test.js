@@ -36,10 +36,10 @@ before(async () => {
     loaded = await require(bundle)({
         express,
         router,
-        expressApp: app,
         httpServer: server,
         io: ioServer,
         appPackage: { title: 'Test App', name: 'test-app', version: '9.9.9' }
+        //no window and no tray: this is the plain node case, same as `npm run dev`
     });
 
     await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -53,16 +53,21 @@ after(() => {
 
 test('the plugin graph resolves on the server side', () => {
     const services = loaded.app.services;
-    for (const name of ['app', 'react', 'session', 'config', 'io', 'appPackage', 'theme', 'nw'])
+    for (const name of ['app', 'io', 'appPackage', 'window', 'tray'])
         assert.ok(name in services, 'missing service: ' + name);
 });
 
-test('browser only services register as stubs, not as failures', () => {
+test('the window half is not in this bundle at all', () => {
     const services = loaded.app.services;
-    assert.equal(services.react, undefined);
-    assert.equal(services.theme, undefined);
-    assert.equal(services.nw, undefined, 'no nw.js in this process, so no nw service');
-    assert.equal(typeof services.config, 'function');//storage hands back an empty factory
+    //react, theme and storage are window.js files, so they are not here to stub
+    for (const name of ['react', 'theme', 'session', 'config'])
+        assert.ok(!(name in services), name + ' leaked into the server bundle');
+});
+
+test('nw services are absent without nw.js, rather than half present', () => {
+    const services = loaded.app.services;
+    assert.equal(services.window, undefined);
+    assert.equal(services.tray, undefined);
 });
 
 test('a plugin server half mounts its routes on the swappable router', async () => {

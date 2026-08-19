@@ -15,9 +15,10 @@ export interface App {
     io?: any;
     appPackage?: AppPackage;
 
-    //the window and tray controller, present only under nw.js. src/core/nw
-    //wraps it as the `nw` service
-    nw?: any;
+    //controllers for the real window and tray, present only under nw.js.
+    //src/app/window and src/app/tray wrap these as services
+    window?: any;
+    tray?: any;
 
     //rectify's own event bus. server halves clean up on 'destroy'
     on(name: string, cb: (...args: any[]) => void): void;
@@ -48,18 +49,20 @@ export type TypeStoreFactory = <T extends object>(name: string, defaults: T) => 
 
 export interface TrayItem { remove(): void }
 
-export interface Nw {
+export interface Window {
     readonly url: string;
-    readonly hasWindow: boolean;
+    readonly isOpen: boolean;
     open(): void;
+    show(): void;
     hide(): void;
     openInBrowser(): void;
     quit(reason?: string): void;
-    tray: {
-        //options are nw.MenuItem's: label, click, type, checked, enabled, ...
-        add(options: Record<string, any>): TrayItem;
-        labels(): string[];
-    };
+}
+
+export interface Tray {
+    //options are nw.MenuItem's: label, click, type, checked, enabled, ...
+    add(options: Record<string, any>): TrayItem;
+    labels(): string[];
 }
 
 export interface Theme {
@@ -82,7 +85,8 @@ export interface Services {
     io: any;
     appPackage: AppPackage;
     theme: Theme | undefined;
-    nw: Nw | undefined;
+    window: Window | undefined;
+    tray: Tray | undefined;
 }
 
 //what a plugin's setup receives, given what it consumes:

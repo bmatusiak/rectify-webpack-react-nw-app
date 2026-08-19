@@ -2,9 +2,10 @@ const path = require('path');
 const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
-//two entries over one plugin list: src/index.js runs the plugins in the window,
-//src/server.js runs the same plugins in nw's node context. a plugin branches on
-//app.isBrowser and keeps both halves in the one file.
+//two of the three boots are bundled. src/window.js gathers every
+//src/app/*/window.js, src/server.js every src/app/*/server.js — so a plugin
+//declares where it runs by which files it has, and neither bundle carries the
+//other's half. the third boot, src/main.js, is loaded off disk by nw.js.
 module.exports = (env, argv = {}) => {
 
     const isProduction = ((argv.mode || process.env.NODE_ENV) == 'production');
@@ -33,14 +34,14 @@ module.exports = (env, argv = {}) => {
     //inlined as a string, ie the bootstrap-icons sprite sheet
     const asString = { test: /\.(txt|svg)$/i, type: 'asset/source' };
 
-    const client = {
-        name: 'client',
+    const windowBundle = {
+        name: 'window',
         target: 'web',
         mode,
         //the hot client talks to webpack-hot-middleware in main.js
         entry: isProduction
-            ? path.join(__dirname, 'src', 'index.js')
-            : ['webpack-hot-middleware/client?reload=true&overlay=true', path.join(__dirname, 'src', 'index.js')],
+            ? path.join(__dirname, 'src', 'window.js')
+            : ['webpack-hot-middleware/client?reload=true&overlay=true', path.join(__dirname, 'src', 'window.js')],
         resolve,
         output: {
             path: path.resolve(__dirname, 'dist'),
@@ -116,5 +117,5 @@ module.exports = (env, argv = {}) => {
         }
     };
 
-    return [client, server];
+    return [windowBundle, server];
 }

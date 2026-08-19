@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const path = require('node:path');
 
 const configs = require('../webpack.config.js')({}, { mode: 'development' });
-const client = configs.find((c) => c.name == 'client');
+const windowBundle = configs.find((c) => c.name == 'window');
 const server = configs.find((c) => c.name == 'server');
 
 //the externals rule shipped broken once: it matched anything starting with a
@@ -22,21 +22,21 @@ test('bare specifiers stay external on the server', async () => {
 });
 
 test('relative and absolute requests are bundled, not externalized', async () => {
-    assert.equal(await externalize('./core/storage'), undefined);
+    assert.equal(await externalize('./app/storage'), undefined);
     assert.equal(await externalize('../overlay'), undefined);
     assert.equal(await externalize(path.join(__dirname, '..', 'src', 'server.js')), undefined);
     assert.equal(await externalize('/srv/app/src/server.js'), undefined);
 });
 
 test('both bundles resolve .ts the same way', () => {
-    for (const c of [client, server]) {
+    for (const c of [windowBundle, server]) {
         assert.ok(c.resolve.extensions.includes('.ts'), c.name + ' cannot resolve .ts');
         assert.ok(c.resolve.extensions.includes('.js'), c.name + ' cannot resolve .js');
     }
 });
 
-test('the client is a web bundle and the server is a node one', () => {
-    assert.equal(client.target, 'web');
+test('the window is a web bundle and the server is a node one', () => {
+    assert.equal(windowBundle.target, 'web');
     assert.equal(server.target, 'node');
     assert.equal(server.output.library.type, 'commonjs2');
 });

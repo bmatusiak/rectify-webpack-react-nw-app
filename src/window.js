@@ -1,18 +1,17 @@
 
 var Config = require("./config");
-
-var app_config = require('./plugins');
-
-//rectify reads this off the list and hands each plugin its own slice as the
-//third argument to setup
-app_config.config = Config();
-
 var rectify = require('@bmatusiak/rectify');
 var showError = require('./overlay');
 
-//the window half. see src/server.js for the node half of the same list.
+//every src/app/<plugin>/window.js. the window half, and the only code that
+//reaches the browser.
+var found = require.context('./app', true, /^\.\/[^_.][^/]*\/window\.(js|ts|tsx|jsx)$/);
+var plugins = found.keys().map(found);
+
+plugins.config = Config();
+
 (async function starter() {
-  var app = rectify.build(app_config, { isServer: false })
+  var app = rectify.build(plugins, { isWindow: true })
 
   //without a listener rectify's emit throws, and a plugin that died during
   //startup leaves a blank window with no clue which one it was

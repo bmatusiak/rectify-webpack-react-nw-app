@@ -24,15 +24,11 @@ console.log(typeStore.testing);//'ok-default', and assigning to it saves
 //and remember the types are only stripped, never checked, during a build.
 //`npm run typecheck` is what checks them.
 //---------------------------------------------------------------------------
-type Imports = import('../../rectify').Imports<'app'>;
 type Register = import('../../rectify').Register;
 type TypeStore<T> = import('../../rectify').TypeStore<T>;
 type TypeStoreFactory = import('../../rectify').TypeStoreFactory;
 
-async function plugin(imports: Imports, register: Register) {
-    const empty = (() => ({})) as unknown as TypeStoreFactory;
-    if (imports.app.isServer) return register(null, { config: empty, session: empty });
-
+async function plugin(_imports: unknown, register: Register) {
     function typeStorage(storageObject: Storage): TypeStoreFactory {
 
         const getStored = (name: string): Record<string, unknown> => {
@@ -84,7 +80,7 @@ async function plugin(imports: Imports, register: Register) {
     });
 }
 
-plugin.consumes = ['app'];
+plugin.consumes = [] as string[];
 plugin.provides = ['session', 'config'];
 
 //`export =` would need babel's cjs transform, which preset-env leaves off so

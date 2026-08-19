@@ -7,107 +7,92 @@ bundled by webpack, rendered with React, running live inside an nw.js window.
 `react-nw-app` (nw.js shell). There is no build/packaging step — nw.js runs
 everything, and the code it runs is the code in `src/`.
 
-## shape
+## three boots, one folder of plugins
+
+A plugin is a folder in `src/app/`, and the files inside say where it runs:
 
 ```
-nw.js starts  ->  main.js          node context, no window
-                    builds src/server.js  -> runs the plugins here
-                    express + socket.io + webpack-dev-middleware, free port
-                    nw.Window.open('http://localhost:<port>/')
-                                  ->  the window, its own context, no node
-                                      src/index.js -> runs the same plugins
-                                      talks back over socket.io
+src/
+  main.js       boot: nw's node context. loaded off disk, never bundled
+  server.js     boot: the app's node half. bundled, reloaded on every save
+  window.js     boot: the browser. bundled, hot reloaded
+  config.js     settings, sliced per plugin
+  index.html
+  overlay.js
+  rectify.d.ts
+  app/
+    lifecycle/  main.js                              shutdown, crashes, instance file
+    http/       main.js                              express, the swappable router
+    io/         main.js server.js window.js          socket.io, all three sides
+                serve.js mock.js                     shared between two of them
+    window/     main.js server.js                    the nw window, and its handle
+    tray/       main.js server.js                    the tray, and its menu api
+    devtools/   main.js                              the two Inspect items
+    build/      main.js                              webpack and the reload
+    react/      window.js                            createRoot
+    storage/    window.ts                            session + config stores
+    theme/      window.js + components/ + scss       the theme kit
+    example/    server.js window.js                  delete this one
 ```
 
-`main` in `package.json` is a `.js` file, so nw.js runs it in the node context
-and creates no window; `main.js` opens the view itself. The window loads a
-remote page, so it gets its own javascript context with no node in it.
-
-## two plugin lists
-
-`main.js` is a bootstrap and nothing else: it builds a rectify app out of
-`src/main/plugins.js` and starts it.
-
-```
-src/main/plugins.js   this process. loaded straight off disk, never bundled,
-                      never reloaded — it has to outlive what the reload
-                      replaces.
-
-  lifecycle   shutdown, the crash handlers, .nw-instance.json
-  server      express, http, socket.io, the swappable router
-  window      the nw.js window
-  tray        the tray icon and its menu
-  devtools    the two Inspect items on that menu
-  bundler     webpack, the server half reload, and the start order
-
-src/plugins.js        the app. the same list run twice — here through
-                      src/server.js, and in the window through src/index.js.
-                      src/main/bundler rebuilds and reloads the node half of
-                      it on every save.
-```
-
-They are separate rectify apps with separate service graphs. The main side
-hands the app side a host object (`express`, `router`, `httpServer`, `io`,
-`appPackage`, and an `nw` controller) — which is why `src/core/nw` wraps a
-controller rather than touching a window itself.
-
-`bundler` consumes everything, so rectify runs it last, and its setup *is* the
-startup sequence: build, load the node half, listen, show a window.
-
-Teardown is rectify's: `lifecycle.shutdown()` calls `app.destroy()`, and each
-plugin's `onDestroy` runs in reverse — the tray comes off, the server closes,
-the instance file goes away.
-
-## two entries, one plugin list
-
-`src/plugins.js` is the one list. `src/index.js` and `src/server.js` both read
-it — nothing else declares what loads. Webpack builds both — a `web` bundle served to the window and a `node`
-bundle `main.js` loads — so a plugin keeps its server code and its client code
-in the same file:
+Each boot gathers its own half and nothing else:
 
 ```js
-plugin.consumes = ['app'];
-plugin.provides = ['thing'];
-async function plugin(imports, register) {
-    var { app } = imports;
-
-    if (app.isServer) {
-        app.router.get('/api/thing', ...);        //node half
-        return register(null, { thing: ... });
-    }
-
-    var res = await fetch('/api/thing');          //browser half
-    await register(null, { thing: await res.json() });
-}
+//src/window.js
+var found = require.context('./app', true, /^\.\/[^_.][^/]*\/window\.(js|ts)$/);
+var plugins = found.keys().map(found);
 ```
 
-`main.js` hands the host in through rectify's second `build()` argument, which
-merges onto the `app` service — so `consumes: ['app']` gets you `app.express`,
-`app.router`, `app.expressApp`, `app.httpServer`, `app.io` and
-`app.appPackage` on the node side.
+So **the folder is the registry**. Adding a plugin is creating a folder; there
+is no list to update, and no way to add one in a place that forgets it. Rename
+a folder with a leading `_` and it stops loading.
 
-Mount routes on **`app.router`**, not on `app.expressApp`. The router is
-replaced on every server rebuild, which is what lets routes come and go with a
-reload; anything mounted on the app itself stacks up instead.
+**The filename is the branch.** There is no `isServer` or `isBrowser` test
+anywhere in a plugin, because a file that only exists in one bundle cannot run
+in the other — and the window bundle never even parses the server half. That
+also means editing a `server.js` no longer reloads the page: it is not in that
+bundle.
 
-**Branch on `app.isServer`, not on `app.isBrowser` or `typeof document`.** The
-entries set it. nw.js's node context has a `window` with a `document` on it, so
-every other test reports that side as a browser and the node bundle then runs
-the wrong half.
+### how the halves join
 
-### the client can mock the server
+They are three separate rectify apps with three service graphs, so a plugin
+that spans runtimes joins itself:
 
-Because the client bundle contains both halves, the browser can run the server
-half itself. `src/core/io/index.js` has one `serve(io, appPackage)` function,
-given the real socket.io server on the node side and an in-memory pair from
-`src/core/io/mock.js` in the browser. Open a built client with **`?mock`** in
-the url and the app comes up with no server behind it, driven by the real
-server code rather than a second implementation of it.
+- `window/main.js` owns the real nw window and provides `window` on the main
+  graph. `window/server.js` provides `window` on the app graph, wrapping a
+  controller handed over from main. Same name, same meaning, different process.
+- `tray/` does the same for the tray.
+- `io/main.js` creates the socket.io server, `io/server.js` registers the
+  handlers, `io/window.js` connects — and both of the latter share `serve.js`,
+  which is the one function `?mock` runs in the page.
 
-It is opt-in on purpose. Falling back to the mock automatically on a failed
-connection meant a server that was merely slow to start produced a page that
-looked fine and served invented data. Without `?mock`, no server is a visible
-error.
+Main hands the app side a **host** object — `express`, `router`, `httpServer`,
+`io`, `appPackage`, and controllers for `window` and `tray` — and it arrives as
+`app.host`. Under one key on purpose: rectify's own `services.app` already
+carries `window` (the dom window, or `global` in node), `services`, `on`,
+`emit` and the `is*` flags, so anything spread in there is one name away from a
+collision that looks like it works.
+
+The startup order lives in `src/main.js` rather than inside whichever plugin
+happens to depend on all the others:
+
+```js
+await services.build.ready();          //first bundle built and loaded
+var url = await services.http.listen();
+services.lifecycle.publish(url);       //tools/nw.js reads this
+services.tray.start();
+services.window.open();
+```
+
+Teardown is rectify's: `lifecycle.shutdown()` calls `app.destroy()` and every
+plugin's `onDestroy` runs in reverse.
+
+### why main.js sits at the root
+
+`main.js` in the root is three lines that require `src/main.js`. nw.js loads
+the manifest's `main` into a generated background page at the app root and
+resolves that script's requires from the root rather than from the file's own
+directory, so a boot living in `src/` cannot require its neighbours without it.
 
 ## install
 
@@ -244,8 +229,8 @@ Closing the devtools window does nothing to the app.
 
 ### the tray belongs to the app too
 
-`src/core/nw` provides an `nw` service so a plugin can put its own items on the
-tray menu:
+`src/app/tray/server.js` provides a `tray` service, so a plugin can put its own
+items on the menu:
 
 ```js
 if (app.isServer && nw) {
@@ -282,32 +267,35 @@ is probably still running.                  # this one shuts down instead of
                                             # sitting there dead.
 ```
 
-## layout
+## adding a plugin
+
+Make a folder under `src/app/` and put in the halves you need. Nothing to
+register:
 
 ```
-main.js               nw.js entry, node context: builds, serves, opens the window
-tools/nw.js           launcher, finds the nw binary and turns logging on
-webpack.config.js     returns [client, server]
-src/
-  plugins.js          the plugin list, read by both entries
-  index.js            entry: runs the list in the window
-  server.js           entry: runs the list in the node context
-  config.js           app config, reaches plugins as setup's third argument
-  index.html          <div id="root">
-  rectify.d.ts        the plugin contract, for typescript plugins
-  core/               what the scaffold is, and what nw.js needs
-    react/            provides `react`   -> createRoot on #root
-    storage/          provides `session` + `config` -> typeStore, written in typescript
-    io/               provides `io` + `appPackage`  -> socket.io both sides, + mock.js
-    nw/               provides `nw`      -> window and tray, node side only
-  app/                what this app is. delete it and build your own
-    index.js          the example plugin
-    theme/            provides `theme`  -> the theme kit, bootstrap 5 here
-      components/     NavBar, Dialog
+src/app/my-thing/
+  server.js     runs in the node half
+  window.js     runs in the window
 ```
 
-`core/` is the parts that do not change when the app does. `app/` is
-everything that does — the theme kit included, since a project brings its own.
+```js
+//src/app/my-thing/server.js
+plugin.consumes = ['app', 'appPackage'];
+plugin.provides = ['my-thing'];
+async function plugin(imports, register) {
+    imports.app.host.router.get('/api/my-thing', ...);
+
+    await register(null, {
+        'my-thing': {},
+        onDestroy: function () { /* undo it, this half reloads */ }
+    });
+}
+module.exports = plugin;
+```
+
+Service names are the contract between halves and between plugins; rectify
+resolves the order from `consumes` and `provides`, so the order of the folders
+never matters.
 
 `theme` is a slot, and bringing your own style is the expected thing to do.
 Bootstrap, jquery and bootstrap-icons are in `src/app/theme/` because something
@@ -315,7 +303,7 @@ had to be — tailwind, plain css, a component library or nothing at all all fit
 the same slot.
 
 The service name is the only thing anything outside that directory knows:
-`src/app/index.js` asks for `theme` and reads `theme.navbar`. So a swap is the
+`src/app/example/window.js` asks for `theme` and reads `theme.navbar`. So a swap is the
 whole directory replaced. What this kit happens to carry is `navbar`, `dialog`,
 `themeSwitcher`, `bs` (its own library) and `$` (its dom helper, deliberately
 not a top level service since another kit may not want one) — none of which are
@@ -339,29 +327,15 @@ Both entries listen for rectify's `error`. Without that the emit throws with no
 indication of which plugin died; now it is logged, and in the window it is also
 printed at the top of the page rather than leaving you a blank one.
 
-Add plugins in `src/plugins.js`:
-
-```js
-module.exports = [
-    require('./core/react'),
-    require('./core/storage'),
-    require('./core/io'),
-
-    require('./app/theme'),
-    require('./app'),
-    require('./my-plugin')
-];
-```
-
 ## typescript
 
 `.ts` and `.tsx` build with no extra step — babel strips the types and
-`resolve.extensions` finds them, so `require('./core/storage')` picks up
-`index.ts` exactly as it would `index.js`.
+`resolve.extensions` finds them, and the discovery regex matches both — so a
+plugin's half can be `window.ts` as readily as `window.js`.
 
-Nothing here is committed to typescript. `src/core/storage` is written in it to
-show that it works; every other plugin is plain javascript, and the two sit in
-the same plugin list. Pick per plugin, or rename that one to `.js` and have
+Nothing here is committed to typescript. `src/app/storage` is written in it to
+show that it works; every other plugin is plain javascript, and they sit in the
+same folder. Pick per plugin, or rename that one to `.js` and have
 none at all.
 
 Stripping is not checking. `npm run typecheck` runs `tsc --noEmit` against
@@ -431,7 +405,11 @@ loop into a chromium render process, and that context is not plain node:
 - **`--mixed-context` swaps in the browser's timers.** `setInterval()` then
   returns a number with no `.unref()`, which crashes `webpack-hot-middleware`
   on startup. Nothing here does cross-context `instanceof`, so the flag is gone.
-- **`window` and `document` exist there**, which is what `app.isServer` is for.
+- **`window` and `document` exist there.** Which is why a plugin's runtime is
+  the file it is in, rather than a test it runs: every global you would sniff
+  reports the wrong thing on one side or the other. Rectify's own
+  `services.app.window` is that same trap — it is the dom window, or `global`
+  in node, and never the app's window.
 - `Worker` and `WebSocket` are not available there either.
 
 Everything is in `devDependencies`: the app compiles itself at startup, so
