@@ -11,7 +11,7 @@ module.exports = (env, argv = {}) => {
     const mode = isProduction ? 'production' : 'development';
 
     const babel = {
-        test: /\.?js$/,
+        test: /\.(jsx?|tsx?)$/,
         exclude: /node_modules/,
         use: {
             loader: 'babel-loader',
@@ -19,11 +19,16 @@ module.exports = (env, argv = {}) => {
                 presets: [
                     '@babel/preset-env',
                     //classic, the sources use commonjs require('react')
-                    ['@babel/preset-react', { runtime: 'classic' }]
+                    ['@babel/preset-react', { runtime: 'classic' }],
+                    //types are stripped, not checked. `npm run typecheck` checks.
+                    '@babel/preset-typescript'
                 ]
             }
         }
     };
+
+    //so require('./core/storage') finds index.ts as readily as index.js
+    const resolve = { extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'] };
 
     //inlined as a string, ie the bootstrap-icons sprite sheet
     const asString = { test: /\.(txt|svg)$/i, type: 'asset/source' };
@@ -39,6 +44,7 @@ module.exports = (env, argv = {}) => {
         entry: isProduction
             ? path.join(__dirname, 'src', 'index.js')
             : ['webpack-hot-middleware/client?reload=true&overlay=true', path.join(__dirname, 'src', 'index.js')],
+        resolve,
         output: {
             path: path.resolve(__dirname, 'dist'),
             publicPath: '/'
@@ -84,6 +90,7 @@ module.exports = (env, argv = {}) => {
         target: 'node',
         mode,
         entry: path.join(__dirname, 'src', 'server.js'),
+        resolve,
         output: {
             path: path.resolve(__dirname, 'dist'),
             filename: 'server.js',

@@ -80,6 +80,7 @@ scripts the runtime never downloads — `npm approve-scripts nw`, then reinstall
 ```
 npm start        # nw.js: node context + window
 npm run dev      # the same server under plain node, open localhost:8080 yourself
+npm run typecheck  # tsc --noEmit
 ```
 
 `npm start` goes through `tools/nw.js`, which passes `--enable-logging=stderr`
@@ -127,9 +128,10 @@ src/
   config.js           app config slot
   index.html          <div id="root">
   app/                the example app plugin, delete it and build your own
+  rectify.d.ts        the plugin contract, for typescript plugins
   core/
     react/            provides `react`   -> createRoot on #root
-    storage/          provides `session` + `config` -> typeStore over session/localStorage
+    storage/          provides `session` + `config` -> typeStore, written in typescript
     io/               provides `io` + `appPackage`  -> socket.io both sides, + mock.js
     theme/            provides `theme` + `$`        -> the theme kit, bootstrap 5 here
       components/     NavBar, Dialog
@@ -152,6 +154,31 @@ module.exports = [
     require('./my-plugin')
 ];
 ```
+
+## typescript
+
+`.ts` and `.tsx` build with no extra step — babel strips the types and
+`resolve.extensions` finds them, so `require('./core/storage')` picks up
+`index.ts` exactly as it would `index.js`. Mix freely; `src/core/storage` is
+the one written in typescript.
+
+Stripping is not checking. `npm run typecheck` runs `tsc --noEmit` against
+`tsconfig.json`, which is `strict`.
+
+Two things to know when writing a plugin in typescript:
+
+- **Keep it commonjs.** `module.exports = plugin` at the bottom, and pull types
+  in with `type App = import('../../rectify').App` rather than an `import type`
+  statement. Any `import`/`export` statement, even a type-only one, leaves babel
+  marking the output as an es module, and webpack then rejects the
+  `module.exports`. `export = plugin` does not work either — that needs babel's
+  commonjs transform, which preset-env deliberately leaves off.
+- **Do not reach for ts-loader or fork-ts-checker.** They load the `typescript`
+  package, which is esm-only, inside nw's node context. See below. Babel does
+  the stripping; `tsc` only ever runs under plain node.
+
+`src/rectify.d.ts` carries the plugin contract — `App`, `Register`, `Plugin`,
+`AppPackage`.
 
 ## what nw.js's node context will not run
 
