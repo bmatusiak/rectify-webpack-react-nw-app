@@ -12,8 +12,8 @@ everything, and the code it runs is the code in `src/`.
 ```
 nw.js starts  ->  main.js          node context, no window
                     builds src/server.js  -> runs the plugins here
-                    express + socket.io + webpack-dev-middleware on :8080
-                    nw.Window.open('http://localhost:8080/')
+                    express + socket.io + webpack-dev-middleware, free port
+                    nw.Window.open('http://localhost:<port>/')
                                   ->  the window, its own context, no node
                                       src/index.js -> runs the same plugins
                                       talks back over socket.io
@@ -37,7 +37,7 @@ async function plugin(imports, register) {
     var { app } = imports;
 
     if (app.isServer) {
-        app.expressApp.get('/api/thing', ...);   //node half
+        app.router.get('/api/thing', ...);        //node half
         return register(null, { thing: ... });
     }
 
@@ -48,8 +48,12 @@ async function plugin(imports, register) {
 
 `main.js` hands the host in through rectify's second `build()` argument, which
 merges onto the `app` service — so `consumes: ['app']` gets you `app.express`,
-`app.expressApp`, `app.httpServer`, `app.io` and `app.appPackage` on the node
-side.
+`app.router`, `app.expressApp`, `app.httpServer`, `app.io` and
+`app.appPackage` on the node side.
+
+Mount routes on **`app.router`**, not on `app.expressApp`. The router is
+replaced on every server rebuild, which is what lets routes come and go with a
+reload; anything mounted on the app itself stacks up instead.
 
 **Branch on `app.isServer`, not on `app.isBrowser` or `typeof document`.** The
 entries set it. nw.js's node context has a `window` with a `document` on it, so
@@ -79,9 +83,13 @@ scripts the runtime never downloads — `npm approve-scripts nw`, then reinstall
 
 ```
 npm start        # nw.js: node context + window
-npm run dev      # the same server under plain node, open localhost:8080 yourself
+npm run dev      # the same server under plain node, it prints the url
+npm test         # node --test
 npm run typecheck  # tsc --noEmit
 ```
+
+The port is whatever is free, so two of these can run side by side. `PORT=8080`
+pins it.
 
 `npm start` goes through `tools/nw.js`, which passes `--enable-logging=stderr`
 so the window's console reaches your terminal. Extra flags pass through:
@@ -90,15 +98,33 @@ so the window's console reaches your terminal. Extra flags pass through:
 npm start -- --remote-debugging-port=9222
 ```
 
-The window half hot reloads. The server bundle is built once at startup, so a
-change to a plugin's node half needs a restart.
+Both halves hot reload. The window half goes through webpack-hot-middleware;
+the node half is watched too, and on each rebuild `main.js` tears the old one
+down and loads the new bundle in place — same process, no restart.
+
+That teardown is why a server half has to clean up after itself:
+
+```js
+if (app.isServer) {
+    app.router.get('/api/thing', ...);        //router is swapped for you
+
+    app.on('destroy', function () {           //anything else, undo it here
+        app.io.removeAllListeners('connection');
+    });
+
+    return register(null, { thing: ... });
+}
+```
+
+Without it a reload stacks a second copy of every listener. There is a test for
+exactly that.
 
 ### the view is the app
 
 Closing the window exits the process. `nw.App.quit()` alone does not always
 manage that — the http server, socket.io and webpack's watchers are open
 handles, and the node context can outlive the window holding them, which leaves
-a copy running with nothing on screen and port 8080 taken. So `shutdown()` in
+a copy running with nothing on screen and the port taken. So `shutdown()` in
 `main.js` closes the server, closes the windows, quits, and then hard exits.
 
 Closing the devtools window does not quit; only the app window does.
@@ -110,7 +136,7 @@ Opening in existing browser session.        # nw.js is single instance. the
                                             # second start woke the first one
                                             # and exited. the window comes back.
 
-port 8080 is already taken. another copy    # something else has the port.
+port 8080 is already taken. another copy    # only if you pinned PORT.
 is probably still running.                  # this one shuts down instead of
                                             # sitting there dead.
 ```
@@ -125,7 +151,7 @@ src/
   plugins.js          the plugin list, read by both entries
   index.js            entry: runs the list in the window
   server.js           entry: runs the list in the node context
-  config.js           app config slot
+  config.js           app config, reaches plugins as setup's third argument
   index.html          <div id="root">
   app/                the example app plugin, delete it and build your own
   rectify.d.ts        the plugin contract, for typescript plugins
@@ -133,13 +159,33 @@ src/
     react/            provides `react`   -> createRoot on #root
     storage/          provides `session` + `config` -> typeStore, written in typescript
     io/               provides `io` + `appPackage`  -> socket.io both sides, + mock.js
-    theme/            provides `theme` + `$`        -> the theme kit, bootstrap 5 here
+    theme/            provides `theme`              -> the theme kit, bootstrap 5 here
       components/     NavBar, Dialog
 ```
 
-`theme` is a slot, not a commitment to bootstrap. It provides `navbar`,
-`dialog`, `themeSwitcher` and `bs` (the kit itself); bring another kit by
-replacing `src/core/theme/` with one that provides the same names.
+`theme` is a slot, not a commitment to bootstrap. It carries `navbar`,
+`dialog`, `themeSwitcher`, `bs` (the kit itself) and `$` (the kit's dom helper,
+jquery here — deliberately not a top level service, since another kit may not
+want one). Bring another kit by replacing `src/core/theme/` with one that
+carries the same names.
+
+### config
+
+`src/config.js` is the app's settings. Rectify slices it by service name and
+hands each plugin its own piece as the third argument to setup, so the theme
+plugin reads `config.theme.mode`:
+
+```js
+async function plugin(imports, register, config) {
+    var mode = config.theme.mode || ...;
+}
+```
+
+### when a plugin fails to start
+
+Both entries listen for rectify's `error`. Without that the emit throws with no
+indication of which plugin died; now it is logged, and in the window it is also
+printed at the top of the page rather than leaving you a blank one.
 
 Add plugins in `src/plugins.js`:
 
@@ -164,6 +210,19 @@ the one written in typescript.
 
 Stripping is not checking. `npm run typecheck` runs `tsc --noEmit` against
 `tsconfig.json`, which is `strict`.
+
+`src/rectify.d.ts` names every service in one `Services` interface, so a plugin
+declares what it consumes and gets them typed:
+
+```ts
+type Imports = import('../../rectify').Imports<'app' | 'config'>;
+
+async function plugin(imports: Imports, register: Register) {
+    imports.config('theme', { mode: 'dark' }).mode;//knows it has a mode
+}
+```
+
+Add a service to `Services` when you add a plugin that provides one.
 
 Two things to know when writing a plugin in typescript:
 
