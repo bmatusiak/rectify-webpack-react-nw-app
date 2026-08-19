@@ -128,11 +128,9 @@ if (app.isServer) {
 Without it a reload stacks a second copy of every listener. There is a test for
 exactly that.
 
-`onDestroy` is rectify's own slot — `register()` collects it and, as shipped,
-never calls it, so `src/server.js` wraps the plugin list to pick it up on the
-way past. Cleanups run in reverse dependency order and a throwing one does not
-stop the others. It works for any plugin, including one that provides nothing.
-If rectify ever calls its own destructors, that wrapper deletes itself.
+`onDestroy` is rectify's own slot: `register()` collects it and `app.destroy()`
+runs them, in reverse dependency order, catching so one bad cleanup cannot
+strand the rest. It works for any plugin, including one that provides nothing.
 
 ### the view is the app
 

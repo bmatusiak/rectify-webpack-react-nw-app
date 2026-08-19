@@ -66,7 +66,7 @@ function enqueue(work) {
 
 async function loadServerBundle() {
     if (serverApp) {
-        serverApp.destroy();//plugins tear down on app.on('destroy')
+        await serverApp.destroy();//rectify runs each plugin's onDestroy
         serverApp = null;
     }
 

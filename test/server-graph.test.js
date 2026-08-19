@@ -89,7 +89,7 @@ test('socket.io answers the handshake and the ping', async () => {
 });
 
 test('destroy() unhooks the server half so a reload cannot double register', async () => {
-    loaded.destroy();
+    await loaded.destroy();
 
     const socket = connect(url, { transports: ['websocket'] });
     try {
