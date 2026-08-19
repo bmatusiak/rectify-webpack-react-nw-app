@@ -102,22 +102,31 @@ Both halves hot reload. The window half goes through webpack-hot-middleware;
 the node half is watched too, and on each rebuild `main.js` tears the old one
 down and loads the new bundle in place — same process, no restart.
 
-That teardown is why a server half has to clean up after itself:
+That teardown is why a server half has to clean up after itself. Return an
+`onDestroy` alongside what you provide — the same shape as an effect returning
+its cleanup:
 
 ```js
 if (app.isServer) {
     app.router.get('/api/thing', ...);        //router is swapped for you
 
-    app.on('destroy', function () {           //anything else, undo it here
-        app.io.removeAllListeners('connection');
+    return register(null, {
+        thing: ...,
+        onDestroy: function () {              //anything else, undo it here
+            app.io.removeAllListeners('connection');
+        }
     });
-
-    return register(null, { thing: ... });
 }
 ```
 
 Without it a reload stacks a second copy of every listener. There is a test for
 exactly that.
+
+`onDestroy` is rectify's own slot — `register()` collects it and, as shipped,
+never calls it, so `src/server.js` wraps the plugin list to pick it up on the
+way past. Cleanups run in reverse dependency order and a throwing one does not
+stop the others. It works for any plugin, including one that provides nothing.
+If rectify ever calls its own destructors, that wrapper deletes itself.
 
 ### the view is the app
 
