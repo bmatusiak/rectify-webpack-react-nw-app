@@ -96,7 +96,9 @@ module.exports = (env, argv = {}) => {
         //half of a plugin is never loaded here, only skipped
         externals: [
             function ({ request }, callback) {
-                if (/^[a-zA-Z@]/.test(request)) return callback(null, 'commonjs ' + request);
+                //bare specifiers only, an absolute path here would swallow the entry
+                if (request && !request.startsWith('.') && !path.isAbsolute(request))
+                    return callback(null, 'commonjs ' + request);
                 callback();
             }
         ],
