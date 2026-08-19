@@ -12,17 +12,10 @@ console.log(typeStore.testing);//'ok-default', and assigning to it saves
 //statement, even a type-only one, makes babel mark the output as an es module
 //and webpack then refuses the `module.exports` at the bottom. this form is
 //erased outright, so the file stays commonjs like every other plugin.
-type App = import('../../rectify').App;
+type Imports = import('../../rectify').Imports<'app'>;
 type Register = import('../../rectify').Register;
-
-//what a store hands back: the defaults you asked for, plus save()
-type TypeStore<T> = T & { save(): void };
-
-//`config` and `session` are both this: name a store, describe its shape with
-//the defaults, and get it back typed
-type TypeStoreFactory = <T extends object>(name: string, defaults: T) => TypeStore<T>;
-
-interface Imports { app: App }
+type TypeStore<T> = import('../../rectify').TypeStore<T>;
+type TypeStoreFactory = import('../../rectify').TypeStoreFactory;
 
 async function plugin(imports: Imports, register: Register) {
     const empty = (() => ({})) as unknown as TypeStoreFactory;
