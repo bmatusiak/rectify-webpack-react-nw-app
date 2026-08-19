@@ -119,10 +119,7 @@ it says so, and brings the window back:
 
 ```
 $ npm start
-launching node_modules
-w
-wjs-sdk-v0.114.2-win-x64
-w.exe
+launching node_modules\nw\nwjs-sdk-v0.114.2-win-x64\nw.exe
 logging to nw.log  (--attach to watch it live)
 
 $ npm start
@@ -169,22 +166,25 @@ Devtools does not open by itself. The tray menu has both:
 The port is loopback-only and never pinned. Pass your own
 `--remote-debugging-port` to override it.
 
-Both halves hot reload. The window half goes through webpack-hot-middleware;
-the node half is watched too, and on each rebuild `main.js` tears the old one
-down and loads the new bundle in place — same process, no restart.
+### reloading
 
-That teardown is why a server half has to clean up after itself. Return an
+Both halves hot reload. The window half goes through webpack-hot-middleware;
+the node half is watched too, and on each rebuild `build/main.js` tears the old
+one down and loads the new bundle in place — same process, no restart.
+
+That teardown is why a `server.js` has to clean up after itself. Return an
 `onDestroy` alongside what you provide — the same shape as an effect returning
 its cleanup:
 
 ```js
-if (app.isServer) {
-    app.router.get('/api/thing', ...);        //router is swapped for you
+//src/app/my-thing/server.js
+async function plugin(imports, register) {
+    imports.app.host.router.get('/api/thing', ...);   //router is swapped for you
 
-    return register(null, {
-        thing: ...,
-        onDestroy: function () {              //anything else, undo it here
-            app.io.removeAllListeners('connection');
+    await register(null, {
+        'my-thing': ...,
+        onDestroy: function () {                      //anything else, undo it here
+            imports.app.host.io.removeAllListeners('connection');
         }
     });
 }
@@ -207,7 +207,7 @@ Two mechanisms hold that up, because one of them is not reliable:
 
 - `close` is intercepted and the window hidden instead, so reopening is instant
   with the page state intact. Nice when it works — but **a page reload silently
-  drops that listener** while leaving `loaded` firing, and the client half
+  drops that listener** while leaving `loaded` firing, and the window half
   full-reloads on any change it cannot hot swap. So the first edit you make
   turns close back into a real close. Re-attaching on `loaded` does not fix it;
   the handle is stale.
@@ -233,27 +233,33 @@ Closing the devtools window does nothing to the app.
 items on the menu:
 
 ```js
-if (app.isServer && nw) {
-    var item = nw.tray.add({
+//src/app/my-thing/server.js
+plugin.consumes = ['tray'];
+
+async function plugin(imports, register) {
+    var item = imports.tray && imports.tray.add({
         label: 'Say hello in the log',
         click: function () { console.log('hello'); }
     });
 
     //nw.MenuItem options all work: type, checked, enabled, submenu, icon, key
+
+    await register(null, { onDestroy: function () { if (item) item.remove(); } });
 }
 ```
 
-The item comes back off the menu when the plugin is torn down, so a server
-reload does not leave a second copy behind — the menu is rebuilt from scratch
-each time rather than patched by index. `nw` also carries `url`, `hasWindow`,
-`open()`, `hide()`, `openInBrowser()` and `quit()`.
+Give the item back on teardown and a reload cannot leave a second copy behind —
+the menu is rebuilt from scratch each time rather than patched by index. The
+`window` service alongside it carries `url`, `isOpen`, `open()`, `show()`,
+`hide()`, `openInBrowser()` and `quit()`.
 
-The window and the tray themselves live in `main.js`, not in the plugin: they
-have to outlive the server bundle, which is thrown away on every reload. The
-plugin wraps that controller and hands back only what it added.
+The icon and the window themselves live in `tray/main.js` and `window/main.js`,
+not in the halves that reload: they have to outlive the bundle that is being
+thrown away. The `server.js` halves wrap a controller and own only what they
+added.
 
-Under `npm run dev` there is no nw.js at all, so the `nw` service is
-`undefined` — check for it, the example plugin does.
+Under `npm run dev` there is no nw.js at all, so both services are `undefined`
+— check for them, the example plugin does.
 
 Two things you will see if a copy is somehow still up:
 
@@ -297,6 +303,8 @@ Service names are the contract between halves and between plugins; rectify
 resolves the order from `consumes` and `provides`, so the order of the folders
 never matters.
 
+### the theme kit
+
 `theme` is a slot, and bringing your own style is the expected thing to do.
 Bootstrap, jquery and bootstrap-icons are in `src/app/theme/` because something
 had to be — tailwind, plain css, a component library or nothing at all all fit
@@ -323,9 +331,11 @@ async function plugin(imports, register, config) {
 
 ### when a plugin fails to start
 
-Both entries listen for rectify's `error`. Without that the emit throws with no
-indication of which plugin died; now it is logged, and in the window it is also
-printed at the top of the page rather than leaving you a blank one.
+All three boots listen for rectify's `error`. Without that the emit throws with
+no indication of which plugin died. `src/main.js` and `src/server.js` log it —
+and the server boot rethrows, so a broken node half fails the reload loudly
+instead of half-starting. `src/window.js` also prints it at the top of the page
+rather than leaving you a blank one.
 
 ## typescript
 
@@ -341,8 +351,8 @@ none at all.
 Stripping is not checking. `npm run typecheck` runs `tsc --noEmit` against
 `tsconfig.json`, which is `strict`.
 
-`src/rectify.d.ts` names every service in one `Services` interface, so a plugin
-declares what it consumes and gets them typed:
+`src/rectify.d.ts` names every service — all three graphs — in one `Services`
+interface, so a plugin declares what it consumes and gets them typed:
 
 ```ts
 type Imports = import('../../rectify').Imports<'app' | 'config'>;
@@ -366,8 +376,8 @@ Two things to know when writing a plugin in typescript:
   package, which is esm-only, inside nw's node context. See below. Babel does
   the stripping; `tsc` only ever runs under plain node.
 
-`src/rectify.d.ts` carries the plugin contract — `App`, `Register`, `Plugin`,
-`AppPackage`.
+`src/rectify.d.ts` carries the rest of the contract — `App`, `AppPackage`,
+`Register`, and the service interfaces the `Services` map is built from.
 
 ## when things break
 

@@ -75,10 +75,28 @@ export interface Theme {
 
 //---- the service graph --------------------------------------------------
 
-//every service a plugin can consume. add yours here and every consumer,
-//typescript or not, gets it named in one place.
+//every service a plugin can consume, across all three graphs. add yours here
+//and every consumer, typescript or not, gets it named in one place.
 export interface Services {
     app: App;
+
+    //main only — the process around the app
+    http: {
+        express: any;
+        app: any;
+        server: any;
+        readonly url: string | null;
+        readonly router: any;
+        swapRouter(): any;
+        listen(): Promise<string>;
+    };
+    lifecycle: {
+        readonly isShuttingDown: boolean;
+        shutdown(reason: string): void;
+        publish(url: string): void;
+    };
+    build: { ready(): Promise<void> };
+
     react: { root: any } | undefined;
     session: TypeStoreFactory;
     config: TypeStoreFactory;
