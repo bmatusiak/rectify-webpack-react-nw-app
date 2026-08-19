@@ -8,7 +8,7 @@ plugin.provides = [];
 async function plugin(imports, register) {
     var { app, react, bootstrap, appPackage, io } = imports;
 
-    if (!app.isBrowser) {
+    if (app.isServer) {
         app.expressApp.get('/api/hello', function (req, res) {
             res.json({ hello: appPackage.title, pid: process.pid });
         });

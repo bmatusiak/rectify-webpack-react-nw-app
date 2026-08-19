@@ -12,7 +12,7 @@ plugin.consumes = ['app'];
 plugin.provides = ['session', 'config'];
 async function plugin(imports, register) {
     var empty = () => { return {} };
-    if (!imports.app.isBrowser) return register(null, { config: empty, session: empty })
+    if (imports.app.isServer) return register(null, { config: empty, session: empty })
 
     function typeStorage(storeageObject) {
 

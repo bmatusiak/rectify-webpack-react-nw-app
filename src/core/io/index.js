@@ -24,7 +24,7 @@ async function plugin(imports, register) {
         });
     }
 
-    if (!app.isBrowser) {
+    if (app.isServer) {
         serve(app.io, app.appPackage);
         return register(null, { io: app.io, appPackage: app.appPackage });
     }

@@ -6,7 +6,7 @@ plugin.provides = ['bootstrap', '$'];
 async function plugin(imports, register) {
     //every require below is browser only, so they sit inside the branch, the
     //node bundle parses them and never loads them
-    if (!imports.app.isBrowser) return register(null, { bootstrap: void 0, $: void 0 })
+    if (imports.app.isServer) return register(null, { bootstrap: void 0, $: void 0 })
 
     var $ = require('jquery');
     var scss = require('./index.scss');// eslint-disable-line no-unused-vars
