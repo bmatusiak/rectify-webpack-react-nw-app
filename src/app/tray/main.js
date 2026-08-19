@@ -1,5 +1,3 @@
-var path = require('path');
-
 //the tray icon, and the menu other plugins add to.
 //
 //this is what makes closing the window survivable: without somewhere to reopen
@@ -66,7 +64,11 @@ async function plugin(imports, register, config) {
                 try {
                     tray = new nw.Tray({
                         title: app.appPackage.title,
-                        icon: path.join(app.root, (config.tray && config.tray.icon) || 'icon.png')
+                        //relative on purpose: nw resolves it against the app,
+                        //so the same value works from the source tree and from
+                        //inside a package. an icon path that does not resolve
+                        //is not an error — you get an invisible tray entry.
+                        icon: (config.tray && config.tray.icon) || 'icon.png'
                     });
                     tray.tooltip = app.appPackage.title + ' — ' + http.url;//see nw.js issue 1903
 

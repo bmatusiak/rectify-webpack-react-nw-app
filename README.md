@@ -136,6 +136,24 @@ sitting inside a function, because webpack collects a dependency wherever it
 can reach it, and a `require('webpack')` in an unreachable function would still
 be bundled.
 
+### paths inside a package
+
+Nothing about the app's own location survives the move intact, so the two
+places that need it are worth knowing:
+
+- **`app.root` is `process.cwd()`** in the packaged boot. nw sets the working
+  directory to the app's own directory, whichever directory it was launched
+  from — measured both ways. The obvious alternatives all fail: `location.href`
+  is a `chrome-extension://` url rather than `file://`, so `fileURLToPath`
+  throws; `__dirname` does not exist in that context; `process.execPath` is the
+  runtime; and `nw.App.startPath` is wherever the launch happened.
+- **The tray icon goes in relative**, and nw resolves it against the app. The
+  same value then works from the source tree and from inside a package.
+
+Watch for that second one. An icon path that does not resolve is not an error —
+`new nw.Tray()` succeeds, the menu works, and you get an invisible entry in the
+notification area. It cost a while to notice, and longer to believe.
+
 ### what this does and does not protect
 
 It means the app runs what it shipped with: there is no `.js` on disk to edit,

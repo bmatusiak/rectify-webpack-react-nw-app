@@ -42,7 +42,9 @@ async function plugin(imports, register) {
         },
 
         publish: function (url) {
-            if (!app.isNw) return;//`npm run dev` is not a running app to the launcher
+            //`npm run dev` is not a running app to the launcher, and a
+            //package has no launcher reading this at all
+            if (!app.isNw || app.isPackaged) return;
             try {
                 fs.writeFileSync(INSTANCE_FILE, JSON.stringify({ pid: process.pid, url: url }, null, 2));
             } catch (e) {

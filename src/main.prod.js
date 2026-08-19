@@ -21,16 +21,15 @@ var plugins = found.keys().map(found);
 
 plugins.config = Config();
 
-//where the app's files are. app.html is one of them and it knows its own
-//location, which holds whether this is a packaged build or build/app being
-//previewed with the sdk runtime — process.execPath only holds for the first.
-var root = (function () {
-    try {
-        return path.dirname(require('url').fileURLToPath(location.href));
-    } catch (e) {
-        return path.dirname(process.execPath);
-    }
-})();
+//where the app's files are. nw sets the working directory to the app's own
+//directory, whichever directory the app was launched from — measured both ways.
+//
+//the obvious alternatives are all wrong here: location.href is a
+//chrome-extension:// url rather than a file:// one, so fileURLToPath throws;
+//__dirname does not exist in this context at all; process.execPath is the
+//runtime, which under `npm start -- --prod` is inside node_modules; and
+//nw.App.startPath is wherever the launch happened to happen.
+var root = process.cwd();
 
 boot(plugins, {
     isNw: true,
