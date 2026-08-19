@@ -2,11 +2,13 @@ var navbar = require('./components/navbar');
 var dialog = require('./components/dialog');
 
 plugin.consumes = ['app', 'react', 'config', 'appPackage'];
-plugin.provides = ['theme', '$'];
-async function plugin(imports, register) {
+plugin.provides = ['theme'];
+//`config` here is the third argument rectify passes: src/config.js, keyed by
+//the service name. `imports.config` is the storage plugin, a different thing.
+async function plugin(imports, register, config) {
     //every require below is browser only, so they sit inside the branch, the
     //node bundle parses them and never loads them
-    if (imports.app.isServer) return register(null, { theme: void 0, $: void 0 })
+    if (imports.app.isServer) return register(null, { theme: void 0 })
 
     var $ = require('jquery');
     var scss = require('./index.scss');// eslint-disable-line no-unused-vars
@@ -16,7 +18,9 @@ async function plugin(imports, register) {
 
     const bootstrap = require('bootstrap');
 
-    var default_color_mode = (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    //src/config.js can pin this, otherwise follow the os
+    var default_color_mode = config.theme.mode ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
     var config = imports.config('theme', {
         mode: default_color_mode
@@ -39,15 +43,14 @@ async function plugin(imports, register) {
 
     var $theme = {
         bs: bootstrap,//the kit itself, swap this file to swap kits
+        $,//the kit's dom helper. not a top level service, another kit may not want one
         themeSwitcher,
     }
     imports.theme = $theme;
-    imports.$ = $;
     $theme.navbar = await navbar(imports);
     $theme.dialog = await dialog(imports);
 
     await register(null, {
-        '$': $,
         theme: $theme
     });
 }

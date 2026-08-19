@@ -2,7 +2,7 @@ var React = require('react');
 var { useRef, useState, useEffect } = React;
 
 async function dialog(imports) {
-    var { theme, $ } = imports;
+    var { theme } = imports;
 
     return function NavBar(props) {
         const { isOpen, onClose } = props;
