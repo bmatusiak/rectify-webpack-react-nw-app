@@ -63,12 +63,16 @@ the wrong half.
 ### the client can mock the server
 
 Because the client bundle contains both halves, the browser can run the server
-half itself when nothing answers on the wire. `src/core/io/index.js` does this:
-one `serve(io, appPackage)` function, given the real socket.io server on the
-node side, and given an in-memory pair from `src/core/io/mock.js` in the browser
-when the connection fails. Open a built client with no server behind it and the
-app still comes up, driven by the real server code rather than a second
-implementation of it.
+half itself. `src/core/io/index.js` has one `serve(io, appPackage)` function,
+given the real socket.io server on the node side and an in-memory pair from
+`src/core/io/mock.js` in the browser. Open a built client with **`?mock`** in
+the url and the app comes up with no server behind it, driven by the real
+server code rather than a second implementation of it.
+
+It is opt-in on purpose. Falling back to the mock automatically on a failed
+connection meant a server that was merely slow to start produced a page that
+looked fine and served invented data. Without `?mock`, no server is a visible
+error.
 
 ## install
 
@@ -76,8 +80,10 @@ implementation of it.
 npm install
 ```
 
-`.npmrc` pins `nwjs_build_type=sdk`, so devtools work. If npm blocks install
-scripts the runtime never downloads — `npm approve-scripts nw`, then reinstall.
+`nw` is pinned to the `-sdk` build, so devtools work and the flavour is decided
+by the version rather than by an `.npmrc` npm now warns about on every command.
+If npm blocks install scripts the runtime never downloads — `npm approve-scripts
+nw`, then reinstall.
 
 ## run
 
@@ -247,6 +253,20 @@ Two things to know when writing a plugin in typescript:
 
 `src/rectify.d.ts` carries the plugin contract — `App`, `Register`, `Plugin`,
 `AppPackage`.
+
+## when things break
+
+Failures here are easy to make invisible — a window with nothing in it, or a
+node context that has quietly stopped serving. So:
+
+- a plugin that throws during startup is caught by rectify's `error`, logged,
+  and printed over the page
+- if the server half fails to rebuild, its old handlers are already gone, so
+  the node side pushes `server:error` down the socket and the window says so
+- an uncaught exception in the node context logs and shuts the app down rather
+  than leaving a headless process behind
+- reloads are queued, so two rebuilds in quick succession cannot interleave and
+  double-register
 
 ## what nw.js's node context will not run
 

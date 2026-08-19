@@ -34,7 +34,6 @@ app.use(function (req, res, next) { router(req, res, next); });
 const host = {
     express,
     router,
-    expressApp: app,
     httpServer: server,
     io,
     appPackage: {
@@ -55,6 +54,15 @@ app.use(hotMiddleware(clientCompiler));
 
 const bundlePath = path.join(serverConfig.output.path, serverConfig.output.filename);
 let serverApp = null;
+
+//one reload at a time. watch() fires again while a load is still awaiting, and
+//two overlapping loads are exactly the double registration all of this exists
+//to prevent.
+let queue = Promise.resolve();
+function enqueue(work) {
+    queue = queue.then(work, work);
+    return queue;
+}
 
 async function loadServerBundle() {
     if (serverApp) {
@@ -82,12 +90,17 @@ function watchServerBundle(onBuild) {
         }
         console.log('server bundle built in ' + (stats.endTime - stats.startTime) + 'ms');
 
-        loadServerBundle().then(function () {
-            if (first) { first = false; onBuild(null); }
-            else console.log('server half reloaded');
-        }, function (e) {
-            if (first) { first = false; onBuild(e); }
-            else console.error('server half failed to reload', e && e.stack || e);
+        enqueue(function () {
+            return loadServerBundle().then(function () {
+                if (first) { first = false; onBuild(null); }
+                else console.log('server half reloaded');
+            }, function (e) {
+                if (first) { first = false; return onBuild(e); }
+                //the old half is already torn down, so the app is now serving
+                //the window and nothing else. say so on screen, not just here.
+                console.error('server half failed to reload', e && e.stack || e);
+                io.emit('server:error', { message: String(e && e.stack || e) });
+            });
         });
     });
 }
@@ -95,11 +108,16 @@ function watchServerBundle(onBuild) {
 //---- lifecycle -------------------------------------------------------------
 
 let win = null;
+let shuttingDown = false;
 
 //strict: the view is the app. when it goes, this process goes with it.
 //nw.App.quit() on its own can leave the node context alive, because the
 //server, socket.io and webpack's watchers are all still open handles.
 function shutdown(reason) {
+    //the window closing and the server failing can both land here
+    if (shuttingDown) return;
+    shuttingDown = true;
+
     console.log('shutting down: ' + reason);
     try { io.close(); } catch (e) { /* already gone */ }
     try { server.close(); } catch (e) { /* already gone */ }
@@ -129,6 +147,17 @@ function openWindow(url) {
         });
     });
 }
+
+//in nw's node context an uncaught throw takes the app down with no window and
+//no message, which is the failure mode that is hardest to read from outside
+process.on('uncaughtException', function (e) {
+    console.error('uncaught exception', e && e.stack || e);
+    shutdown('an uncaught exception');
+});
+process.on('unhandledRejection', function (e) {
+    //not fatal on its own, but silence here is what hides a broken plugin
+    console.error('unhandled rejection', e && e.stack || e);
+});
 
 server.on('error', function (e) {
     if (e.code == 'EADDRINUSE')

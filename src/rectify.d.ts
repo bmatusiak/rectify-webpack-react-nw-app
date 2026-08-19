@@ -11,7 +11,6 @@ export interface App {
     //mount routes here, not on expressApp. this router is swapped out on
     //every server rebuild, which is what makes reloading routes possible
     router?: any;
-    expressApp?: any;
     httpServer?: any;
     io?: any;
     appPackage?: AppPackage;
@@ -70,9 +69,3 @@ export interface Services {
 export type Imports<K extends keyof Services> = Pick<Services, K>;
 
 export type Register = (err: Error | null, provided: Record<string, unknown>) => Promise<void> | void;
-
-export interface Plugin {
-    (imports: any, register: Register, config?: Record<string, any>): Promise<void> | void;
-    consumes: string[];
-    provides: string[];
-}

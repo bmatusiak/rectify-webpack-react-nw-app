@@ -3,8 +3,8 @@ var mockPair = require('./mock');
 //one plugin, both halves.
 //
 //  node    main.js handed the socket.io server in on the `app` service
-//  browser connects back to it, and if nothing answers it runs the server half
-//          above against an in-memory pair instead — see ./mock.js
+//  browser connects back to it. with ?mock it runs the server half above
+//          against an in-memory pair instead — see ./mock.js
 plugin.consumes = ['app'];
 plugin.provides = ['io', 'appPackage'];
 async function plugin(imports, register) {
@@ -42,19 +42,31 @@ async function plugin(imports, register) {
 
     //---- browser half -----------------------------------------------------
     var { io: connect } = require('socket.io-client');
+    var showError = require('../../overlay');
 
-    var socket = connect({ timeout: 2000, reconnectionAttempts: 2 });
+    //?mock runs the server half above against an in-memory pair instead of a
+    //socket. deliberately opt in: falling back to it on a failed connection
+    //silently served made up data whenever the server was merely slow.
+    if (new URLSearchParams(location.search).has('mock')) {
+        var mock = mockPair();
+        serve(mock.io, { title: 'mock', name: 'mock', version: '0.0.0' });
+        var mocked = await new Promise(function (resolve) { mock.socket.once('app', resolve); });
+        return register(null, { io: mock.socket, appPackage: mocked });
+    }
 
-    var appPackage = await new Promise(function (resolve) {
+    var socket = connect({ timeout: 4000 });
+
+    //the node side tells us when its half failed to reload, at which point the
+    //page is talking to a server that no longer has any handlers
+    socket.on('server:error', function (e) {
+        showError('the server half failed to reload', e && e.message);
+    });
+
+    var appPackage = await new Promise(function (resolve, reject) {
         socket.once('app', resolve);
-
-        socket.once('connect_error', function () {
-            socket.close();
-            console.warn('[io] nothing on the wire, running the server half in a mock');
-            var mock = mockPair();
-            serve(mock.io, { title: 'mock', name: 'mock', version: '0.0.0' });
-            socket = mock.socket;
-            socket.once('app', resolve);
+        socket.once('connect_error', function (err) {
+            reject(new Error('no server answered on ' + location.origin +
+                '. add ?mock to run the server half in the page instead. (' + err.message + ')'));
         });
     });
 

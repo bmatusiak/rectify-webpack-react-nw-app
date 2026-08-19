@@ -4,7 +4,7 @@ var { useRef, useState, useEffect } = React;
 async function dialog(imports) {
     var { theme } = imports;
 
-    return function NavBar(props) {
+    return function Dialog(props) {
         const { isOpen, onClose } = props;
 
         const modalRef = useRef(null);

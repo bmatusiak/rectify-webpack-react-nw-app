@@ -8,6 +8,7 @@ var app_config = require('./plugins');
 app_config.config = Config();
 
 var rectify = require('@bmatusiak/rectify');
+var showError = require('./overlay');
 
 //the window half. see src/server.js for the node half of the same list.
 (async function starter() {
@@ -17,16 +18,9 @@ var rectify = require('@bmatusiak/rectify');
   //startup leaves a blank window with no clue which one it was
   app.on('error', function (err) {
     console.error('[rectify] a plugin failed to start', err);
-    showStartupError(err);
+    showError('a plugin failed to start', err);
   });
 
   app = await app.start();
   app.services.app.emit("start");
 })();
-
-function showStartupError(err) {
-  var pre = document.createElement('pre');
-  pre.style.cssText = 'margin:0;padding:1rem;white-space:pre-wrap;font:12px/1.5 monospace;color:#b00;background:#fff';
-  pre.textContent = 'a plugin failed to start\n\n' + (err && err.stack || err);
-  document.body.insertBefore(pre, document.body.firstChild);
-}

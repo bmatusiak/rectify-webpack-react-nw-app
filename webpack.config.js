@@ -33,9 +33,6 @@ module.exports = (env, argv = {}) => {
     //inlined as a string, ie the bootstrap-icons sprite sheet
     const asString = { test: /\.(txt|svg)$/i, type: 'asset/source' };
 
-    //native node addons, ie nw.js native modules
-    const nodeAddon = { test: /\.node$/i, loader: 'node-loader' };
-
     const client = {
         name: 'client',
         target: 'web',
@@ -75,8 +72,7 @@ module.exports = (env, argv = {}) => {
                     ]
                 },
                 asString,
-                { test: /\.(eot|ttf|woff|woff2|png|jpg|gif)$/i, type: 'asset' },
-                nodeAddon
+                { test: /\.(eot|ttf|woff|woff2|png|jpg|gif)$/i, type: 'asset' }
             ]
         },
         plugins: [
@@ -115,8 +111,7 @@ module.exports = (env, argv = {}) => {
                 //scss becomes an inert string here, style-loader would touch the DOM
                 { test: /\.s[ac]ss$/i, type: 'asset/source' },
                 asString,
-                { test: /\.(eot|ttf|woff|woff2|png|jpg|gif)$/i, type: 'asset/source' },
-                nodeAddon
+                { test: /\.(eot|ttf|woff|woff2|png|jpg|gif)$/i, type: 'asset/source' }
             ]
         }
     };
