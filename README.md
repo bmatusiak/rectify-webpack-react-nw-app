@@ -88,21 +88,48 @@ nw`, then reinstall.
 ## run
 
 ```
-npm start        # nw.js: node context + window
+npm start        # nw.js: node context + window, then gives the terminal back
 npm run dev      # the same server under plain node, it prints the url
 npm test         # node --test
 npm run typecheck  # tsc --noEmit
 ```
 
-The port is whatever is free, so two of these can run side by side. `PORT=8080`
-pins it.
+`npm start` returns straight away and the app keeps running. Run it again and
+it says so, and brings the window back:
 
-`npm start` goes through `tools/nw.js`, which passes `--enable-logging=stderr`
-so the window's console reaches your terminal. Extra flags pass through:
+```
+$ npm start
+launching node_modules
+w
+wjs-sdk-v0.114.2-win-x64
+w.exe
+logging to nw.log  (--attach to watch it live)
+
+$ npm start
+already running (pid 35788) at http://localhost:57539/
+bringing its window to the front
+```
+
+nw.js is single instance, so the second launch is handed to the running app,
+which shows its window. That handoff happens inside the nw binary though, so
+the launcher cannot see it — `main.js` writes `.nw-instance.json` with its pid
+and url, and `tools/nw.js` reads that. A stale file left by a hard kill is
+caught by signalling the pid.
+
+Detached means the output goes to `nw.log` instead of your terminal.
+`npm start -- --attach` keeps it in the foreground when you want to watch a run
+happen. Other flags pass through either way:
 
 ```
 npm start -- --remote-debugging-port=9222
 ```
+
+The port is whatever is free, so two of these can run side by side. `PORT=8080`
+pins it.
+
+`tools/nw.js` passes `--enable-logging=stderr`, which is what makes the
+window's console audible at all — without it a page that threw on load looks
+exactly like a page with nothing to draw.
 
 Both halves hot reload. The window half goes through webpack-hot-middleware;
 the node half is watched too, and on each rebuild `main.js` tears the old one

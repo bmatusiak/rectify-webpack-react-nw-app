@@ -70,6 +70,56 @@ try {
 // browser process itself is what is being chased.
 const FLAGS = ['--enable-logging=stderr']
 
-console.log(`launching ${path.relative(APP, binary)}`)
-const child = spawn(binary, [APP, ...FLAGS, ...process.argv.slice(2)], { stdio: 'inherit' })
-child.on('exit', code => process.exit(code === null ? 1 : code))
+// LETTING GO OF THE TERMINAL.
+//
+// This used to hold the shell for as long as the app ran, which is wrong for
+// something you leave open all day -- and doubly so now that closing the window
+// only hides it. So the child is detached and this process exits immediately.
+//
+// The output still matters (see above), so it goes to nw.log rather than
+// nowhere. `--attach` keeps the old behaviour when you want to watch a run
+// happen: the app stays in the foreground and its output on your screen.
+//
+// KNOWING IT IS ALREADY UP.
+//
+// NW.js is single instance: a second launch is handed to the running app,
+// which brings its window back (main.js listens for App.on('open')). But that
+// handoff happens inside the nw binary, where this script cannot see it -- the
+// only sign is a line in the log of the process that is exiting. So main.js
+// writes .nw-instance.json with its pid and url, and this reads it. A stale
+// file from a hard kill is caught by signalling the pid, which throws when
+// nothing is there.
+const INSTANCE_FILE = path.join(APP, '.nw-instance.json')
+const LOG_FILE = path.join(APP, 'nw.log')
+
+function runningInstance () {
+  try {
+    const info = JSON.parse(fs.readFileSync(INSTANCE_FILE, 'utf8'))
+    process.kill(info.pid, 0) // does not kill, just asks whether it is there
+    return info
+  } catch (err) {
+    return null // no file, unreadable, or the pid is gone
+  }
+}
+
+const attach = process.argv.includes('--attach')
+const passthrough = process.argv.slice(2).filter(a => a !== '--attach')
+const args = [APP, ...FLAGS, ...passthrough]
+
+const running = runningInstance()
+if (running) {
+  console.log(`already running (pid ${running.pid}) at ${running.url}`)
+  console.log('bringing its window to the front')
+} else {
+  console.log(`launching ${path.relative(APP, binary)}`)
+}
+
+if (attach) {
+  const child = spawn(binary, args, { stdio: 'inherit' })
+  child.on('exit', code => process.exit(code === null ? 1 : code))
+} else {
+  const log = fs.openSync(LOG_FILE, 'a')
+  const child = spawn(binary, args, { detached: true, stdio: ['ignore', log, log] })
+  child.unref()
+  if (!running) console.log(`logging to ${path.relative(APP, LOG_FILE)}  (--attach to watch it live)`)
+}

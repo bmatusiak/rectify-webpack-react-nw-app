@@ -1,5 +1,6 @@
 process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 
+const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const express = require('express');
@@ -141,6 +142,23 @@ function watchServerBundle(onBuild) {
 
 //---- lifecycle -------------------------------------------------------------
 
+//what tools/nw.js reads to tell you the app is already up, and at which port.
+//nw.js is single instance, so a second launch is forwarded to this process --
+//but that happens inside the nw binary, where the launcher cannot see it.
+const INSTANCE_FILE = path.join(__dirname, '.nw-instance.json');
+
+function writeInstanceFile() {
+    try {
+        fs.writeFileSync(INSTANCE_FILE, JSON.stringify({ pid: process.pid, url: appUrl }, null, 2));
+    } catch (e) {
+        console.error('could not write ' + INSTANCE_FILE + ': ' + (e && e.message));
+    }
+}
+
+function clearInstanceFile() {
+    try { fs.unlinkSync(INSTANCE_FILE); } catch (e) { /* never written, or already gone */ }
+}
+
 let win = null;
 let tray = null;//module scope on purpose: a collected Tray takes its icon with it
 let trayItems = [];//what the plugins added, replayed into the menu on every rebuild
@@ -159,6 +177,7 @@ function shutdown(reason) {
     shuttingDown = true;
 
     console.log('shutting down: ' + reason);
+    clearInstanceFile();
     try { if (tray) tray.remove(); tray = null; } catch (e) { /* already gone */ }
     try { io.close(); } catch (e) { /* already gone */ }
     try { server.close(); } catch (e) { /* already gone */ }
@@ -274,8 +293,11 @@ watchServerBundle(function (err) {
         appUrl = 'http://' + HOST + ':' + server.address().port + '/';
         console.log('listening on ' + appUrl);
 
-        //plain node, ie `npm run dev`, there is no window to open
+        //plain node, ie `npm run dev`, there is no window to open and nothing
+        //for the launcher to find
         if (typeof nw == 'undefined') return;
+
+        writeInstanceFile();
 
         //if there is no status area to put it in, the window stays the app
         try {
