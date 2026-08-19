@@ -1,0 +1,43 @@
+{
+  "name": "rectify-webpack-react-nw-app",
+  "title": "Rectify NW App",
+  "version": "1.0.0",
+  "description": "Minimal rectify + webpack + react scaffold, running as an nw.js desktop app",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "start": "node tools/nw.js",
+    "dev": "node ./main.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "browserslist": [
+    "chrome >= 120"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/preset-env": "^7.29.7",
+    "@babel/preset-react": "^7.29.7",
+    "@bmatusiak/rectify": "github:bmatusiak/rectify",
+    "babel-loader": "^10.1.1",
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
+    "css-loader": "^7.1.4",
+    "express": "^5.2.1",
+    "html-webpack-plugin": "^5.6.8",
+    "jquery": "^4.0.0",
+    "node-loader": "^2.1.0",
+    "nw": "^0.114.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sass": "^1.102.0",
+    "sass-loader": "^16.0.8",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.109.2",
+    "webpack-dev-middleware": "^8.1.1",
+    "webpack-hot-middleware": "^2.26.1"
+  }
+}
