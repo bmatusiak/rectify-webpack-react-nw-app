@@ -35,6 +35,30 @@ test('both bundles resolve .ts the same way', () => {
     }
 });
 
+//the packaged main is the one bundle that must carry everything, since the
+//package has no node_modules beside it
+const main = require('../webpack.config.js')({}, { mode: 'production', bundle: 'main' })[0];
+
+test('the packaged main bundles everything, externalising nothing', () => {
+    assert.equal(main.name, 'main');
+    assert.equal(main.target, 'node');
+    assert.equal(main.externals, undefined, 'an external would be missing at runtime');
+});
+
+test('the packaged main is told it is packaged', () => {
+    const defines = main.plugins
+        .filter((p) => p.definitions)
+        .map((p) => p.definitions.BUILD_PROD)
+        .filter((v) => v !== undefined);
+    assert.deepEqual(defines, ['true'], 'BUILD_PROD gates webpack itself out of the package');
+});
+
+test('the window bundle is named after its entry, not main.js', () => {
+    //otherwise it overwrites the packaged main, which also writes into dist
+    assert.equal(windowBundle.output.filename, 'window.js');
+    assert.notEqual(windowBundle.output.filename, main.output.filename);
+});
+
 test('the window is a web bundle and the server is a node one', () => {
     assert.equal(windowBundle.target, 'web');
     assert.equal(server.target, 'node');

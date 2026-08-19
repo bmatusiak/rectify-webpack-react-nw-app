@@ -94,6 +94,61 @@ the manifest's `main` into a generated background page at the app root and
 resolves that script's requires from the root rather than from the file's own
 directory, so a boot living in `src/` cannot require its neighbours without it.
 
+## building a package
+
+```
+npm run build        production bundles, compiled, staged into build/app
+npm start -- --prod  run that staged build, before waiting on nw-builder
+npm run dist         build, then nw-builder -> build/out
+```
+
+`npm run build` produces four files and no javascript:
+
+```
+build/app/
+  package.json   main: app.html, window hidden
+  app.html       one line: evalNWBin(null, 'main.bin')
+  main.bin       native code, compiled by nwjc
+  icon.png
+```
+
+What goes into `main.bin`: `src/main.prod.js`, every `main.js` plugin half,
+`src/server.js` and every `server.js` half, express, socket.io — and the window
+half as a string, so it is served out of memory and never written to disk
+either. Nothing is external, because there is no `node_modules` beside it.
+
+### why it boots differently
+
+`evalNWBin` is a `Window` method, and nw's node context has no window —
+`nw.Window.get()` throws `No current window` there. So the packaged app's
+`main` is a hidden local page whose only job is to load the binary. Local means
+it has node; being a window means `evalNWBin` exists at all. The visible window
+is still remote and still has no node.
+
+That is the whole reason for the second boot: `src/main.js` reads plugins off
+disk for development, `src/main.prod.js` gets the same list from the bundle
+through `require.context`, and both hand off to `src/boot.js`.
+
+`src/app/build` is where the two modes actually diverge — webpack, watching and
+reloading on one side; assets served from memory and the node half simply
+required on the other. `BUILD_PROD` gates the requires directly rather than
+sitting inside a function, because webpack collects a dependency wherever it
+can reach it, and a `require('webpack')` in an unreachable function would still
+be bundled.
+
+### what this does and does not protect
+
+It means the app runs what it shipped with: there is no `.js` on disk to edit,
+and no `node_modules` to shim. Swapping `main.bin` for another one is possible
+but it is not a text edit.
+
+It is not encryption. The window half is delivered to a browser context to run,
+so it is readable there by anyone who opens devtools — as any client code is.
+And `nwjc` output is tied to **one platform and one nw.js version**, so the
+build has to run on each target with the runtime it will ship against. That is
+why `tools/pack.js` takes its version from the same `nw` pin that compiled the
+binary.
+
 ## install
 
 ```
@@ -110,6 +165,8 @@ nw`, then reinstall.
 ```
 npm start        # nw.js: node context + window, then gives the terminal back
 npm run dev      # the same server under plain node, it prints the url
+npm run build    # production bundles, compiled and staged into build/app
+npm run dist     # build, then nw-builder -> build/out
 npm test         # node --test
 npm run typecheck  # tsc --noEmit
 ```

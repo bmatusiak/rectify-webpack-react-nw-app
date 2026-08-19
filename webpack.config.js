@@ -45,6 +45,9 @@ module.exports = (env, argv = {}) => {
         resolve,
         output: {
             path: path.resolve(__dirname, 'dist'),
+            //named after its entry, so it cannot collide with the packaged main
+            //bundle, which also writes into dist
+            filename: 'window.js',
             publicPath: '/'
         },
         devtool: !isProduction ? 'inline-source-map' : false,
@@ -117,5 +120,37 @@ module.exports = (env, argv = {}) => {
         }
     };
 
-    return [windowBundle, server];
+    //the packaged main. only built by tools/build.js, never in development.
+    //
+    //nothing is external: the point is one file with no node_modules beside it,
+    //so express, socket.io and the plugins all go in. BUILD_PROD folds away the
+    //development branch of src/app/build, which is what keeps webpack itself
+    //from being dragged in with it.
+    const main = {
+        name: 'main',
+        target: 'node',
+        mode: 'production',
+        entry: path.join(__dirname, 'src', 'main.prod.js'),
+        output: {
+            path: path.resolve(__dirname, 'dist'),
+            filename: 'main.js'
+        },
+        devtool: false,
+        resolve,
+        //__dirname would otherwise be mocked to "/" and the plugins that use it
+        //would quietly look in the wrong place
+        node: { __dirname: false, __filename: false },
+        module: { rules: [babel, asString] },
+        plugins: [
+            new webpack.DefinePlugin({ BUILD_PROD: JSON.stringify(true) }),
+            //express reaches for a view engine by name at runtime; nothing here
+            //renders server side templates, so the miss is expected
+            new webpack.ContextReplacementPlugin(/express.lib/, /$^/)
+        ],
+        //socket.io and express both probe for optional native extras
+        ignoreWarnings: [{ module: /node_modules/ }],
+        stats: { errorDetails: true }
+    };
+
+    return argv.bundle == 'main' ? [main] : [windowBundle, server];
 }

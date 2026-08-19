@@ -109,16 +109,28 @@ function runningInstance () {
 }
 
 const attach = process.argv.includes('--attach')
-const passthrough = process.argv.slice(2).filter(a => a !== '--attach')
+
+// --prod runs build/app instead of the source tree: the same compiled main.bin
+// the package ships, with the sdk runtime so its console is still audible. The
+// last thing worth checking before waiting on nw-builder.
+const prod = process.argv.includes('--prod')
+const TARGET = prod ? path.join(APP, 'build', 'app') : APP
+
+const passthrough = process.argv.slice(2).filter(a => a !== '--attach' && a !== '--prod')
 const debugging = passthrough.some(a => a.startsWith('--remote-debugging-port'))
-const args = [APP, ...FLAGS, ...(debugging ? [] : ['--remote-debugging-port=0']), ...passthrough]
+const args = [TARGET, ...FLAGS, ...(debugging ? [] : ['--remote-debugging-port=0']), ...passthrough]
+
+if (prod && !fs.existsSync(path.join(TARGET, 'main.bin'))) {
+  console.error('build/app is not staged. run:  npm run build')
+  process.exit(1)
+}
 
 const running = runningInstance()
 if (running) {
   console.log(`already running (pid ${running.pid}) at ${running.url}`)
   console.log('bringing its window to the front')
 } else {
-  console.log(`launching ${path.relative(APP, binary)}`)
+  console.log(`launching ${path.relative(APP, binary)}${prod ? '  (packaged build)' : ''}`)
 }
 
 if (attach) {
