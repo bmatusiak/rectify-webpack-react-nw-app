@@ -9,7 +9,9 @@ async function plugin(imports, register) {
     var { app, react, theme, appPackage, io } = imports;
 
     if (app.isServer) {
-        app.expressApp.get('/api/hello', function (req, res) {
+        //app.router, not app.expressApp: the router is replaced on every
+        //server rebuild, so routes come and go with the reload
+        app.router.get('/api/hello', function (req, res) {
             res.json({ hello: appPackage.title, pid: process.pid });
         });
         return register(null, {});

@@ -26,6 +26,14 @@ async function plugin(imports, register) {
 
     if (app.isServer) {
         serve(app.io, app.appPackage);
+
+        //a server rebuild reloads this file, so drop the old handlers and let
+        //the clients reconnect onto the new ones
+        app.on('destroy', function () {
+            app.io.removeAllListeners('connection');
+            app.io.disconnectSockets();
+        });
+
         return register(null, { io: app.io, appPackage: app.appPackage });
     }
 

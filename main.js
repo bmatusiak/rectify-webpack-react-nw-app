@@ -14,7 +14,9 @@ const clientConfig = configs.find((c) => c.name == 'client');
 const serverConfig = configs.find((c) => c.name == 'server');
 
 const HOST = process.env.HOST || 'localhost';
-const PORT = process.env.PORT || 8080;
+//0 means "whatever is free". nothing depends on a fixed port any more, so two
+//of these can run side by side. set PORT to pin it.
+const PORT = process.env.PORT || 0;
 
 //nw.js runs this in its node context, `main` in package.json. no window is
 //created, this file opens it. the window is a remote page, so it gets its own
@@ -23,9 +25,15 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+//plugins mount on a router rather than on the app, so the whole set of routes
+//can be thrown away and rebuilt when the server bundle reloads
+let router = express.Router();
+app.use(function (req, res, next) { router(req, res, next); });
+
 //merged into rectify's `app` service, so plugins reach it with consumes: ['app']
 const host = {
     express,
+    router,
     expressApp: app,
     httpServer: server,
     io,
@@ -43,19 +51,48 @@ const clientCompiler = webpack(clientConfig);
 app.use(devMiddleware(clientCompiler, { publicPath: clientConfig.output.publicPath }));
 app.use(hotMiddleware(clientCompiler));
 
-//the node half of every plugin, built by the second entry. built once, so a
-//change under src/ that touches a server half needs a restart, the window half
-//hot reloads on its own.
-function buildServerBundle() {
-    return new Promise(function (resolve, reject) {
-        webpack(serverConfig).run(function (err, stats) {
-            if (err) return reject(err);
-            if (stats.hasErrors()) return reject(new Error(stats.toString({ all: false, errors: true })));
-            console.log('server bundle built in ' + (stats.endTime - stats.startTime) + 'ms');
-            resolve(path.join(serverConfig.output.path, serverConfig.output.filename));
+//---- the node half of every plugin, built by the second entry --------------
+
+const bundlePath = path.join(serverConfig.output.path, serverConfig.output.filename);
+let serverApp = null;
+
+async function loadServerBundle() {
+    if (serverApp) {
+        serverApp.destroy();//plugins tear down on app.on('destroy')
+        serverApp = null;
+    }
+
+    //a fresh router, so routes from the previous load do not stack up
+    router = express.Router();
+    host.router = router;
+
+    delete require.cache[require.resolve(bundlePath)];
+    serverApp = await require(bundlePath)(host);
+}
+
+//watch rather than build once, so a change to a plugin's node half reloads
+//the same way the window half does
+function watchServerBundle(onBuild) {
+    let first = true;
+    webpack(serverConfig).watch({}, function (err, stats) {
+        if (err) return first ? onBuild(err) : console.error(err);
+        if (stats.hasErrors()) {
+            const e = new Error(stats.toString({ all: false, errors: true }));
+            return first ? onBuild(e) : console.error(String(e.message));
+        }
+        console.log('server bundle built in ' + (stats.endTime - stats.startTime) + 'ms');
+
+        loadServerBundle().then(function () {
+            if (first) { first = false; onBuild(null); }
+            else console.log('server half reloaded');
+        }, function (e) {
+            if (first) { first = false; onBuild(e); }
+            else console.error('server half failed to reload', e && e.stack || e);
         });
     });
 }
+
+//---- lifecycle -------------------------------------------------------------
 
 let win = null;
 
@@ -101,13 +138,14 @@ server.on('error', function (e) {
     shutdown('the server could not start');
 });
 
-(async function () {
-
-    const bundle = await buildServerBundle();
-    await require(bundle)(host);
+watchServerBundle(function (err) {
+    if (err) {
+        console.error(err.stack || err);
+        return shutdown('the server bundle would not build');
+    }
 
     server.listen(PORT, HOST, function () {
-        const url = 'http://' + HOST + ':' + PORT + '/';
+        const url = 'http://' + HOST + ':' + server.address().port + '/';
         console.log('listening on ' + url);
 
         //plain node, ie `npm run dev`, there is no window to open
@@ -122,7 +160,4 @@ server.on('error', function (e) {
             openWindow(url);
         });
     });
-})().catch(function (e) {
-    console.error(e && e.stack || e);
-    shutdown('startup failed');
 });
