@@ -3,10 +3,10 @@ var { useState, useEffect } = React;
 
 //example app plugin, delete this and build your own.
 //both halves live here: the node side adds a route, the window renders.
-plugin.consumes = ['app', 'react', 'bootstrap', 'appPackage', 'io'];
+plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io'];
 plugin.provides = [];
 async function plugin(imports, register) {
-    var { app, react, bootstrap, appPackage, io } = imports;
+    var { app, react, theme, appPackage, io } = imports;
 
     if (app.isServer) {
         app.expressApp.get('/api/hello', function (req, res) {
@@ -15,7 +15,7 @@ async function plugin(imports, register) {
         return register(null, {});
     }
 
-    var NavBar = bootstrap.navbar;
+    var NavBar = theme.navbar;
 
     function App() {
         var [pong, setPong] = useState(null);

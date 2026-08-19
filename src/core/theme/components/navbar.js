@@ -1,8 +1,8 @@
 var React = require('react');
 
 async function navbar(imports) {
-    var { bootstrap, $ } = imports;
-    var { themeSwitcher } = bootstrap;
+    var { theme, $ } = imports;
+    var { themeSwitcher } = theme;
     return function NavBar(props) {
         var { title, back_title, back_action, sub_title } = props;
 

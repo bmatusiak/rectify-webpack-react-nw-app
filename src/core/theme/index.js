@@ -2,11 +2,11 @@ var navbar = require('./components/navbar');
 var dialog = require('./components/dialog');
 
 plugin.consumes = ['app', 'react', 'config', 'appPackage'];
-plugin.provides = ['bootstrap', '$'];
+plugin.provides = ['theme', '$'];
 async function plugin(imports, register) {
     //every require below is browser only, so they sit inside the branch, the
     //node bundle parses them and never loads them
-    if (imports.app.isServer) return register(null, { bootstrap: void 0, $: void 0 })
+    if (imports.app.isServer) return register(null, { theme: void 0, $: void 0 })
 
     var $ = require('jquery');
     var scss = require('./index.scss');// eslint-disable-line no-unused-vars
@@ -37,18 +37,18 @@ async function plugin(imports, register) {
 
     $('body').attr('data-bs-theme', config.mode);
 
-    var $bootstrap = {
-        bs: bootstrap,
+    var $theme = {
+        bs: bootstrap,//the kit itself, swap this file to swap kits
         themeSwitcher,
     }
-    imports.bootstrap = $bootstrap;
+    imports.theme = $theme;
     imports.$ = $;
-    $bootstrap.navbar = await navbar(imports);
-    $bootstrap.dialog = await dialog(imports);
+    $theme.navbar = await navbar(imports);
+    $theme.dialog = await dialog(imports);
 
     await register(null, {
         '$': $,
-        bootstrap: $bootstrap
+        theme: $theme
     });
 }
 module.exports = plugin;

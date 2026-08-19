@@ -2,7 +2,7 @@ var React = require('react');
 var { useRef, useState, useEffect } = React;
 
 async function dialog(imports) {
-    var { bootstrap, $ } = imports;
+    var { theme, $ } = imports;
 
     return function NavBar(props) {
         const { isOpen, onClose } = props;
@@ -17,7 +17,7 @@ async function dialog(imports) {
 
         useEffect(() => {
             if (bsRef.current == null) {
-                bsRef.current = new bootstrap.bs.Modal(modalRef.current, {
+                bsRef.current = new theme.bs.Modal(modalRef.current, {
                     focus: true,
                     backdrop: 'static'
                 })

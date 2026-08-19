@@ -3,7 +3,7 @@
 Minimal scaffold: a [rectify](https://github.com/bmatusiak/rectify) plugin app,
 bundled by webpack, rendered with React, running live inside an nw.js window.
 
-`webpack-rectify-react` (plugin architecture + bootstrap ui) merged with
+`webpack-rectify-react` (plugin architecture + theme kit) merged with
 `react-nw-app` (nw.js shell). There is no build/packaging step — nw.js runs
 everything, and the code it runs is the code in `src/`.
 
@@ -131,9 +131,13 @@ src/
     react/            provides `react`   -> createRoot on #root
     storage/          provides `session` + `config` -> typeStore over session/localStorage
     io/               provides `io` + `appPackage`  -> socket.io both sides, + mock.js
-    bootstrap/        provides `bootstrap` + `$`    -> bootstrap 5, scss, icons
+    theme/            provides `theme` + `$`        -> the theme kit, bootstrap 5 here
       components/     NavBar, Dialog
 ```
+
+`theme` is a slot, not a commitment to bootstrap. It provides `navbar`,
+`dialog`, `themeSwitcher` and `bs` (the kit itself); bring another kit by
+replacing `src/core/theme/` with one that provides the same names.
 
 Add plugins in `src/plugins.js`:
 
@@ -142,7 +146,7 @@ module.exports = [
     require('./core/react'),
     require('./core/storage'),
     require('./core/io'),
-    require('./core/bootstrap'),
+    require('./core/theme'),
 
     require('./app'),
     require('./my-plugin')
