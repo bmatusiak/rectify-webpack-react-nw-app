@@ -260,8 +260,12 @@ module.exports = [
 
 `.ts` and `.tsx` build with no extra step — babel strips the types and
 `resolve.extensions` finds them, so `require('./core/storage')` picks up
-`index.ts` exactly as it would `index.js`. Mix freely; `src/core/storage` is
-the one written in typescript.
+`index.ts` exactly as it would `index.js`.
+
+Nothing here is committed to typescript. `src/core/storage` is written in it to
+show that it works; every other plugin is plain javascript, and the two sit in
+the same plugin list. Pick per plugin, or rename that one to `.js` and have
+none at all.
 
 Stripping is not checking. `npm run typecheck` runs `tsc --noEmit` against
 `tsconfig.json`, which is `strict`.

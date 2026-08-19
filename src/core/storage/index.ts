@@ -8,10 +8,22 @@ console.log(typeStore.testing);//'ok-default', and assigning to it saves
 
  */
 
-//types pulled in with import() rather than `import type`. an `import`
-//statement, even a type-only one, makes babel mark the output as an es module
-//and webpack then refuses the `module.exports` at the bottom. this form is
-//erased outright, so the file stays commonjs like every other plugin.
+//---------------------------------------------------------------------------
+//this plugin is in typescript to show that it works, and nothing more. you are
+//not restricted to it: .js and .ts build the same way and sit side by side in
+//the same plugin list — every other plugin here is plain javascript. write in
+//whichever you prefer, per plugin, and rename this one to .js if you would
+//rather not have any typescript in the tree at all.
+//
+//if you do write typescript, two things are load bearing. keep the file
+//commonjs: `module.exports` at the bottom, and types pulled in with import()
+//rather than an `import type` statement. any import/export statement, even a
+//type-only one, makes babel mark the output an es module and webpack then
+//refuses the module.exports. the import() form below is erased outright.
+//
+//and remember the types are only stripped, never checked, during a build.
+//`npm run typecheck` is what checks them.
+//---------------------------------------------------------------------------
 type Imports = import('../../rectify').Imports<'app'>;
 type Register = import('../../rectify').Register;
 type TypeStore<T> = import('../../rectify').TypeStore<T>;
