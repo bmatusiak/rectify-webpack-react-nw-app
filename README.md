@@ -203,20 +203,25 @@ src/
   server.js           entry: runs the list in the node context
   config.js           app config, reaches plugins as setup's third argument
   index.html          <div id="root">
-  app/                the example app plugin, delete it and build your own
   rectify.d.ts        the plugin contract, for typescript plugins
-  core/
+  core/               what the scaffold is, and what nw.js needs
     react/            provides `react`   -> createRoot on #root
     storage/          provides `session` + `config` -> typeStore, written in typescript
     io/               provides `io` + `appPackage`  -> socket.io both sides, + mock.js
-    theme/            provides `theme`              -> the theme kit, bootstrap 5 here
+    nw/               provides `nw`      -> window and tray, node side only
+  app/                what this app is. delete it and build your own
+    index.js          the example plugin
+    theme/            provides `theme`  -> the theme kit, bootstrap 5 here
       components/     NavBar, Dialog
 ```
+
+`core/` is the parts that do not change when the app does. `app/` is
+everything that does — the theme kit included, since a project brings its own.
 
 `theme` is a slot, not a commitment to bootstrap. It carries `navbar`,
 `dialog`, `themeSwitcher`, `bs` (the kit itself) and `$` (the kit's dom helper,
 jquery here — deliberately not a top level service, since another kit may not
-want one). Bring another kit by replacing `src/core/theme/` with one that
+want one). Bring another kit by replacing `src/app/theme/` with one that
 carries the same names.
 
 ### config
@@ -244,8 +249,8 @@ module.exports = [
     require('./core/react'),
     require('./core/storage'),
     require('./core/io'),
-    require('./core/theme'),
 
+    require('./app/theme'),
     require('./app'),
     require('./my-plugin')
 ];

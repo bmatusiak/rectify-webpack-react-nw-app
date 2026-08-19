@@ -9,9 +9,9 @@ module.exports = [
     require('./core/storage'),
     require('./core/io'),
     require('./core/nw'),
-    require('./core/theme'),
 
     //app
+    require('./app/theme'),
     require('./app')
 
 ];
