@@ -11,17 +11,60 @@ everything, and the code it runs is the code in `src/`.
 
 ```
 nw.js starts  ->  main.js          node context, no window
+                    builds src/server.js  -> runs the plugins here
                     express + socket.io + webpack-dev-middleware on :8080
                     nw.Window.open('http://localhost:8080/')
                                   ->  the window, its own context, no node
+                                      src/index.js -> runs the same plugins
                                       talks back over socket.io
 ```
 
 `main` in `package.json` is a `.js` file, so nw.js runs it in the node context
 and creates no window; `main.js` opens the view itself. The window loads a
-remote page, so it gets its own javascript context with no node in it — which
-is why `app-server/index.js` and the window talk over socket.io instead of
-sharing objects.
+remote page, so it gets its own javascript context with no node in it.
+
+## two entries, one plugin list
+
+`src/plugins.js` is the one list. `src/index.js` and `src/server.js` both read
+it — nothing else declares what loads. Webpack builds both — a `web` bundle served to the window and a `node`
+bundle `main.js` loads — so a plugin keeps its server code and its client code
+in the same file:
+
+```js
+plugin.consumes = ['app'];
+plugin.provides = ['thing'];
+async function plugin(imports, register) {
+    var { app } = imports;
+
+    if (app.isServer) {
+        app.expressApp.get('/api/thing', ...);   //node half
+        return register(null, { thing: ... });
+    }
+
+    var res = await fetch('/api/thing');          //browser half
+    await register(null, { thing: await res.json() });
+}
+```
+
+`main.js` hands the host in through rectify's second `build()` argument, which
+merges onto the `app` service — so `consumes: ['app']` gets you `app.express`,
+`app.expressApp`, `app.httpServer`, `app.io` and `app.appPackage` on the node
+side.
+
+**Branch on `app.isServer`, not on `app.isBrowser` or `typeof document`.** The
+entries set it. nw.js's node context has a `window` with a `document` on it, so
+every other test reports that side as a browser and the node bundle then runs
+the wrong half.
+
+### the client can mock the server
+
+Because the client bundle contains both halves, the browser can run the server
+half itself when nothing answers on the wire. `src/core/io/index.js` does this:
+one `serve(io, appPackage)` function, given the real socket.io server on the
+node side, and given an in-memory pair from `src/core/io/mock.js` in the browser
+when the connection fails. Open a built client with no server behind it and the
+app still comes up, driven by the real server code rather than a second
+implementation of it.
 
 ## install
 
@@ -46,56 +89,65 @@ so the window's console reaches your terminal. Extra flags pass through:
 npm start -- --remote-debugging-port=9222
 ```
 
+The window half hot reloads. The server bundle is built once at startup, so a
+change to a plugin's node half needs a restart.
+
+### the view is the app
+
+Closing the window exits the process. `nw.App.quit()` alone does not always
+manage that — the http server, socket.io and webpack's watchers are open
+handles, and the node context can outlive the window holding them, which leaves
+a copy running with nothing on screen and port 8080 taken. So `shutdown()` in
+`main.js` closes the server, closes the windows, quits, and then hard exits.
+
+Closing the devtools window does not quit; only the app window does.
+
+Two things you will see if a copy is somehow still up:
+
+```
+Opening in existing browser session.        # nw.js is single instance. the
+                                            # second start woke the first one
+                                            # and exited. the window comes back.
+
+port 8080 is already taken. another copy    # something else has the port.
+is probably still running.                  # this one shuts down instead of
+                                            # sitting there dead.
+```
+
 ## layout
 
 ```
-main.js               nw.js entry, node context: server + window
-app-server/index.js   attach point for anything server side, ie gun
+main.js               nw.js entry, node context: builds, serves, opens the window
 tools/nw.js           launcher, finds the nw binary and turns logging on
-webpack.config.js
+webpack.config.js     returns [client, server]
 src/
-  index.js            starts rectify with the plugin list
+  plugins.js          the plugin list, read by both entries
+  index.js            entry: runs the list in the window
+  server.js           entry: runs the list in the node context
   config.js           app config slot
   index.html          <div id="root">
   app/                the example app plugin, delete it and build your own
   core/
-    index.js          the core plugin list
     react/            provides `react`   -> createRoot on #root
     storage/          provides `session` + `config` -> typeStore over session/localStorage
-    io/               provides `io` + `appPackage`  -> socket.io client
+    io/               provides `io` + `appPackage`  -> socket.io both sides, + mock.js
     bootstrap/        provides `bootstrap` + `$`    -> bootstrap 5, scss, icons
       components/     NavBar, Dialog
 ```
 
-Add app plugins in the array in `src/index.js`:
+Add plugins in `src/plugins.js`:
 
 ```js
-var app_config = []
-  .concat(
-    require('./core/index'),
-    [
-      require('./app/index')
-    ]);
+module.exports = [
+    require('./core/react'),
+    require('./core/storage'),
+    require('./core/io'),
+    require('./core/bootstrap'),
+
+    require('./app'),
+    require('./my-plugin')
+];
 ```
-
-A plugin declares what it needs and what it exposes:
-
-```js
-plugin.consumes = ['react', 'bootstrap'];
-plugin.provides = ['my-thing'];
-async function plugin(imports, register) {
-    await register(null, { 'my-thing': {} });
-}
-module.exports = plugin;
-```
-
-## talking to the node side
-
-`app-server/index.js` gets the express app, with `app.server` (http) and
-`app.io` (socket.io) on it. The window gets the connected socket as the `io`
-service. The example round trip is `ping` in `app-server/index.js` and the
-`io.emit('ping', ...)` in `src/app/index.js`; `appPackage` reaches the window
-the same way, because the window cannot read `package.json` itself.
 
 ## what nw.js's node context will not run
 
@@ -119,6 +171,7 @@ loop into a chromium render process, and that context is not plain node:
 - **`--mixed-context` swaps in the browser's timers.** `setInterval()` then
   returns a number with no `.unref()`, which crashes `webpack-hot-middleware`
   on startup. Nothing here does cross-context `instanceof`, so the flag is gone.
+- **`window` and `document` exist there**, which is what `app.isServer` is for.
 - `Worker` and `WebSocket` are not available there either.
 
 Everything is in `devDependencies`: the app compiles itself at startup, so
