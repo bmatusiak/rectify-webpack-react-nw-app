@@ -51,11 +51,55 @@ function buildServerBundle() {
         webpack(serverConfig).run(function (err, stats) {
             if (err) return reject(err);
             if (stats.hasErrors()) return reject(new Error(stats.toString({ all: false, errors: true })));
-            console.log('server bundle built in ' + stats.endTime - stats.startTime + 'ms');
+            console.log('server bundle built in ' + (stats.endTime - stats.startTime) + 'ms');
             resolve(path.join(serverConfig.output.path, serverConfig.output.filename));
         });
     });
 }
+
+let win = null;
+
+//strict: the view is the app. when it goes, this process goes with it.
+//nw.App.quit() on its own can leave the node context alive, because the
+//server, socket.io and webpack's watchers are all still open handles.
+function shutdown(reason) {
+    console.log('shutting down: ' + reason);
+    try { io.close(); } catch (e) { /* already gone */ }
+    try { server.close(); } catch (e) { /* already gone */ }
+    if (typeof nw != 'undefined') {
+        try { nw.App.closeAllWindows(); } catch (e) { /* already gone */ }
+        try { nw.App.quit(); } catch (e) { /* already gone */ }
+    }
+    var t = setTimeout(function () { process.exit(0); }, 300);
+    if (t && t.unref) t.unref();//a browser timer id has no unref, see the readme
+}
+
+function openWindow(url) {
+    nw.Window.open(url, {
+        id: 'main',
+        width: 1024,
+        height: 768
+    }, function (w) {
+        if (!w) return shutdown('the window failed to open');
+        win = w;
+
+        if (process.versions['nw-flavor'].indexOf('sdk') >= 0)
+            win.showDevTools();//the normal flavor opens an empty devtools window
+
+        win.on('closed', function () {
+            win = null;
+            shutdown('the window was closed');
+        });
+    });
+}
+
+server.on('error', function (e) {
+    if (e.code == 'EADDRINUSE')
+        console.error('port ' + PORT + ' is already taken. another copy is probably still running.');
+    else
+        console.error(e.stack || e);
+    shutdown('the server could not start');
+});
 
 (async function () {
 
@@ -69,19 +113,16 @@ function buildServerBundle() {
         //plain node, ie `npm run dev`, there is no window to open
         if (typeof nw == 'undefined') return;
 
-        nw.Window.open(url, {
-            id: 'main',
-            width: 1024,
-            height: 768
-        }, function (win) {
-            if (process.versions['nw-flavor'].indexOf('sdk') >= 0)
-                win.showDevTools();//the normal flavor opens an empty devtools window
+        openWindow(url);
 
-            win.on('closed', function () {
-                nw.App.quit();
-            });
+        //nw.js is single instance: a second `npm start` wakes this one instead
+        //of starting its own. bring the window back rather than doing nothing.
+        nw.App.on('open', function () {
+            if (win) { try { return win.show(), win.focus(); } catch (e) { win = null; } }
+            openWindow(url);
         });
     });
 })().catch(function (e) {
     console.error(e && e.stack || e);
+    shutdown('startup failed');
 });
