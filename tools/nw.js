@@ -68,6 +68,12 @@ try {
 // about THIS app, it adds Chromium talking about itself, and the line that
 // matters is then somewhere in three hundred. Add it by hand for one run if the
 // browser process itself is what is being chased.
+// --remote-debugging-port=0 is what makes "Inspect main.js" on the tray work.
+// main.js runs in a background page, which nw's own window API cannot reach, so
+// the only way in is chromium's debugger. 0 means chromium picks a free port and
+// writes it to DevToolsActivePort in the user data dir, so nothing is pinned and
+// nothing collides; it listens on loopback only. Pass your own
+// --remote-debugging-port to override it.
 const FLAGS = ['--enable-logging=stderr']
 
 // LETTING GO OF THE TERMINAL.
@@ -104,7 +110,8 @@ function runningInstance () {
 
 const attach = process.argv.includes('--attach')
 const passthrough = process.argv.slice(2).filter(a => a !== '--attach')
-const args = [APP, ...FLAGS, ...passthrough]
+const debugging = passthrough.some(a => a.startsWith('--remote-debugging-port'))
+const args = [APP, ...FLAGS, ...(debugging ? [] : ['--remote-debugging-port=0']), ...passthrough]
 
 const running = runningInstance()
 if (running) {

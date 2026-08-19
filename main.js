@@ -198,9 +198,6 @@ function openWindow() {
         if (!w) return shutdown('the window failed to open');
         win = w;
 
-        if (process.versions['nw-flavor'].indexOf('sdk') >= 0)
-            win.showDevTools();//the normal flavor opens an empty devtools window
-
         //nw quits when the last window closes, tray or not. so with a tray the
         //close is intercepted and the window is only hidden: the node half
         //keeps running, and reopening is instant with the page state intact.
@@ -228,6 +225,51 @@ function showWindow() {
     openWindow();
 }
 
+//the window is a normal nw window, so it can be told to show its own devtools
+function inspectWindow() {
+    if (!win) return openWindow();//it opens, inspect it again once it is up
+    try { win.showDevTools(); } catch (e) { console.error('showDevTools failed: ' + (e && e.message)); }
+}
+
+//main.js cannot. it runs in _generated_background_page.html, which nw does not
+//treat as a window -- nw.Window.get() there throws "No current window", with or
+//without a window object passed to it. the way in is chromium's own debugger:
+//the launcher starts nw with --remote-debugging-port=0, chromium writes the
+//port it picked into DevToolsActivePort, and /json lists a frontend url for
+//every target. the node context is the background_page one.
+function inspectMain() {
+    //nw.App.dataPath is <user data>/Default, and chromium writes the port file
+    //one level up in <user data>. both are checked, layouts differ by platform.
+    var dirs = [path.dirname(nw.App.dataPath), nw.App.dataPath];
+    var port = null;
+    for (var i = 0; i < dirs.length && !port; i++) {
+        try {
+            port = String(fs.readFileSync(path.join(dirs[i], 'DevToolsActivePort'), 'utf8'))
+                .split(String.fromCharCode(10))[0].trim();
+        } catch (e) { /* try the next one */ }
+    }
+    if (!port) return console.error('no debugger port. start with --remote-debugging-port=0');
+
+    http.get('http://127.0.0.1:' + port + '/json', function (res) {
+        var body = '';
+        res.on('data', function (c) { body += c; });
+        res.on('end', function () {
+            var target;
+            try {
+                target = JSON.parse(body).find(function (t) { return t.type == 'background_page'; });
+            } catch (e) { /* handled below */ }
+
+            if (!target || !target.devtoolsFrontendUrl)
+                return console.error('the node context is not in the debugger target list');
+
+            nw.Window.open('http://127.0.0.1:' + port + target.devtoolsFrontendUrl,
+                { width: 1200, height: 800 });
+        });
+    }).on('error', function (e) {
+        console.error('could not reach the debugger on ' + port + ': ' + (e && e.message));
+    });
+}
+
 //rebuilt whole rather than patched: plugins come and go on every reload, and
 //removing by index is how menus end up with the wrong item on them
 function rebuildTrayMenu() {
@@ -245,6 +287,10 @@ function rebuildTrayMenu() {
         label: 'Open in browser',
         click: function () { nw.Shell.openExternal(appUrl); }
     }));
+    menu.append(new nw.MenuItem({ type: 'separator' }));
+    menu.append(new nw.MenuItem({ label: 'Inspect window', click: inspectWindow }));
+    menu.append(new nw.MenuItem({ label: 'Inspect main.js', click: inspectMain }));
+
     menu.append(new nw.MenuItem({ type: 'separator' }));
     menu.append(new nw.MenuItem({ label: 'Quit', click: function () { shutdown('quit from the tray'); } }));
 
@@ -298,6 +344,7 @@ watchServerBundle(function (err) {
         if (typeof nw == 'undefined') return;
 
         writeInstanceFile();
+
 
         //if there is no status area to put it in, the window stays the app
         try {

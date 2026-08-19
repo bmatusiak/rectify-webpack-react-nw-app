@@ -131,6 +131,24 @@ pins it.
 window's console audible at all — without it a page that threw on load looks
 exactly like a page with nothing to draw.
 
+### inspecting either half
+
+Devtools does not open by itself. The tray menu has both:
+
+- **Inspect window** — the page. `win.showDevTools()`, the ordinary thing.
+- **Inspect main.js** — the node context. Not the ordinary thing: `main.js`
+  runs in `_generated_background_page.html`, which nw does not treat as a
+  window, so `nw.Window.get()` throws `No current window` there with or without
+  a window object passed to it. The way in is chromium's own debugger. The
+  launcher starts nw with `--remote-debugging-port=0`, chromium picks a free
+  port and writes it to `DevToolsActivePort` in the user data dir, and the
+  `background_page` entry in `/json` carries a frontend url to open.
+
+  (`nw.App.dataPath` is `<user data>/Default`; the port file is one level up.)
+
+The port is loopback-only and never pinned. Pass your own
+`--remote-debugging-port` to override it.
+
 Both halves hot reload. The window half goes through webpack-hot-middleware;
 the node half is watched too, and on each rebuild `main.js` tears the old one
 down and loads the new bundle in place — same process, no restart.
