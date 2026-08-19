@@ -1,3 +1,9 @@
+//the example kit's stylesheet. replace it along with the rest of this
+//directory when you bring your own style — nothing outside depends on it.
+//
+//bare specifier, not "~bootstrap/...": sass-loader's webpack importer cannot
+//run inside nw's node context, so sass resolves this itself through the
+//loadPaths in webpack.config.js.
 @use "bootstrap/scss/bootstrap" as *;
 
 :root,

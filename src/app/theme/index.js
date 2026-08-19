@@ -1,3 +1,26 @@
+//---------------------------------------------------------------------------
+//this is an example kit, not the scaffold's opinion. bootstrap, jquery and
+//bootstrap-icons are here because something had to be, and bringing your own
+//style is the expected thing to do — tailwind, your own css, a component
+//library, or nothing at all.
+//
+//`theme` is the slot. it is the only name anything outside this directory
+//knows: src/app/index.js asks for `theme` and reads `theme.navbar`. so a kit
+//swap is this whole directory replaced by one that provides the same service
+//with whatever it carries. the pieces here happen to be:
+//
+//  navbar, dialog   the components, in ./components
+//  themeSwitcher    flips light/dark, remembered through the `config` store
+//  bs               the kit's own library, bootstrap's js in this one
+//  $                the kit's dom helper, jquery here. deliberately not a top
+//                   level service, since another kit may not want one
+//
+//none of those names are required either. they are what this kit provides,
+//and what the example plugin happens to use.
+//
+//src/config.js pins the starting colour mode, if you want one.
+//---------------------------------------------------------------------------
+
 var navbar = require('./components/navbar');
 var dialog = require('./components/dialog');
 

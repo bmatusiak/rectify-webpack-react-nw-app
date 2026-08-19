@@ -218,11 +218,17 @@ src/
 `core/` is the parts that do not change when the app does. `app/` is
 everything that does — the theme kit included, since a project brings its own.
 
-`theme` is a slot, not a commitment to bootstrap. It carries `navbar`,
-`dialog`, `themeSwitcher`, `bs` (the kit itself) and `$` (the kit's dom helper,
-jquery here — deliberately not a top level service, since another kit may not
-want one). Bring another kit by replacing `src/app/theme/` with one that
-carries the same names.
+`theme` is a slot, and bringing your own style is the expected thing to do.
+Bootstrap, jquery and bootstrap-icons are in `src/app/theme/` because something
+had to be — tailwind, plain css, a component library or nothing at all all fit
+the same slot.
+
+The service name is the only thing anything outside that directory knows:
+`src/app/index.js` asks for `theme` and reads `theme.navbar`. So a swap is the
+whole directory replaced. What this kit happens to carry is `navbar`, `dialog`,
+`themeSwitcher`, `bs` (its own library) and `$` (its dom helper, deliberately
+not a top level service since another kit may not want one) — none of which are
+required of a replacement, only of the example plugin that uses them.
 
 ### config
 
