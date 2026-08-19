@@ -6,6 +6,17 @@ module.exports = function () {
 
     var Config = {
 
+        //src/main plugins
+        window: {
+            width: 1024,
+            height: 768
+        },
+
+        tray: {
+            icon: 'icon.png'//relative to the project root
+        },
+
+        //app plugins
         theme: {
             mode: null//'light' | 'dark', or null to follow the os
         }

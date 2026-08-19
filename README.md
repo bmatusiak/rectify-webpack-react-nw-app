@@ -23,6 +23,41 @@ nw.js starts  ->  main.js          node context, no window
 and creates no window; `main.js` opens the view itself. The window loads a
 remote page, so it gets its own javascript context with no node in it.
 
+## two plugin lists
+
+`main.js` is a bootstrap and nothing else: it builds a rectify app out of
+`src/main/plugins.js` and starts it.
+
+```
+src/main/plugins.js   this process. loaded straight off disk, never bundled,
+                      never reloaded — it has to outlive what the reload
+                      replaces.
+
+  lifecycle   shutdown, the crash handlers, .nw-instance.json
+  server      express, http, socket.io, the swappable router
+  window      the nw.js window
+  tray        the tray icon and its menu
+  devtools    the two Inspect items on that menu
+  bundler     webpack, the server half reload, and the start order
+
+src/plugins.js        the app. the same list run twice — here through
+                      src/server.js, and in the window through src/index.js.
+                      src/main/bundler rebuilds and reloads the node half of
+                      it on every save.
+```
+
+They are separate rectify apps with separate service graphs. The main side
+hands the app side a host object (`express`, `router`, `httpServer`, `io`,
+`appPackage`, and an `nw` controller) — which is why `src/core/nw` wraps a
+controller rather than touching a window itself.
+
+`bundler` consumes everything, so rectify runs it last, and its setup *is* the
+startup sequence: build, load the node half, listen, show a window.
+
+Teardown is rectify's: `lifecycle.shutdown()` calls `app.destroy()`, and each
+plugin's `onDestroy` runs in reverse — the tray comes off, the server closes,
+the instance file goes away.
+
 ## two entries, one plugin list
 
 `src/plugins.js` is the one list. `src/index.js` and `src/server.js` both read
@@ -179,14 +214,25 @@ strand the rest. It works for any plugin, including one that provides nothing.
 
 ### the window is a view, the tray is the app
 
-Closing the window does not quit. It hides, the node half keeps running behind
-the tray icon, and reopening is instant with the page state intact — nw quits
-when the last window closes whether or not there is a tray, so `main.js`
-intercepts `close` and hides instead. Reopen from the tray, by left-clicking it,
-or by running `npm start` again; quit from the tray's Quit.
+Closing the window does not quit. The node half keeps running behind the tray
+icon; reopen from the tray, by left-clicking it, or by running `npm start`
+again, and quit from the tray's Quit.
 
-If the tray cannot be created (no status area), the old rule stands: closing
-the window quits.
+Two mechanisms hold that up, because one of them is not reliable:
+
+- `close` is intercepted and the window hidden instead, so reopening is instant
+  with the page state intact. Nice when it works — but **a page reload silently
+  drops that listener** while leaving `loaded` firing, and the client half
+  full-reloads on any change it cannot hot swap. So the first edit you make
+  turns close back into a real close. Re-attaching on `loaded` does not fix it;
+  the handle is stale.
+- So `window` also opens a hidden, never-closed keep-alive window. nw quits when
+  the *last* window closes, and that one never does. If the interception held,
+  the window hides; if it did not, the window is destroyed and the app survives
+  anyway — "Open window" then makes a fresh one.
+
+Measured both ways: fresh start, close hides it. After an edit, close destroys
+it and the app is still serving.
 
 Quitting has to be thorough. `nw.App.quit()` alone does not always manage it —
 the http server, socket.io and webpack's watchers are open handles, and the
