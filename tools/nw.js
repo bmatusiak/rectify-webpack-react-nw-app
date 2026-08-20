@@ -74,6 +74,12 @@ try {
 // writes it to DevToolsActivePort in the user data dir, so nothing is pinned and
 // nothing collides; it listens on loopback only. Pass your own
 // --remote-debugging-port to override it.
+//
+// SOURCE ONLY. A built or packaged app has no Inspect items on its tray, and
+// opening a debugger onto it would hand back precisely what compiling the node
+// half into main.bin was for -- while also being the one socket left listening
+// in a build whose whole point is that nothing is. Ask for it by hand if you
+// are debugging a packaged build; you will not get it by accident.
 const FLAGS = ['--enable-logging=stderr']
 
 // LETTING GO OF THE TERMINAL.
@@ -161,7 +167,7 @@ const debugging = passthrough.some(a => a.startsWith('--remote-debugging-port'))
 const args = [
   ...(target ? [target] : []),
   ...FLAGS,
-  ...(debugging ? [] : ['--remote-debugging-port=0']),
+  ...(mode === 'source' && !debugging ? ['--remote-debugging-port=0'] : []),
   ...passthrough
 ]
 
