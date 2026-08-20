@@ -116,6 +116,67 @@ test('socket.io answers the handshake and the ping', async () => {
     }
 });
 
+//---- the remote control --------------------------------------------------
+
+//the window half is the thing that clicks, and it needs a document, so what is
+//exercised here is the half in between: which view a command goes to, and what
+//comes back. the view is played by a socket.io client that answers.
+
+function view(nw) {
+    const socket = connect(url, { transports: ['websocket'] });
+
+    socket.on('remote:click', (data, ack) => {
+        if (data.selector === 'nothing') return ack({ error: 'nothing matches "nothing"' });
+        ack({ found: 'selector', clicked: { element: 'button', text: data.selector } });
+    });
+
+    return new Promise((resolve, reject) => {
+        socket.once('connect_error', reject);
+        socket.once('app', () => {
+            socket.emit('remote:hello', { app: nw, title: nw ? 'the window' : 'a browser' });
+            //the hello has to land before the server is asked to choose
+            setTimeout(() => resolve(socket), 150);
+        });
+    });
+}
+
+test('with nothing connected, a click says so rather than hanging', async () => {
+    await assert.rejects(() => handlers.click({ selector: 'a' }), /no view is connected/);
+});
+
+test('a click reaches the view and comes back described', async () => {
+    const socket = await view(true);
+    try {
+        const out = await handlers.click({ selector: 'Save' });
+        assert.equal(out.clicked.text, 'Save');
+        assert.equal(out.view, 'window');
+        assert.equal(out.views, undefined);//only one, so not worth saying
+    } finally {
+        socket.close();
+    }
+});
+
+test('the window wins over a browser view, and the answer says which', async () => {
+    const browser = await view(false);
+    const window = await view(true);
+    try {
+        const out = await handlers.click({ selector: 'Save' });
+        assert.equal(out.view, 'window');
+        assert.equal(out.views, 2);//and says there was a choice to make
+    } finally {
+        browser.close(); window.close();
+    }
+});
+
+test('an error from the view arrives as an error, not as a result', async () => {
+    const socket = await view(true);
+    try {
+        await assert.rejects(() => handlers.click({ selector: 'nothing' }), /nothing matches/);
+    } finally {
+        socket.close();
+    }
+});
+
 test('destroy() unhooks the server half so a reload cannot double register', async () => {
     await loaded.destroy();
 

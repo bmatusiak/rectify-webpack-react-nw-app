@@ -15,7 +15,11 @@ async function plugin(imports, register) {
         appPackage: host.appPackage,
         onDestroy: function () {
             host.io.removeAllListeners('connection');
-            host.io.disconnectSockets();//the clients reconnect onto the new handlers
+            //the clients come back onto the new handlers, but not by themselves
+            //-- either way this is spelled, they are told "io server
+            //disconnect" and socket.io-client treats that as final. the page
+            //reconnects itself; see the disconnect handler in ./window.js
+            host.io.disconnectSockets();
         }
     });
 }

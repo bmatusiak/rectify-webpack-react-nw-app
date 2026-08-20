@@ -33,7 +33,12 @@ async function plugin(imports, register, config) {
     function open() {
         if (!http.url) return console.error('nothing is listening yet');
 
-        nw.Window.open(http.url, {
+        //?view=app marks this as the app's own window rather than a browser
+        //looking at the same url. nothing in the page can tell the difference
+        //on its own -- nw 0.114 sends an ordinary chrome user agent, and the
+        //window deliberately has no node in it -- so the side that opened it
+        //is the side that has to say so. src/app/remote reads it back.
+        nw.Window.open(http.url + '?view=app', {
             id: 'main',
             width: size.width || 1024,
             height: size.height || 768

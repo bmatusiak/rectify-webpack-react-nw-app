@@ -13,7 +13,8 @@ async function plugin(imports, register) {
     var { cli, ipc } = imports;
 
     cli.command('capture', {
-        help: 'save a picture of the window  [{"path":"shot.png","format":"jpeg"}]',
+        help: 'save a picture of the window   [path] [png|jpeg]',
+        args: ['path', 'format'],
         run: async function (data) {
             var format = data.format == 'jpeg' ? 'jpeg' : 'png';
             var file = path.resolve(data.path || stamp(format));

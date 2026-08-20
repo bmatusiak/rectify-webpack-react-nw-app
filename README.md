@@ -216,6 +216,9 @@ npm run cli                    what it understands
 npm run cli -- status          is the app up, and where
 npm run cli -- open            bring the window back
 npm run cli -- capture         photograph the window
+npm run cli -- views           what is open to be driven
+npm run cli -- click Save      press something in it
+npm run cli -- fill "#name" Bo type into it
 npm run cli -- quit            shut it down
 npm run cli -- hello '{"a":1}' anything the app answers, with json in
 ```
@@ -223,6 +226,10 @@ npm run cli -- hello '{"a":1}' anything the app answers, with json in
 `src/cli.js` is a fourth boot, run by plain node with no nw.js and no window.
 It gathers every `src/app/*/cli.js`, exactly as the other three gather their
 own halves.
+
+A command can name what it takes, so the common case is typed the way it is
+spoken -- `click Save` rather than `click '{"selector":"Save"}'`. Json still
+wins when the names do not cover what you want to say.
 
 **A command is local unless it is not.** Anything the table does not know is
 forwarded to the running app, so a plugin that answers over ipc is reachable
@@ -254,6 +261,54 @@ screen at 2x returns a picture twice the size the window was asked to be.
 showing both go through this plugin, so it knows, and says so instead of
 waiting. A minimized window looks the same from here and is not tracked; that
 one falls to a 15s timeout.
+
+### clicking
+
+`capture` gave it eyes. These are the hands.
+
+```
+npm run cli -- click Save                press it
+npm run cli -- click ".btn-primary"      by selector instead
+npm run cli -- fill "#email" me@here     type into it
+npm run cli -- fill select darkly        choose in it
+npm run cli -- fill "#agree"             toggle it
+npm run cli -- read .nav-link            what is there now
+```
+
+Say which element three ways, tried in that order: a **css selector**, because
+it is exact; the **visible text**, because "the button that says Save" is how
+people think about a screen; or a **point**, `{"x":120,"y":80}`, which is the
+only one of the three that respects what is on top. Text only matches things a
+person could click or type into, and prefers one that is actually on screen --
+a bootstrap app keeps whole pages in the dom with `display:none` on them.
+
+It is **not an `eval` channel**. One would have been three lines and would have
+answered every question this will ever be asked, and would also have handed
+anything that can open a local socket the run of the app -- which is the exact
+thing `nwjc` is there to prevent. So: verbs, and only these.
+
+Two details that took measuring:
+
+- `click` is not `element.click()`. That fires one event, and half of bootstrap
+  listens for the ones around it -- dropdowns close on `pointerdown`, carousels
+  drag on `mousedown`. It sends the sequence a mouse actually produces.
+- `fill` does not assign `el.value`. React remembers the last value it wrote
+  and drops any change event whose value it thinks it already knows, so
+  assigning moves the input on screen and nothing else. Going through the
+  prototype's own setter moves React's copy with it.
+
+### which view gets it
+
+`npm run cli -- views` lists them, because there can be more than one -- **open
+in browser** makes a second, and it is a real client of the same server. The
+app's own window wins; a browser view only gets the click if it is the only
+thing there, and the answer says which one it went to.
+
+Nothing in the page can tell the two apart on its own. Nw 0.114 sends an
+**ordinary chrome user agent** with no mention of nw in it, and the window
+deliberately has no node in it to ask. So the side that opened it says so:
+`src/app/window/main.js` opens the url with `?view=app` and the remote plugin
+reads it back.
 
 ### the control socket
 

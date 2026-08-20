@@ -12,7 +12,7 @@ async function plugin(imports, register) {
     var commands = {};
 
     function command(name, options) {
-        commands[name] = options;//{ help, run(args) }
+        commands[name] = options;//{ help, args, run(data) }
     }
 
     command('help', {
@@ -44,10 +44,26 @@ async function plugin(imports, register) {
 
             run: async function (argv) {
                 var name = argv[0] || 'help';
+                var rest = argv.slice(1);
                 var data = {};
-                if (argv[1]) {
-                    try { data = JSON.parse(argv[1]); }
-                    catch (e) { throw new Error('the argument after the command must be json: ' + argv[1]); }
+
+                if (rest.length) {
+                    if (rest[0].charAt(0) == '{') {
+                        try { data = JSON.parse(rest[0]); }
+                        catch (e) { throw new Error('that did not parse as json: ' + rest[0]); }
+                    }
+
+                    //a command can name what it takes, so the common case is
+                    //typed the way it is spoken -- `click Save` rather than
+                    //`click {"selector":"Save"}`. json still wins if you want
+                    //to say something the names do not cover.
+                    else if (commands[name] && commands[name].args) {
+                        commands[name].args.forEach(function (key, i) {
+                            if (rest[i] !== undefined) data[key] = rest[i];
+                        });
+                    }
+
+                    else throw new Error('"' + name + '" takes json: ' + rest[0]);
                 }
 
                 if (commands[name]) return commands[name].run(data);
