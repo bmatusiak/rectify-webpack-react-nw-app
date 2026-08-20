@@ -46,6 +46,12 @@ function slug(title) {
     return 's-' + String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+//headings do not follow the body colour on their own. bootstrap points them at
+//--bs-heading-color, and a swatch is free to pin that to one value and never
+//mention it again -- lux sets #1a1a1a at :root and says nothing about dark, so
+//in dark mode its headings came out #1a1a1a on #1a1a1a, a contrast ratio of
+//exactly 1. text-body-emphasis is the utility that tracks the mode, so every
+//heading this kit renders wears it.
 function Section(props) {
     var { title, lead, aside, className, children } = props;
     return (
@@ -55,7 +61,7 @@ function Section(props) {
             {title ? (
                 <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-3">
                     <div>
-                        <h4 className="mb-0">{title}</h4>
+                        <h4 className="mb-0 text-body-emphasis">{title}</h4>
                         {lead ? <p className="text-body-secondary mb-0 small">{lead}</p> : null}
                     </div>
                     {aside}
@@ -72,7 +78,7 @@ function Hero(props) {
         <div className={cx('p-5 mb-4 bg-body-tertiary rounded-3', className)}>
             <div className="container-fluid py-3">
                 {icon ? <Icon name={icon} size="48" className="mb-3 text-primary" /> : null}
-                <h1 className="display-6 fw-bold">{title}</h1>
+                <h1 className="display-6 fw-bold text-body-emphasis">{title}</h1>
                 {lead ? <p className="col-md-8 fs-5 text-body-secondary">{lead}</p> : null}
                 {actions}
             </div>
@@ -101,7 +107,7 @@ function Panel(props) {
             {title ? (
                 <div className="card-header d-flex align-items-center justify-content-between gap-2">
                     <div className="min-w-0">
-                        <span className="fw-semibold">{title}</span>
+                        <span className="fw-semibold text-body-emphasis">{title}</span>
                         {lead ? <div className="small text-body-secondary">{lead}</div> : null}
                     </div>
                     {aside}

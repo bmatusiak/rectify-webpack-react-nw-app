@@ -18,10 +18,14 @@ async function plugin(imports, register) {
             if (out.count > 1) out.items.forEach(function (i) {
                 console.log('  ' + i.element + (i.text ? '  "' + i.text + '"' : ''));
             });
-            else if (verb == 'read') console.log(JSON.stringify({
-                element: out.element, text: out.text,
-                value: out.value, checked: out.checked, visible: out.visible
-            }, null, 2));
+            else if (verb == 'read') {
+                //everything the view said about it, minus the routing. listing
+                //the fields here meant every new one had to be added twice,
+                //and the one I wanted was silently dropped.
+                var seen = Object.assign({}, out);
+                delete seen.view; delete seen.views; delete seen.found;
+                console.log(JSON.stringify(seen, null, 2));
+            }
 
             if (out.value !== undefined && verb == 'fill') console.log('  is now ' + JSON.stringify(out.value));
             if (out.checked !== undefined && out.checked !== null && verb == 'fill')

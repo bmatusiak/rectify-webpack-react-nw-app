@@ -38,6 +38,17 @@ label {
     color: var(--bs-body-color);
 }
 
+//a navbar carries its own palette, and a swatch writes it for the coloured bar
+//it expects rather than for a surface mixed from the body. left alone, lux and
+//darkly drew the brand at a contrast ratio of 1.1 against the bar behind it.
+.theme-surface.navbar {
+    --bs-navbar-color: color-mix(in srgb, var(--bs-body-color) 80%, transparent);
+    --bs-navbar-hover-color: var(--bs-body-color);
+    --bs-navbar-active-color: var(--bs-body-color);
+    --bs-navbar-brand-color: var(--bs-emphasis-color, var(--bs-body-color));
+    --bs-navbar-brand-hover-color: var(--bs-emphasis-color, var(--bs-body-color));
+}
+
 //the shell is a fixed frame with one scrolling pane, so the sidebar and the
 //navbar stay put while a page moves
 .app-sidebar {
@@ -51,6 +62,22 @@ label {
     --bs-nav-link-hover-color: var(--bs-body-color);
     font-size: .875rem;
     font-weight: 500;
+}
+
+//muted is not the same as unreadable, and --bs-secondary-color is a swatch's
+//own opinion of how faint text may go. three of them put the section subtitles
+//under wcag's 4.5 floor -- morph at 2.63, minty at 3.54, spacelab at 4.48 --
+//so this mixes the body colour toward the background instead: still clearly
+//secondary, never illegible, whichever swatch is worn.
+//mixed from the emphasis colour, not the body colour. some swatches set the
+//body colour pale enough that no proportion of it clears the floor -- minty's
+//subtitles came out at 2.34 even at 72%. emphasis is the one bootstrap
+//guarantees stands against the background in either mode, so a fixed fraction
+//of it lands in the same readable place on all twenty-eight.
+.text-body-secondary {
+    color: color-mix(in srgb,
+        var(--bs-emphasis-color, var(--bs-body-color)) 62%,
+        var(--bs-body-bg)) !important;
 }
 
 //a readout is not a button. left as a disabled one it takes the swatch's

@@ -56,13 +56,17 @@ async function plugin(imports, register, config) {
     });
 
     //bootstrap arrives as a link rather than compiled into index.scss, so it
-    //can be swapped without a rebuild. the kit's own rules are injected by
-    //style-loader afterwards, which is what keeps them on top of whichever
-    //swatch is wearing.
+    //can be swapped without a rebuild.
+    //
+    //the link goes at the very top of head, before anything style-loader has
+    //put there or will put there. that ordering is the whole reason the kit's
+    //own rules can correct a swatch: appended, the link came last, and a
+    //swatch's `.text-body-secondary { ... !important }` beat ours on source
+    //order alone -- same specificity, same importance, later wins.
     var link = document.createElement('link');
     link.rel = 'stylesheet';
     link.id = 'theme-swatch';
-    document.head.appendChild(link);
+    document.head.insertBefore(link, document.head.firstChild);
 
     //eight of the bootswatch themes are dark designs. asking one of those for
     //light mode gets you a dark page either way, so the honest thing is to

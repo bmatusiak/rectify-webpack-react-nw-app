@@ -620,6 +620,22 @@ stylesheet wins: once a swatch has loaded, the body's real background decides
 what `data-bs-theme` says. Ask a dark design for light mode and the toggle
 disables itself and says why, rather than offering a choice it cannot honour.
 
+Three things a swatch styles for a page it expected, not the one it got:
+**headings** point at `--bs-heading-color`, which a swatch may pin once and
+never mention again -- `lux` sets `#1a1a1a` at `:root` and says nothing about
+dark, so its headings came out `#1a1a1a` on `#1a1a1a`, a contrast ratio of
+exactly **1**. **Muted text** reads `--bs-secondary-color`, and some set it
+pale enough to fall under the 4.5 floor. And a **navbar** carries its own
+palette written for a coloured bar, which drew `darkly`'s brand at **1.1**
+against the surface behind it. All three are mixed from `--bs-emphasis-color`
+instead, the one bootstrap guarantees stands against the background either way.
+
+Measured rather than eyeballed: `npm run cli -- read <selector>` reports the
+computed colour, what is actually behind it, and the WCAG ratio. Sweeping all
+28 swatches in both modes is how the three above were found and how they are
+known to be fixed -- the lowest heading now sits at 14.2 and the lowest muted
+text at 5.7.
+
 Two components pay for this directly. A **readout** is not a button -- the
 `35%` between the stepper's two buttons was a disabled one, so it took each
 swatch's disabled colour, and on `lux` that is white on white. And

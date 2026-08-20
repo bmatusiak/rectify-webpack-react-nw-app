@@ -248,8 +248,65 @@ function read(data) {
         element: seen.element, text: seen.text,
         value: hit.el.value === undefined ? null : hit.el.value,
         checked: hit.el.checked === undefined ? null : hit.el.checked,
-        visible: !!visible([hit.el])
+        visible: !!visible([hit.el]),
+        contrast: contrast(hit.el)
     };
 }
 
 module.exports = plugin;
+
+//---- is it readable ------------------------------------------------------
+
+//a screenshot shows you that a heading is hard to read. this says by how much,
+//which is the difference between an opinion and a bug report. the ratio is
+//wcag's: 4.5 is the floor for body text, 3 for large text.
+function contrast(el) {
+    var style = getComputedStyle(el);
+    var fg = channels(style.color);
+    var bg = behind(el);
+    if (!fg || !bg) return null;
+
+    var a = luminance(fg), b = luminance(bg);
+    var ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+
+    return {
+        color: style.color,
+        background: bg.source,
+        ratio: Math.round(ratio * 100) / 100,
+        readable: ratio >= 4.5
+    };
+}
+
+//the nearest ancestor that actually paints something, because a transparent
+//background is not the colour the text sits on
+function behind(el) {
+    for (var node = el; node; node = node.parentElement) {
+        var colour = channels(getComputedStyle(node).backgroundColor);
+        if (colour && colour[3] > 0) { colour.source = getComputedStyle(node).backgroundColor; return colour; }
+    }
+    var body = channels(getComputedStyle(document.body).backgroundColor);
+    if (body) body.source = getComputedStyle(document.body).backgroundColor;
+    return body;
+}
+
+function channels(colour) {
+    var text = String(colour);
+    var parts = text.match(/[0-9.]+/g);
+    if (!parts || parts.length < 3) return null;
+
+    //rgb() counts to 255 and color(srgb ...) counts to 1. reading one as the
+    //other makes every mixed colour look nearly black, which is how a
+    //perfectly good subtitle measured 20.9 against white.
+    var scale = /^color\(/.test(text) ? 255 : 1;
+
+    return [+parts[0] * scale, +parts[1] * scale, +parts[2] * scale,
+        parts.length > 3 ? +parts[3] : 1];
+}
+
+function luminance(rgb) {
+    var v = rgb.slice(0, 3).map(function (c) {
+        c = c / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+}
