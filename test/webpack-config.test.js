@@ -28,10 +28,10 @@ test('relative and absolute requests are bundled, not externalized', async () =>
     assert.equal(await externalize('/srv/app/src/server.js'), undefined);
 });
 
-test('both bundles resolve .ts the same way', () => {
+test('both bundles resolve the same extensions', () => {
     for (const c of [windowBundle, server]) {
-        assert.ok(c.resolve.extensions.includes('.ts'), c.name + ' cannot resolve .ts');
         assert.ok(c.resolve.extensions.includes('.js'), c.name + ' cannot resolve .js');
+        assert.ok(!c.resolve.extensions.includes('.ts'), c.name + ' still expects typescript');
     }
 });
 

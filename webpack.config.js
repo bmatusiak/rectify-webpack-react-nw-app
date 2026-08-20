@@ -12,7 +12,7 @@ module.exports = (env, argv = {}) => {
     const mode = isProduction ? 'production' : 'development';
 
     const babel = {
-        test: /\.(jsx?|tsx?)$/,
+        test: /\.jsx?$/,
         exclude: /node_modules/,
         use: {
             loader: 'babel-loader',
@@ -20,16 +20,13 @@ module.exports = (env, argv = {}) => {
                 presets: [
                     '@babel/preset-env',
                     //classic, the sources use commonjs require('react')
-                    ['@babel/preset-react', { runtime: 'classic' }],
-                    //types are stripped, not checked. `npm run typecheck` checks.
-                    '@babel/preset-typescript'
+                    ['@babel/preset-react', { runtime: 'classic' }]
                 ]
             }
         }
     };
 
-    //so require('./core/storage') finds index.ts as readily as index.js
-    const resolve = { extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'] };
+    const resolve = { extensions: ['.js', '.jsx', '.json'] };
 
     //inlined as a string, ie the bootstrap-icons sprite sheet
     const asString = { test: /\.(txt|svg)$/i, type: 'asset/source' };

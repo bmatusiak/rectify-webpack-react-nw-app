@@ -20,7 +20,6 @@ src/
   config.js     settings, sliced per plugin
   index.html
   overlay.js
-  rectify.d.ts
   app/
     lifecycle/  main.js                              shutdown, crashes, instance file
     http/       main.js                              express, the swappable router
@@ -34,7 +33,7 @@ src/
     devtools/   main.js                              the two Inspect items
     build/      main.js                              webpack and the reload
     react/      window.js                            createRoot
-    storage/    window.ts                            session + config stores
+    storage/    window.js                            session + config stores
     theme/      window.js + components/ + scss       the theme kit
     example/    server.js window.js cli.js           delete this one
 ```
@@ -43,7 +42,7 @@ Each boot gathers its own half and nothing else:
 
 ```js
 //src/window.js
-var found = require.context('./app', true, /^\.\/[^_.][^/]*\/window\.(js|ts)$/);
+var found = require.context('./app', true, /^\.\/[^_.][^/]*\/window\.jsx?$/);
 var plugins = found.keys().map(found);
 ```
 
@@ -279,7 +278,6 @@ npm run dev      # the same server under plain node, it prints the url
 npm run build    # production bundles, compiled and staged into build/app
 npm run dist     # build, then nw-builder -> build/out
 npm test         # node --test
-npm run typecheck  # tsc --noEmit
 ```
 
 `npm start` also takes `--build` and `--package` to run what those two produced
@@ -508,48 +506,6 @@ no indication of which plugin died. `src/main.js` and `src/server.js` log it —
 and the server boot rethrows, so a broken node half fails the reload loudly
 instead of half-starting. `src/window.js` also prints it at the top of the page
 rather than leaving you a blank one.
-
-## typescript
-
-`.ts` and `.tsx` build with no extra step — babel strips the types and
-`resolve.extensions` finds them, and the discovery regex matches both — so a
-plugin's half can be `window.ts` as readily as `window.js`.
-
-Nothing here is committed to typescript. `src/app/storage` is written in it to
-show that it works; every other plugin is plain javascript, and they sit in the
-same folder. Pick per plugin, or rename that one to `.js` and have
-none at all.
-
-Stripping is not checking. `npm run typecheck` runs `tsc --noEmit` against
-`tsconfig.json`, which is `strict`.
-
-`src/rectify.d.ts` names every service — all three graphs — in one `Services`
-interface, so a plugin declares what it consumes and gets them typed:
-
-```ts
-type Imports = import('../../rectify').Imports<'app' | 'config'>;
-
-async function plugin(imports: Imports, register: Register) {
-    imports.config('theme', { mode: 'dark' }).mode;//knows it has a mode
-}
-```
-
-Add a service to `Services` when you add a plugin that provides one.
-
-Two things to know when writing a plugin in typescript:
-
-- **Keep it commonjs.** `module.exports = plugin` at the bottom, and pull types
-  in with `type App = import('../../rectify').App` rather than an `import type`
-  statement. Any `import`/`export` statement, even a type-only one, leaves babel
-  marking the output as an es module, and webpack then rejects the
-  `module.exports`. `export = plugin` does not work either — that needs babel's
-  commonjs transform, which preset-env deliberately leaves off.
-- **Do not reach for ts-loader or fork-ts-checker.** They load the `typescript`
-  package, which is esm-only, inside nw's node context. See below. Babel does
-  the stripping; `tsc` only ever runs under plain node.
-
-`src/rectify.d.ts` carries the rest of the contract — `App`, `AppPackage`,
-`Register`, and the service interfaces the `Services` map is built from.
 
 ## when things break
 

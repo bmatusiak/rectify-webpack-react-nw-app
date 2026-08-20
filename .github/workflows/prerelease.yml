@@ -51,9 +51,7 @@ jobs:
         run: npm ci --foreground-scripts
 
       - name: Check
-        run: |
-          npm run typecheck
-          npm test
+        run: npm test
 
       - name: Build and package
         run: npm run dist

@@ -5,7 +5,7 @@ var showError = require('./overlay');
 
 //every src/app/<plugin>/window.js. the window half, and the only code that
 //reaches the browser.
-var found = require.context('./app', true, /^\.\/[^_.][^/]*\/window\.(js|ts|tsx|jsx)$/);
+var found = require.context('./app', true, /^\.\/[^_.][^/]*\/window\.jsx?$/);
 var plugins = found.keys().map(found);
 
 plugins.config = Config();

@@ -4,7 +4,7 @@ var rectify = require('@bmatusiak/rectify');
 
 //every src/app/<plugin>/server.js. webpack turns this into a context, so the
 //node bundle carries the server halves and nothing else.
-var found = require.context('./app', true, /^\.\/[^_.][^/]*\/server\.(js|ts)$/);
+var found = require.context('./app', true, /^\.\/[^_.][^/]*\/server\.jsx?$/);
 var plugins = found.keys().map(found);
 
 plugins.config = Config();
