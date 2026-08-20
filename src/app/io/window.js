@@ -34,28 +34,6 @@ async function plugin(imports, register) {
 
     var socket = connect({ timeout: 4000 });
 
-    //the node half reloads by dropping everyone, and socket.io-client treats a
-    //server-sent disconnect as final -- it will not come back on its own. so
-    //every save would otherwise leave this page attached to nothing, looking
-    //fine, until somebody reloaded it by hand.
-    socket.on('disconnect', function (reason) {
-        console.log('socket disconnected: ' + reason);
-        if (reason == 'io server disconnect') socket.connect();
-    });
-
-    //the node half reloads by dropping everyone. whether they come back on
-    //their own depends on how they were dropped -- socket.io-client retries a
-    //connection that closed under it, but treats a disconnect the server asked
-    //for as final. saying so out loud is worth the line: a page that is still
-    //on screen and no longer attached to anything looks exactly like a working
-    //one until you click something.
-    socket.on('disconnect', function (reason) {
-        console.log('socket disconnected: ' + reason);
-        if (reason == 'io server disconnect') socket.connect();
-    });
-
-    socket.io.on('reconnect', function (n) { console.log('socket back after ' + n + ' attempts'); });
-
     //the node half reloads by dropping everyone, and whether they come back on
     //their own depends on how they were dropped: socket.io-client retries a
     //connection that closed under it, but treats a disconnect the server asked
