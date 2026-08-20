@@ -1,9 +1,14 @@
 node_modules
 package-lock.json
 
-dist
-dist*/
-build
+#anchored to the root on purpose. Without the leading slash these match a
+#directory of that name at ANY depth, and src/app/build is a plugin -- the one
+#that builds and reloads the two halves. Its files are already tracked so git
+#keeps versioning them, but a new file added there would have been skipped in
+#silence: refused by git add, and never mentioned by git status.
+/dist
+/dist*/
+/build
 
 nw.log
 .nw-instance.json
