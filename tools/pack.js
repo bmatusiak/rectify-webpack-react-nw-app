@@ -30,22 +30,42 @@ const version = String(pkg.devDependencies.nw).replace(/[^0-9.]/g, '').replace(/
 
   console.log('packaging build/app with nw.js ' + version)
 
+  const platform = { win32: 'win', darwin: 'osx', linux: 'linux' }[process.platform]
+  const name = pkg.title || pkg.name
+
+  // nw-builder asks for different things per platform, and refuses to start if
+  // they are missing. macos wants the CFBundle set and an .icns; there is no
+  // .icns here, and it is the one field it does not insist on, so it goes
+  // without rather than shipping a fabricated one.
+  const app = platform === 'osx'
+    ? {
+        name,
+        CFBundleName: name,
+        CFBundleDisplayName: name,
+        CFBundleSpokenName: name,
+        CFBundleVersion: pkg.version,
+        CFBundleShortVersionString: pkg.version,
+        NSHumanReadableCopyright: pkg.license || ''
+      }
+    : {
+        name,
+        // windows takes an .ico, linux takes the png as it is
+        icon: path.join(ROOT, platform === 'win' ? 'icon.ico' : 'icon.png'),
+        version: pkg.version,
+        fileDescription: pkg.description
+      }
+
   await nwbuild({
     mode: 'build',
     srcDir: STAGE,
     outDir: OUT,
     version,
     flavor: 'normal',
-    platform: { win32: 'win', darwin: 'osx', linux: 'linux' }[process.platform],
+    platform,
     arch: process.arch,
     glob: false,
     cacheDir: path.join(ROOT, 'build', 'cache'),
-    app: {
-      name: pkg.title || pkg.name,
-      icon: path.join(ROOT, 'icon.ico'),
-      version: pkg.version,
-      fileDescription: pkg.description
-    }
+    app
   })
 
   const shipped = fs.readdirSync(OUT)

@@ -154,6 +154,32 @@ Watch for that second one. An icon path that does not resolve is not an error �
 `new nw.Tray()` succeeds, the menu works, and you get an invisible entry in the
 notification area. It cost a while to notice, and longer to believe.
 
+### builds from CI
+
+`.github/workflows/prerelease.yml` builds all three platforms and attaches the
+zips to a release, so a prerelease does not have to be built by hand. It runs
+on `release: published` — which covers prereleases — and on
+`workflow_dispatch`, where the zips land on the run itself instead.
+
+The matrix is not a convenience. `nwjc` compiles for one platform and one nw.js
+version, so each target has to be built on its own runner. Note `npm ci` must
+run install scripts there: nw's postinstall is what fetches the sdk, and the
+build needs `nwjc` out of it.
+
+**Nothing is signed**, and no certificate is involved anywhere. What that costs
+whoever downloads it:
+
+- **Windows** — SmartScreen warns. More info, then Run anyway.
+- **macOS** — the workflow ad-hoc signs (`codesign --sign -`, no identity
+  needed) because Apple Silicon refuses to run an unsigned binary at all. It is
+  still quarantined on download, so:
+  `xattr -dr com.apple.quarantine "Rectify NW App.app"`, or right-click and Open.
+- **Linux** — `chmod +x` the binary if the zip did not preserve it.
+
+macOS also has no `.icns` here, so it packages without an icon rather than with
+a fabricated one. Drop a real `.icns` in and pass it as `app.icon` in
+`tools/pack.js` when there is one.
+
 ### what this does and does not protect
 
 It means the app runs what it shipped with: there is no `.js` on disk to edit,
