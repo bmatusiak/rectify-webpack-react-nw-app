@@ -110,35 +110,75 @@ function runningInstance () {
 
 const attach = process.argv.includes('--attach')
 
-// --prod runs build/app instead of the source tree: the same compiled main.bin
-// the package ships, with the sdk runtime so its console is still audible. The
-// last thing worth checking before waiting on nw-builder.
-const prod = process.argv.includes('--prod')
-const TARGET = prod ? path.join(APP, 'build', 'app') : APP
+// THREE WAYS TO START THE SAME APP.
+//
+//   (nothing)   the source tree. webpack builds in memory, both halves reload
+//   --build     build/app: the compiled main.bin, run by the sdk runtime. no
+//               executable yet, so its console is still audible and the
+//               devtools are still there. what `npm run build` leaves behind.
+//   --package   build/out: the executable nw-builder produced. the normal
+//               flavour, so no devtools — this is what a user would run.
+//
+// Each one runs strictly later output than the one above it, so a thing that
+// works in the first and not the third narrows to the step between them.
+const mode = process.argv.includes('--package') ? 'package'
+  : process.argv.includes('--build') ? 'build'
+    : 'source'
 
-const passthrough = process.argv.slice(2).filter(a => a !== '--attach' && a !== '--prod')
-const debugging = passthrough.some(a => a.startsWith('--remote-debugging-port'))
-const args = [TARGET, ...FLAGS, ...(debugging ? [] : ['--remote-debugging-port=0']), ...passthrough]
+const STAGE = path.join(APP, 'build', 'app')
+const OUT = path.join(APP, 'build', 'out')
 
-if (prod && !fs.existsSync(path.join(TARGET, 'main.bin'))) {
+// the packaged app is its own executable, so it is launched instead of the
+// runtime rather than handed to it
+function packagedBinary () {
+  if (!fs.existsSync(OUT)) return null
+  if (process.platform === 'darwin') {
+    const app = fs.readdirSync(OUT).find(f => f.endsWith('.app'))
+    return app ? path.join(OUT, app, 'Contents', 'MacOS', path.basename(app, '.app')) : null
+  }
+  const exe = fs.readdirSync(OUT).find(f =>
+    process.platform === 'win32'
+      ? f.endsWith('.exe') && !f.startsWith('notification_helper')
+      : !f.includes('.') && fs.statSync(path.join(OUT, f)).isFile())
+  return exe ? path.join(OUT, exe) : null
+}
+
+if (mode === 'build' && !fs.existsSync(path.join(STAGE, 'main.bin'))) {
   console.error('build/app is not staged. run:  npm run build')
   process.exit(1)
 }
+if (mode === 'package' && !packagedBinary()) {
+  console.error('build/out has no application in it. run:  npm run dist')
+  process.exit(1)
+}
+
+const launcher = mode === 'package' ? packagedBinary() : binary
+const target = mode === 'build' ? STAGE : mode === 'source' ? APP : null
+
+const passthrough = process.argv.slice(2)
+  .filter(a => a !== '--attach' && a !== '--build' && a !== '--package')
+const debugging = passthrough.some(a => a.startsWith('--remote-debugging-port'))
+const args = [
+  ...(target ? [target] : []),
+  ...FLAGS,
+  ...(debugging ? [] : ['--remote-debugging-port=0']),
+  ...passthrough
+]
 
 const running = runningInstance()
 if (running) {
   console.log(`already running (pid ${running.pid}) at ${running.url}`)
   console.log('bringing its window to the front')
 } else {
-  console.log(`launching ${path.relative(APP, binary)}${prod ? '  (packaged build)' : ''}`)
+  console.log(`launching ${path.relative(APP, launcher)}  (${mode})`)
 }
 
 if (attach) {
-  const child = spawn(binary, args, { stdio: 'inherit' })
+  const child = spawn(launcher, args, { stdio: 'inherit' })
   child.on('exit', code => process.exit(code === null ? 1 : code))
 } else {
   const log = fs.openSync(LOG_FILE, 'a')
-  const child = spawn(binary, args, { detached: true, stdio: ['ignore', log, log] })
+  const child = spawn(launcher, args, { detached: true, stdio: ['ignore', log, log] })
   child.unref()
   if (!running) console.log(`logging to ${path.relative(APP, LOG_FILE)}  (--attach to watch it live)`)
 }

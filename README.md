@@ -97,10 +97,22 @@ directory, so a boot living in `src/` cannot require its neighbours without it.
 ## building a package
 
 ```
-npm run build        production bundles, compiled, staged into build/app
-npm start -- --prod  run that staged build, before waiting on nw-builder
-npm run dist         build, then nw-builder -> build/out
+npm run build   production bundles, compiled, staged into build/app
+npm run dist    build, then nw-builder -> build/out
 ```
+
+`npm start` runs whichever of the three you ask for:
+
+```
+npm start              the source tree. webpack in memory, both halves reload
+npm start -- --build   build/app: the compiled main.bin, run by the sdk runtime
+npm start -- --package build/out: the executable, exactly what a user runs
+```
+
+Each runs strictly later output than the one above it, so something that works
+in the first and not the third narrows to the step between them. `--build` still
+has the sdk runtime under it, so its console is audible and devtools work;
+`--package` is the normal flavour and has neither.
 
 `npm run build` produces four files and no javascript:
 
@@ -215,6 +227,9 @@ npm test         # node --test
 npm run typecheck  # tsc --noEmit
 ```
 
+`npm start` also takes `--build` and `--package` to run what those two produced
+— see [building a package](#building-a-package).
+
 `npm start` returns straight away and the app keeps running. Run it again and
 it says so, and brings the window back:
 
@@ -236,7 +251,8 @@ caught by signalling the pid.
 
 Detached means the output goes to `nw.log` instead of your terminal.
 `npm start -- --attach` keeps it in the foreground when you want to watch a run
-happen. Other flags pass through either way:
+happen, and combines with `--build` and `--package`. Other flags pass through
+either way:
 
 ```
 npm start -- --remote-debugging-port=9222
