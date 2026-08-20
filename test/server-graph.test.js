@@ -2,6 +2,8 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 const http = require('node:http');
+const os = require('node:os');
+const fs = require('node:fs');
 
 const express = require('express');
 const webpack = require('webpack');
@@ -16,6 +18,10 @@ const serverConfig = require('../webpack.config.js')({}, { mode: 'development' }
     .find((c) => c.name == 'server');
 
 let server, ioServer, loaded, url, router;
+
+//whatever the node half answers on the control socket, kept so the tests can
+//call it the way the cli would
+const handlers = {};
 
 before(async () => {
     const stats = await new Promise((resolve, reject) => {
@@ -35,7 +41,7 @@ before(async () => {
 
     //the app only ever runs under nw, so the host always carries all of this.
     //standing in for it here is what lets the node half be exercised without one.
-    const handle = () => ({ remove() {} });
+    const handle = (name, fn) => { handlers[name] = fn; return { remove() {} }; };
 
     loaded = await require(bundle)({
         express,
@@ -46,7 +52,12 @@ before(async () => {
         window: {
             url: 'http://127.0.0.1:0/',
             isOpen: false,
-            open() {}, show() {}, hide() {}, openInBrowser() {}, quit() {}
+            open() {}, show() {}, hide() {}, openInBrowser() {}, quit() {},
+            capture: async (options) => ({
+                format: options.format === 'jpeg' ? 'jpeg' : 'png',
+                buffer: Buffer.from([1, 2, 3, 4, 5]),
+                width: 800, height: 600
+            })
         },
         tray: { add: handle, labels: () => [] },
         ipc: { address: 'test', handle, commands: () => [] }
@@ -118,4 +129,37 @@ test('destroy() unhooks the server half so a reload cannot double register', asy
     } finally {
         socket.close();
     }
+});
+
+test('capture puts the picture where the caller asked and reports it', async () => {
+    const file = path.join(os.tmpdir(), 'capture-' + process.pid + '.png');
+
+    const out = await handlers.capture({ path: file });
+
+    assert.equal(out.path, file);
+    assert.equal(out.bytes, 5);
+    assert.equal(out.format, 'png');
+    assert.equal(out.width, 800);
+    assert.deepEqual(Array.from(fs.readFileSync(file)), [1, 2, 3, 4, 5]);
+
+    fs.unlinkSync(file);
+});
+
+test('a relative path lands beside the app rather than nowhere', async () => {
+    const out = await handlers.capture({ path: 'relative-shot.png' });
+
+    assert.ok(path.isAbsolute(out.path));
+    assert.equal(path.basename(out.path), 'relative-shot.png');
+
+    fs.unlinkSync(out.path);
+});
+
+test('the buffer never goes onto the wire, only what it became', async () => {
+    const out = await handlers.capture({ path: path.join(os.tmpdir(), 'wire-' + process.pid + '.png') });
+
+    //the protocol is one json line, so anything on it has to survive this
+    assert.deepEqual(Object.keys(JSON.parse(JSON.stringify(out))).sort(),
+        ['bytes', 'format', 'height', 'path', 'width']);
+
+    fs.unlinkSync(out.path);
 });

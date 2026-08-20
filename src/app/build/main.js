@@ -37,6 +37,7 @@ async function plugin(imports, register) {
             show: function () { win.show(); },
             hide: function () { win.hide(); },
             openInBrowser: function () { if (http.url) nw.Shell.openExternal(http.url); },
+            capture: function (options) { return win.capture(options); },
             quit: function (reason) { lifecycle.shutdown(reason || 'asked to quit'); }
         },
 

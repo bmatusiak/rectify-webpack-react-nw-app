@@ -9,6 +9,11 @@ async function plugin(imports, register, config) {
     var win = null;
     var keepAlive = null;
 
+    //nw has no isVisible, and capturing a window that is not composited either
+    //hands back a stale frame or never answers, so the one thing worth knowing
+    //is tracked here — every path that hides or shows goes through this plugin
+    var hidden = false;
+
     //'quit' until something says otherwise. the tray switches it to 'hide' if
     //it manages to create an icon, since without one there would be no way back
     //to a hidden window.
@@ -35,6 +40,7 @@ async function plugin(imports, register, config) {
         }, function (w) {
             if (!w) return lifecycle.shutdown('the window failed to open');
             win = w;
+            hidden = false;
 
             //listening to `close` at all suppresses nw's default close, which is
             //why the other two paths have to close(true) by hand
@@ -45,6 +51,7 @@ async function plugin(imports, register, config) {
                 win.on('close', function () {
                     if (lifecycle.isShuttingDown || onClose != 'hide') return this.close(true);
                     this.hide();
+                    hidden = true;
                     console.log('window hidden, still running. reopen it from the tray.');
                 });
 
@@ -68,13 +75,66 @@ async function plugin(imports, register, config) {
 
             show: function () {
                 if (win) {
-                    try { win.show(); win.focus(); return; }
+                    try { win.show(); win.focus(); hidden = false; return; }
                     catch (e) { win = null; }//gone out from under us
                 }
                 open();
             },
 
-            hide: function () { if (win) win.hide(); },
+            hide: function () { if (win) { win.hide(); hidden = true; } },
+
+            //a photograph of what is on screen. nw only draws a frame for a
+            //window the compositor is showing, so a hidden one can leave the
+            //callback unanswered forever — the timeout turns that hang into a
+            //sentence somebody can act on.
+            capture: function (options) {
+                options = options || {};
+                var format = options.format == 'jpeg' ? 'jpeg' : 'png';
+
+                return new Promise(function (resolve, reject) {
+                    if (!win) return reject(new Error('the window is not open'));
+
+                    //asking anyway costs fifteen seconds to be told the same
+                    if (hidden) return reject(new Error(
+                        'the window is hidden, so there is no frame to photograph. open it first'));
+
+                    var settled = false;
+                    var timer = setTimeout(function () {
+                        if (settled) return;
+                        settled = true;
+                        //still the backstop: minimized, or off on another
+                        //desktop, looks no different from here
+                        reject(new Error('the window did not produce a frame within 15s. is it minimized?'));
+                    }, 15000);
+
+                    function fail(e) {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        reject(e);
+                    }
+
+                    try {
+                        win.capturePage(function (buffer) {
+                            if (settled) return;
+                            settled = true;
+                            clearTimeout(timer);
+
+                            //nw hands back whatever it has, and an empty buffer
+                            //is not an error to it
+                            if (!buffer || !buffer.length) return reject(new Error('the capture came back empty'));
+
+                            var size = measure(buffer, format);
+                            resolve({
+                                format: format,
+                                buffer: buffer,
+                                width: size && size.width,
+                                height: size && size.height
+                            });
+                        }, { format: format, datatype: 'buffer' });
+                    } catch (e) { fail(e); }
+                });
+            },
 
             //the tray calls this once there is somewhere to reopen from
             closeShouldHide: function (yes) { onClose = yes ? 'hide' : 'quit'; }
@@ -86,3 +146,31 @@ async function plugin(imports, register, config) {
     });
 }
 module.exports = plugin;
+//the one piece of this file that is arithmetic rather than nw, so it is the
+//one piece worth testing without one
+module.exports.measure = measure;
+
+//what was actually captured, read out of the file's own header rather than
+//from the window: a screen at 2x hands back an image twice the size it asked
+//for, and the number worth printing is the one in the file.
+function measure(buffer, format) {
+    try {
+        if (format == 'png') {
+            //8 bytes of signature, then the IHDR chunk's length and name
+            if (buffer.length < 24) return null;
+            return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+        }
+
+        //jpeg keeps it in whichever start-of-frame marker it happens to use
+        var i = 2;
+        while (i + 9 < buffer.length) {
+            if (buffer[i] != 0xFF) { i++; continue; }
+            var marker = buffer[i + 1];
+            if (marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC)
+                return { width: buffer.readUInt16BE(i + 7), height: buffer.readUInt16BE(i + 5) };
+            if (marker == 0xD8 || (marker >= 0xD0 && marker <= 0xD9)) { i += 2; continue; }
+            i += 2 + buffer.readUInt16BE(i + 2);
+        }
+        return null;
+    } catch (e) { return null; }//a header we do not recognise is not a failure
+}

@@ -215,6 +215,7 @@ binary.
 npm run cli                    what it understands
 npm run cli -- status          is the app up, and where
 npm run cli -- open            bring the window back
+npm run cli -- capture         photograph the window
 npm run cli -- quit            shut it down
 npm run cli -- hello '{"a":1}' anything the app answers, with json in
 ```
@@ -227,6 +228,32 @@ own halves.
 forwarded to the running app, so a plugin that answers over ipc is reachable
 from the terminal without a `cli.js` at all — `open`, `hide` and `quit` are
 registered by `src/app/window/server.js` and nothing declares them here.
+
+### capture
+
+```
+npm run cli -- capture                              capture-20260820-142201.png
+npm run cli -- capture '{"path":"shot.png"}'        where you say
+npm run cli -- capture '{"format":"jpeg"}'          smaller, lossier
+```
+
+The window plugin is the one that spans all four runtimes, and this is why.
+`nw.Window.capturePage` exists only where the window handle does, which is the
+**main** context, so `main.js` takes the picture; `server.js` answers on the
+socket and writes the file; `cli.js` exists only to resolve the path, because
+the app's working directory is wherever it was launched from and yours is not.
+
+The buffer stops at the file. It never goes down the socket — the wire is one
+json line, and a megabyte of base64 on it would serve nobody when the thing
+wants to be a file anyway. What comes back is the path, the size and the
+dimensions, read out of the image's own header rather than from the window: a
+screen at 2x returns a picture twice the size the window was asked to be.
+
+**A hidden window has no frame.** The compositor draws nothing for it, so
+`capturePage` never calls back at all — not an error, just silence. Hiding and
+showing both go through this plugin, so it knows, and says so instead of
+waiting. A minimized window looks the same from here and is not tracked; that
+one falls to a 15s timeout.
 
 ### the control socket
 
