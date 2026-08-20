@@ -1,9 +1,9 @@
 //the nw.js window. it is a view onto a server that outlives it.
 
-plugin.consumes = ['app', 'http', 'lifecycle'];
+plugin.consumes = ['app', 'http', 'lifecycle', 'bridge'];
 plugin.provides = ['window'];
 async function plugin(imports, register, config) {
-    var { app, http, lifecycle } = imports;
+    var { app, http, lifecycle, bridge } = imports;
 
     var size = config.window || {};
     var win = null;
@@ -50,14 +50,21 @@ async function plugin(imports, register, config) {
     }
 
     function open() {
-        if (!http.url) return console.error('nothing is listening yet');
-
+        //a packaged build opens the page out of the package. There is no url,
+        //nothing is served, and the window half arrives by way of the bridge --
+        //which is also the only thing that can reach this app at all.
+        //
         //?view=app marks this as the app's own window rather than a browser
         //looking at the same url. nothing in the page can tell the difference
         //on its own -- nw 0.114 sends an ordinary chrome user agent, and the
         //window deliberately has no node in it -- so the side that opened it
-        //is the side that has to say so. src/app/remote reads it back.
-        nw.Window.open(http.url + '?view=app', {
+        //is the side that has to say so. src/app/remote reads it back. A
+        //packaged window needs no mark: there is no second view to confuse it
+        //with, because there is nowhere for one to come from.
+        var page = BUILD_PROD ? bridge.page : (http.url ? http.url + '?view=app' : null);
+        if (!page) return console.error('nothing is listening yet');
+
+        nw.Window.open(page, {
             id: 'main',
             width: size.width || 1024,
             height: size.height || 768
@@ -65,6 +72,10 @@ async function plugin(imports, register, config) {
             if (!w) return lifecycle.shutdown('the window failed to open');
             win = w;
             hidden = false;
+
+            //injects the way home before the page's own script runs, and the
+            //window half itself once there is a document to put it in
+            if (BUILD_PROD) bridge.attach(w);
 
             //listening to `close` at all suppresses nw's default close, which is
             //why the other two paths have to close(true) by hand

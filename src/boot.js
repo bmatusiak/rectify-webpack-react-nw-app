@@ -21,9 +21,11 @@ module.exports = async function boot(plugins, host) {
     //the startup order, in one readable place rather than hidden in whichever
     //plugin happens to depend on all the others
     await services.build.ready();
-    var url = await services.http.listen();
 
-    console.log('listening on ' + url);
+    //null in a packaged build, which has no http server at all
+    var url = await services.http.listen();
+    console.log(url ? 'listening on ' + url : 'no http server in this build');
+
     services.lifecycle.publish(url);
 
     services.tray.start();

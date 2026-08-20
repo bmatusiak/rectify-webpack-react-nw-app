@@ -61,7 +61,12 @@ module.exports = (env, argv = {}) => {
             //named after its entry, so it cannot collide with the packaged main
             //bundle, which also writes into dist
             filename: 'window.js',
-            publicPath: '/'
+
+            //in development the page is served from the root of a dev server.
+            //a packaged build has no server at all: the page is opened out of
+            //the package and asks for its stylesheets relative to itself, and
+            //they are staged into a theme/ folder beside it.
+            publicPath: isProduction ? 'theme/' : '/'
         },
         devtool: !isProduction ? 'inline-source-map' : false,
         module: {

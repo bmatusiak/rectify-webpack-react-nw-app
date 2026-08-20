@@ -1,6 +1,7 @@
 var { io: connect } = require('socket.io-client');
 var serve = require('./serve');
 var mockPair = require('./mock');
+var bridge = require('../bridge/page');
 var showError = require('../../overlay');
 
 //the window has no node in it, so everything the node side knows arrives over
@@ -19,6 +20,16 @@ async function plugin(imports, register) {
         serve(mock.io, { title: 'mock', name: 'mock', version: '0.0.0' });
         var mocked = await new Promise(function (resolve) { mock.socket.once('app', resolve); });
         return register(null, { io: mock.socket, appPackage: mocked });
+    }
+
+    //a packaged build has no server to connect to: the window was opened out
+    //of the package rather than over http, and main is on the other end of a
+    //message channel instead. it says so by injecting window.__host before any
+    //of this ran, which is what ./bridge/window looks for.
+    var bridged = bridge();
+    if (bridged) {
+        var carried = await new Promise(function (resolve) { bridged.once('app', resolve); });
+        return register(null, { io: bridged, appPackage: carried });
     }
 
     var socket = connect({ timeout: 4000 });

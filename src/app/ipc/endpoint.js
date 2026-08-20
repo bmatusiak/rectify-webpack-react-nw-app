@@ -16,3 +16,17 @@ module.exports = function endpoint(name) {
     var b = String.fromCharCode(92);
     return b + b + '.' + b + 'pipe' + b + name;
 };
+
+//and where the shared secret sits.
+//
+//a named pipe on windows is reachable by anyone logged into the machine -- the
+//default acl is not restrictive -- and /tmp on posix is world-readable. the
+//socket being hard to find is not the same as it being hard to reach, so the
+//app writes a token beside it and refuses to take a command from a client that
+//cannot repeat it.
+//
+//the temp directory is per-user on windows and the file is 0600 on posix, so
+//in both cases the secret is only readable by the account that started the app.
+module.exports.token = function (name) {
+    return path.join(os.tmpdir(), name + '.token');
+};

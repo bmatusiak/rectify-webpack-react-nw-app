@@ -1,3 +1,4 @@
+var fs = require('fs');
 var net = require('net');
 var endpoint = require('./endpoint');
 
@@ -12,7 +13,16 @@ plugin.consumes = ['app'];
 plugin.provides = ['ipc'];
 async function plugin(imports, register) {
     var address = endpoint(imports.app.appPackage.name);
+    var tokenFile = endpoint.token(imports.app.appPackage.name);
     var nextId = 1;
+
+    //the app writes this where only this account can read it. no file means
+    //either nothing is running or it is running as somebody else, and both are
+    //better said than guessed at.
+    function token() {
+        try { return fs.readFileSync(tokenFile, 'utf8').trim(); }
+        catch (e) { return null; }
+    }
 
     function call(command, data, timeout) {
         return new Promise(function (resolve, reject) {
@@ -27,21 +37,40 @@ async function plugin(imports, register) {
             socket.setEncoding('utf8');
 
             socket.on('connect', function () {
+                //every connection introduces itself first. it is one extra line
+                //on a socket that is already open, and it means a command can
+                //never arrive on an untrusted one.
+                socket.write(JSON.stringify({ command: 'auth', data: { token: token() } }) + NL);
                 socket.write(JSON.stringify({ id: id, command: command, data: data || {} }) + NL);
             });
 
             socket.on('data', function (chunk) {
                 buffer += chunk;
-                var line = buffer.split(NL)[0];
-                if (buffer.indexOf(NL) < 0) return;//still arriving
 
-                clearTimeout(timer);
-                socket.end();
+                var lines = buffer.split(NL);
+                buffer = lines.pop();
 
-                var msg;
-                try { msg = JSON.parse(line); } catch (e) { return reject(new Error('bad reply: ' + line)); }
-                if (msg.ok) resolve(msg.result);
-                else reject(new Error(msg.error || 'failed'));
+                for (var i = 0; i < lines.length; i++) {
+                    if (!lines[i]) continue;
+
+                    var msg;
+                    try { msg = JSON.parse(lines[i]); }
+                    catch (e) { clearTimeout(timer); socket.end(); return reject(new Error('bad reply: ' + lines[i])); }
+
+                    //the first reply answers the introduction, and only says
+                    //something worth hearing when it went badly
+                    if (msg.id === undefined) {
+                        if (msg.ok) continue;
+                        clearTimeout(timer); socket.end();
+                        return reject(new Error(msg.error ||
+                            'the app would not accept this token. is ' + tokenFile + ' the running one?'));
+                    }
+
+                    clearTimeout(timer);
+                    socket.end();
+                    if (msg.ok) return resolve(msg.result);
+                    return reject(new Error(msg.error || 'failed'));
+                }
             });
 
             socket.on('error', function (e) {

@@ -17,10 +17,13 @@ async function plugin(imports, register) {
     //`open in browser` makes a second. this is how it tells them apart.
     function hello() {
         io.emit('remote:hello', {
-            //set by src/app/window/main.js on the url it opens. not sniffable
-            //from in here: the user agent is an ordinary chrome one and there
-            //is no node in this context to ask.
-            app: new URLSearchParams(location.search).get('view') === 'app',
+            //two ways to be the app's own window rather than a browser looking
+            //at the same url. A dev build is served over http, so the side that
+            //opened it marks the url. A packaged build serves nothing at all --
+            //the page came out of the package and main injected __host into it
+            //before any of this ran, which is a better proof than a query
+            //string and one a browser could not produce.
+            app: new URLSearchParams(location.search).get('view') === 'app' || !!window.__host,
             title: document.title,
             href: location.href
         });

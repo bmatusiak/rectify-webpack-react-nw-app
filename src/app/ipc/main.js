@@ -1,5 +1,6 @@
 var fs = require('fs');
 var net = require('net');
+var crypto = require('crypto');
 var endpoint = require('./endpoint');
 
 //the app's control socket: a named pipe on windows, a unix domain socket
@@ -25,6 +26,29 @@ async function plugin(imports, register) {
     var handlers = {};
     var open = [];
 
+    //a secret, new every run, written where only this account can read it.
+    //a client says it once and the connection is trusted from then on; a
+    //client that does not is told so and gets nothing else.
+    var secret = crypto.randomBytes(32).toString('hex');
+    var tokenFile = endpoint.token(app.appPackage.name);
+
+    try {
+        fs.writeFileSync(tokenFile, secret, { mode: 0o600 });
+        //writeFileSync only applies the mode when it creates the file, so a
+        //leftover from a previous run would keep whatever it had
+        fs.chmodSync(tokenFile, 0o600);
+    } catch (e) {
+        console.error('could not write ' + tokenFile + ': ' + (e && e.message));
+    }
+
+    //comparing with == leaks how much of the token was right, one character at
+    //a time. over a local socket that is a stretch, but it costs nothing here.
+    function correct(given) {
+        var a = Buffer.from(String(given || ''), 'utf8');
+        var b = Buffer.from(secret, 'utf8');
+        return a.length === b.length && crypto.timingSafeEqual(a, b);
+    }
+
     function handle(name, fn) {
         handlers[name] = fn;
         return { remove: function () { if (handlers[name] === fn) delete handlers[name]; } };
@@ -33,9 +57,22 @@ async function plugin(imports, register) {
     //so a client can ask what this build understands rather than guessing
     handle('commands', function () { return Object.keys(handlers).sort(); });
 
-    async function dispatch(line, reply) {
+    async function dispatch(line, reply, socket) {
         var msg;
         try { msg = JSON.parse(line); } catch (e) { return reply({ ok: false, error: 'not json' }); }
+
+        if (msg.command == 'auth') {
+            socket.trusted = correct(msg.data && msg.data.token);
+            return reply({
+                id: msg.id, ok: socket.trusted, result: socket.trusted ? 'ok' : null,
+                error: socket.trusted ? undefined : 'that is not the token'
+            });
+        }
+
+        if (!socket.trusted) return reply({
+            id: msg.id, ok: false,
+            error: 'not authenticated. the token is in ' + tokenFile
+        });
 
         var fn = handlers[msg.command];
         if (!fn) return reply({ id: msg.id, ok: false, error: 'unknown command: ' + msg.command });
@@ -51,6 +88,13 @@ async function plugin(imports, register) {
     var server = net.createServer(function (socket) {
         open.push(socket);
         socket.setEncoding('utf8');
+        socket.trusted = false;
+
+        //a client that connects and says nothing holds a handle open forever
+        var greeting = setTimeout(function () {
+            if (!socket.trusted) socket.destroy();
+        }, 5000);
+        socket.once('close', function () { clearTimeout(greeting); });
 
         var buffer = '';
         socket.on('data', function (chunk) {
@@ -60,7 +104,7 @@ async function plugin(imports, register) {
             lines.filter(Boolean).forEach(function (line) {
                 dispatch(line, function (out) {
                     if (!socket.destroyed) socket.write(JSON.stringify(out) + NL);
-                });
+                }, socket);
             });
         });
 
@@ -100,6 +144,7 @@ async function plugin(imports, register) {
             if (process.platform != 'win32') {
                 try { fs.unlinkSync(address); } catch (e) { /* already gone */ }
             }
+            try { fs.unlinkSync(tokenFile); } catch (e) { /* already gone */ }
         }
     });
 }

@@ -22,7 +22,9 @@ async function plugin(imports, register, config) {
         if (items.length) menu.append(new nw.MenuItem({ type: 'separator' }));
 
         menu.append(new nw.MenuItem({ label: 'Open window', click: function () { win.show(); } }));
-        menu.append(new nw.MenuItem({
+        //a packaged build serves nothing, so there is no page for a browser to
+        //open and no menu item offering one
+        if (!app.isPackaged) menu.append(new nw.MenuItem({
             label: 'Open in browser',
             click: function () { nw.Shell.openExternal(http.url); }
         }));

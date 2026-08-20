@@ -59,27 +59,11 @@ async function plugin(imports, register) {
 
         //---- packaged ---------------------------------------------------
 
-        var path = require('path');
-
-        //the window half, built before packaging and carried here as strings
-        var assets = require('../../../dist/assets.json');
-
-        //the stylesheets sit beside the app rather than inside main.bin: they
-        //are not code, and the swatches are megabytes of them
-        http.app.use(http.express.static(path.join(app.root, 'theme')));
-
-        http.app.get('/', function (req, res) {
-            res.type('html').send(assets['index.html']);
-        });
-
-        Object.keys(assets).forEach(function (name) {
-            if (name == 'index.html') return;
-            http.app.get('/' + name, function (req, res) {
-                res.type(name.split('.').pop()).send(assets[name]);
-            });
-        });
-
-        //no separate bundle to load, and no reason to reload it
+        //nothing to serve. The window half is evaluated into the page by
+        //src/app/bridge, and the stylesheets sit beside the app as files the
+        //page loads relatively -- so a packaged build opens no port at all.
+        //
+        //no separate bundle to load either, and no reason to reload it
         ready = require('../../server.js')(host);
 
     } else {

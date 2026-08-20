@@ -334,11 +334,48 @@ deliberately has no node in it to ask. So the side that opened it says so:
 `src/app/window/main.js` opens the url with `?view=app` and the remote plugin
 reads it back.
 
+### nothing is listening
+
+A **packaged build opens no port at all**. No http server, no socket.io, no
+webpack — `npm run build` leaves a directory with a manifest, two html files
+with nothing executable in them, `main.bin`, an icon and the stylesheets.
+
+The window is opened straight out of the package rather than over a url, and
+its half of the app is evaluated into the page out of `main.bin`. So there is
+still no javascript on disk, and now there is also nothing to serve it with.
+What used to be socket.io is `src/app/bridge`: main injects a way home into the
+page before any of the page's own script runs, and messages go the other way by
+`postMessage`. One json object per line, the same shape the control socket uses.
+
+The shim it hands the rest of the app is socket.io's shape, so **no plugin
+knows which build it is in** — `io.on('connection')`, `socket.emit(name, data,
+ack)`, all of it. `src/app/io/window.js` picks the transport by looking for
+what main injected; `src/app/io/main.js` picks it from `BUILD_PROD`.
+
+Two things go with it. The tray loses **Inspect window**, **Inspect main.js**
+and **Open in browser** — the first two hand back exactly what compiling the
+node half was for, and the third has no page to open. And `http` still exists
+as a service, because the graph is the same in both builds; what it does is
+nothing. A route mounted in a packaged build goes to a stub rather than
+throwing, and `http.url` is `null`, which is the signal anything asking should
+check.
+
 ### the control socket
 
 It is a **named pipe** on windows and a **unix domain socket** elsewhere, not a
 port. Both sides derive the address from the package name, so nothing has to be
 discovered or written down, and the cli needs no dependency beyond `net`.
+
+It is **not open to whoever finds it**. A named pipe on windows is reachable by
+anyone logged into the machine, and `/tmp` on posix is world-readable, so being
+hard to find is not the same as being hard to reach. The app writes a fresh
+32-byte token beside the socket every run — in the per-user temp directory, and
+`0600` on posix — and a connection that cannot repeat it gets one sentence and
+nothing else. A client that connects and then says nothing is dropped after
+five seconds.
+
+The comparison is `timingSafeEqual` behind a length check, which it needs
+because that function throws on a length mismatch rather than returning false.
 
 One json object per line, both directions:
 

@@ -58,7 +58,10 @@ async function plugin(imports, register) {
         });
     }
 
-    var added = [
+    //a packaged build offers no way in. The point of compiling the node half
+    //into main.bin is that the code it runs is the code it shipped with, and a
+    //menu item that opens a console onto it gives that back.
+    var added = app.isPackaged ? [] : [
         tray.add({ label: 'Inspect window', click: inspectWindow }),
         tray.add({ label: 'Inspect main.js', click: inspectMain })
     ];

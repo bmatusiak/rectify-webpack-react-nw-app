@@ -65,6 +65,11 @@ function nwjcPath () {
   for (const name of fs.readdirSync(DIST)) {
     if (name === 'server.js' || name.endsWith('.map') || name === 'assets.json') continue
     if (name.endsWith('.css')) { styles.push(name); continue }
+
+    //index.html is webpack's, and it carries a <script> tag pointing at a file
+    //that will not exist. The package gets view.html instead, written below.
+    if (name === 'index.html') continue
+
     assets[name] = fs.readFileSync(path.join(DIST, name), 'utf8')
   }
   fs.writeFileSync(path.join(DIST, 'assets.json'), JSON.stringify(assets))
@@ -105,6 +110,15 @@ function nwjcPath () {
     '<meta charset="utf-8">' +
     '<title>' + (pkg.title || pkg.name) + '</title>' +
     '<script>nw.Window.get().evalNWBin(null, "main.bin");</script>')
+
+  // the visible window's page. There is nothing executable in it and nothing
+  // to fetch: the window half is evaluated in by src/app/bridge out of
+  // main.bin, and the stylesheets are the files in theme/ beside it.
+  fs.writeFileSync(path.join(STAGE, 'view.html'),
+    '<!doctype html>' +
+    '<meta charset="utf-8">' +
+    '<title>' + (pkg.title || pkg.name) + '</title>' +
+    '<div id="root"></div>')
 
   fs.writeFileSync(path.join(STAGE, 'package.json'), JSON.stringify({
     name: pkg.name,

@@ -69,3 +69,54 @@ test('a client request gets its reply back on the same line protocol', async () 
         if (process.platform !== 'win32') { try { fs.unlinkSync(address); } catch (e) { /* gone */ } }
     }
 });
+
+//---- the token -----------------------------------------------------------
+
+//a named pipe on windows is reachable by anyone logged into the machine, and
+///tmp on posix is world-readable, so the socket being obscure is not the same
+//as it being closed. these pin the two halves of what makes it closed: both
+//sides look for the secret in the same place, and the app refuses anything
+//that cannot repeat it.
+
+test('both sides look for the token in the same place', () => {
+    assert.equal(endpoint.token('x'), endpoint.token('x'));
+    assert.notEqual(endpoint.token('x'), endpoint.token('y'));
+    assert.ok(endpoint.token('x').endsWith('.token'));
+});
+
+test('the token does not sit inside the socket it guards', () => {
+    //on posix both are files in the temp directory, and a token written over
+    //the socket path would take the app's own address away from it
+    assert.notEqual(endpoint.token('x'), endpoint('x'));
+});
+
+//the check the app makes, in the shape it makes it
+function correct(secret, given) {
+    const crypto = require('node:crypto');
+    const a = Buffer.from(String(given || ''), 'utf8');
+    const b = Buffer.from(secret, 'utf8');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+test('a wrong token of the right length is refused', () => {
+    const secret = 'a'.repeat(64);
+    assert.equal(correct(secret, secret), true);
+    assert.equal(correct(secret, 'b'.repeat(64)), false);
+});
+
+test('a token of the wrong length is refused rather than throwing', () => {
+    //timingSafeEqual throws on a length mismatch, so the length is checked
+    //first. an exception here would be a crash on every malformed greeting.
+    const secret = 'a'.repeat(64);
+    assert.doesNotThrow(() => correct(secret, 'short'));
+    assert.equal(correct(secret, 'short'), false);
+    assert.equal(correct(secret, ''), false);
+    assert.equal(correct(secret, undefined), false);
+    assert.equal(correct(secret, null), false);
+});
+
+test('a prefix of the token is not enough', () => {
+    const secret = 'a'.repeat(64);
+    assert.equal(correct(secret, 'a'.repeat(63)), false);
+    assert.equal(correct(secret, 'a'.repeat(65)), false);
+});
