@@ -30,6 +30,18 @@ async function plugin(imports, register, config) {
         keepAlive = w;
     });
 
+    //pins the window above the others for as long as it takes to photograph
+    //it. nw cannot be asked whether it was already pinned, so the undo puts it
+    //back the way the config asked for rather than the way it was found.
+    function onTop() {
+        try { win.setAlwaysOnTop(true); }
+        catch (e) { return function () {}; }//not every platform has it
+
+        return function () {
+            try { win.setAlwaysOnTop(!!size.alwaysOnTop); } catch (e) { /* gone */ }
+        };
+    }
+
     function open() {
         if (!http.url) return console.error('nothing is listening yet');
 
@@ -88,8 +100,13 @@ async function plugin(imports, register, config) {
 
             hide: function () { if (win) { win.hide(); hidden = true; } },
 
-            //a photograph of what is on screen. nw only draws a frame for a
-            //window the compositor is showing, so a hidden one can leave the
+            //a photograph of what is on screen. chromium stops drawing a
+            //window that nothing can see, so this lifts it to the top of the
+            //stack first and puts it back after. z-order, not focus: windows
+            //will not let a background process take the foreground, and
+            //whatever you are typing into keeps it.
+            //
+            //nw only draws a frame for a
             //callback unanswered forever — the timeout turns that hang into a
             //sentence somebody can act on.
             capture: function (options) {
@@ -104,9 +121,12 @@ async function plugin(imports, register, config) {
                         'the window is hidden, so there is no frame to photograph. open it first'));
 
                     var settled = false;
+                    var restore = onTop();
+
                     var timer = setTimeout(function () {
                         if (settled) return;
                         settled = true;
+                        restore();
                         //still the backstop: minimized, or off on another
                         //desktop, looks no different from here
                         reject(new Error('the window did not produce a frame within 15s. is it minimized?'));
@@ -116,14 +136,26 @@ async function plugin(imports, register, config) {
                         if (settled) return;
                         settled = true;
                         clearTimeout(timer);
+                        restore();
                         reject(e);
                     }
 
+                    //a window that was behind another one until a moment ago
+                    //has not been drawn yet, and capturePage does not wait for
+                    //that -- it hands back whatever the compositor last had,
+                    //which is the previous window's contents or nothing at all
+                    setTimeout(function () {
+                        if (settled) return;
+                        take();
+                    }, 250);
+
+                    function take() {
                     try {
                         win.capturePage(function (buffer) {
                             if (settled) return;
                             settled = true;
                             clearTimeout(timer);
+                            restore();
 
                             //nw hands back whatever it has, and an empty buffer
                             //is not an error to it
@@ -138,6 +170,7 @@ async function plugin(imports, register, config) {
                             });
                         }, { format: format, datatype: 'buffer' });
                     } catch (e) { fail(e); }
+                    }
                 });
             },
 
