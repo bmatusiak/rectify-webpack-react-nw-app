@@ -14,7 +14,7 @@ plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'config', 'sessi
 plugin.provides = [];
 async function plugin(imports, register) {
     var { react, theme, appPackage, io, config, session } = imports;
-    var { Page, Sidebar, Navbar, Footer, Button, Badge, Icon, Toasts } = theme.ui;
+    var { Page, Sidebar, Navbar, Footer, Button, Icon, Toasts } = theme.ui;
 
     //which page you were on survives a reload, because it is in the store
     var ui = session('demo.ui', { page: pages[0].id });
@@ -49,6 +49,11 @@ async function plugin(imports, register) {
             ui.page = id;//the store writes through on assignment
         }
 
+        function jump(id) {
+            var el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
         //the window's own title, which is also what the tray tooltip and the
         //taskbar show
         useEffect(function () {
@@ -66,9 +71,6 @@ async function plugin(imports, register) {
                         <Navbar brand={<span><Icon name="box-seam" className="me-2" />{appPackage.title}</span>}
                             right={
                                 <div className="d-flex align-items-center gap-2">
-                                    <Badge variant={connected ? 'success' : 'danger'} pill>
-                                        {connected ? 'connected' : 'offline'}
-                                    </Badge>
                                     <select className="form-select form-select-sm" style={{ width: '9rem' }}
                                         value={swatch} aria-label="Theme"
                                         onChange={function (e) {
@@ -90,14 +92,25 @@ async function plugin(imports, register) {
                                 </div>
                             } />
                     }
-                    sidebar={
-                        <Sidebar items={pages} active={page} onSelect={open}
-                            className="d-none d-md-flex" style={{ width: '15rem' }}
-                            footer={<span>{pages.length} pages, all live</span>} />
-                    }
+                    sidebar={function (sections) {
+                        return (
+                            <Sidebar items={pages} active={page} onSelect={open}
+                                className="app-sidebar d-none d-md-flex"
+                                sections={sections} onJump={jump}
+                                footer={<span>{pages.length} pages, all live</span>} />
+                        );
+                    }}
                     footer={
-                        <Footer left={current.label}
-                            right={<span>{appPackage.name}</span>} />
+                        <Footer
+                            left={
+                                <span className="d-inline-flex align-items-center gap-2">
+                                    <Icon name={connected ? 'plug-fill' : 'plug'}
+                                        className={connected ? 'text-success' : 'text-danger'} />
+                                    <span>{connected ? 'connected' : 'offline'}</span>
+                                    <span className="opacity-50">{location.host}</span>
+                                </span>
+                            }
+                            right={<span>{appPackage.name} {appPackage.version}</span>} />
                     }>
                     <Body theme={theme} io={io} appPackage={appPackage}
                         config={config} session={session} toast={toast} open={open}

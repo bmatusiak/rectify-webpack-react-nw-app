@@ -106,11 +106,11 @@ function Pagination(props) {
 
 //the dashboard example's sidebar, as a component
 function Sidebar(props) {
-    var { items, active, onSelect, header, footer, className } = props;
+    var { items, active, onSelect, header, footer, className, sections, onJump } = props;
     return (
         <div className={cx('d-flex flex-column flex-shrink-0 p-3 border-end theme-surface', className)}>
             {header ? <div className="mb-3">{header}</div> : null}
-            <ul className="nav nav-pills flex-column mb-auto">
+            <ul className="nav nav-pills flex-column">
                 {items.map(function (item) {
                     return (
                         <li className="nav-item" key={item.id}>
@@ -123,6 +123,31 @@ function Sidebar(props) {
                     );
                 })}
             </ul>
+
+            {/*what is on the page you are already on. it fills the middle of a
+               sidebar that was otherwise empty from the last item to the
+               footer, and it is the only way to move around pages that run
+               several windows deep.*/}
+            {sections && sections.length > 1 ? (
+                <div className="mt-4 mb-auto overflow-y-auto overflow-x-hidden">
+                    <div className="text-uppercase small fw-semibold text-body-secondary px-2 mb-1">
+                        On this page
+                    </div>
+                    <ul className="nav flex-column">
+                        {sections.map(function (section) {
+                            return (
+                                <li className="nav-item" key={section.id}>
+                                    <a className="nav-link d-block py-1 px-2 small text-truncate" role="button"
+                                        onClick={function () { if (onJump) onJump(section.id); }}>
+                                        {section.title}
+                                    </a>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            ) : <div className="mb-auto" />}
+
             {footer ? <div className="mt-3 border-top pt-3 small text-body-secondary">{footer}</div> : null}
         </div>
     );

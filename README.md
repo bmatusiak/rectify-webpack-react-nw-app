@@ -275,6 +275,11 @@ npm run cli -- fill "#agree"             toggle it
 npm run cli -- read .nav-link            what is there now
 ```
 
+Naming something by its text is refused when the text is not unique. A screen
+says the same word twice more often than you would think -- the demo has a
+`light` button variant and a Light mode toggle -- and picking one silently is
+how you click a thing you never named and believe you clicked the other.
+
 Say which element three ways, tried in that order: a **css selector**, because
 it is exact; the **visible text**, because "the button that says Save" is how
 people think about a screen; or a **point**, `{"x":120,"y":80}`, which is the
@@ -600,6 +605,27 @@ theme.setSwatch     wear a different one, now
 theme.bs            bootstrap's own javascript
 theme.$             jquery, this kit's dom helper
 ```
+
+### what a swatch is allowed to change
+
+Everything the shell paints is mixed from `--bs-body-bg` and `--bs-body-color`,
+the two custom properties every swatch sets, rather than from bootstrap's
+`bg-body-tertiary`. That utility looks like the right answer and is not: the
+bootswatch **dark** themes redefine it only under `[data-bs-theme=dark]`, so
+picking one in light mode left the sidebar the light grey it is at `:root`
+while the text followed the swatch, and the navigation disappeared.
+
+The mode toggle and the swatch could contradict each other too, and the
+stylesheet wins: once a swatch has loaded, the body's real background decides
+what `data-bs-theme` says. Ask a dark design for light mode and the toggle
+disables itself and says why, rather than offering a choice it cannot honour.
+
+Two components pay for this directly. A **readout** is not a button -- the
+`35%` between the stepper's two buttons was a disabled one, so it took each
+swatch's disabled colour, and on `lux` that is white on white. And
+**`outline-light`** is invisible on every light theme, as `outline-dark` is on
+every dark one; each gets a strip of contrasting ground, the way bootstrap's
+own examples do it.
 
 ### swatches
 

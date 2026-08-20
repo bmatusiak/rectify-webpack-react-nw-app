@@ -1,4 +1,5 @@
 var React = require('react');
+var { useState, useEffect } = React;
 var { cx, Button, Card, Icon } = require('./ui');
 
 //the page-shaped examples — heroes, footers, pricing, album — as components
@@ -7,11 +8,32 @@ var { cx, Button, Card, Icon } = require('./ui');
 
 function Page(props) {
     var { sidebar, header, footer, className, children } = props;
+    var [sections, setSections] = useState([]);
+
+    //what the page turned out to contain, read back off the dom rather than
+    //declared twice. a page says what its sections are by rendering them, and
+    //anything that wants to list them -- a sidebar, a rail -- asks here.
+    //
+    //no dependency array on purpose: it runs after every render and only moves
+    //the state when the list actually changed, so it settles in one pass.
+    useEffect(function () {
+        var found = Array.prototype.slice
+            .call(document.querySelectorAll('main section[data-section]'))
+            .map(function (el) { return { id: el.id, title: el.getAttribute('data-section') }; });
+
+        setSections(function (was) {
+            var same = was.length === found.length && was.every(function (s, i) {
+                return s.id === found[i].id;
+            });
+            return same ? was : found;
+        });
+    });
+
     return (
         <div className={cx('d-flex flex-column vh-100', className)}>
             {header}
             <div className="d-flex flex-grow-1 overflow-hidden">
-                {sidebar}
+                {typeof sidebar == 'function' ? sidebar(sections) : sidebar}
                 <main className="flex-grow-1 overflow-auto p-4">{children}</main>
             </div>
             {footer}
@@ -19,10 +41,17 @@ function Page(props) {
     );
 }
 
+//a title is enough of an anchor for a page this size
+function slug(title) {
+    return 's-' + String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 function Section(props) {
     var { title, lead, aside, className, children } = props;
     return (
-        <section className={cx('mb-5', className)}>
+        <section className={cx('mb-5', className)}
+            id={title ? slug(title) : undefined}
+            data-section={title || undefined}>
             {title ? (
                 <div className="d-flex align-items-center justify-content-between border-bottom pb-2 mb-3">
                     <div>
@@ -59,6 +88,39 @@ function Footer(props) {
             <span>{left}</span>
             <span>{right}</span>
         </footer>
+    );
+}
+
+//a section's worth of content in a card, for blocks small enough that a page
+//heading and a rule over the top of them weighs more than they do. four of
+//these fill a window that four Sections leave half empty.
+function Panel(props) {
+    var { title, lead, aside, className, children } = props;
+    return (
+        <div className={cx('card h-100', className)}>
+            {title ? (
+                <div className="card-header d-flex align-items-center justify-content-between gap-2">
+                    <div className="min-w-0">
+                        <span className="fw-semibold">{title}</span>
+                        {lead ? <div className="small text-body-secondary">{lead}</div> : null}
+                    </div>
+                    {aside}
+                </div>
+            ) : null}
+            <div className="card-body">{children}</div>
+        </div>
+    );
+}
+
+//side by side rather than stacked, and back to stacked when there is no room
+function Columns(props) {
+    var { of, className, children } = props;
+    return (
+        <div className={cx('row g-4 row-cols-1', 'row-cols-xl-' + (of || 2), className)}>
+            {React.Children.map(children, function (child) {
+                return child ? <div className="col">{child}</div> : null;
+            })}
+        </div>
     );
 }
 
@@ -166,4 +228,4 @@ function Stats(props) {
     );
 }
 
-module.exports = { Page, Section, Hero, Footer, Features, Pricing, Album, Stats };
+module.exports = { Page, Section, Panel, Columns, Hero, Footer, Features, Pricing, Album, Stats };

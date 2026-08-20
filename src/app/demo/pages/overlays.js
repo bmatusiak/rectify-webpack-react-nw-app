@@ -3,7 +3,8 @@ var { useState } = React;
 
 module.exports = function Overlays(props) {
     var { theme, toast, io } = props;
-    var { Section, Modal, Offcanvas, Tip, Dropdown, Button, Card, Badge, Alert, Input, Table } = theme.ui;
+    var { Section, Panel, Columns, Modal, Offcanvas, Tip, Dropdown,
+        Button, Card, Badge, Alert, Input, Table } = theme.ui;
 
     var [modal, setModal] = useState(false);
     var [confirm, setConfirm] = useState(false);
@@ -14,7 +15,12 @@ module.exports = function Overlays(props) {
 
     return (
         <>
+            {/*four small blocks. stacked as four Sections they used half the
+               window and left the rest blank; two columns of panels fill it
+               and spend one page heading instead of four.*/}
             <Section title="Overlays" lead="the parts with bootstrap's javascript behind them">
+              <Columns of={2}>
+                <Panel title="Dialogs and toasts" lead="each one opens something real">
                 <div className="d-flex flex-wrap gap-2">
                     <Button icon="window" onClick={function () { setModal(true); }}>Open a modal</Button>
                     <Button variant="secondary" icon="question-circle"
@@ -28,9 +34,9 @@ module.exports = function Overlays(props) {
                         Loud toast
                     </Button>
                 </div>
-            </Section>
+                </Panel>
 
-            <Section title="Tooltips and popovers" lead="hover the first, click the second">
+                <Panel title="Tooltips and popovers" lead="hover the first, click the second">
                 <div className="d-flex flex-wrap gap-2 align-items-center">
                     <Tip title="On top"><Button outline variant="secondary">Top</Button></Tip>
                     <Tip title="On the right" placement="right"><Button outline variant="secondary">Right</Button></Tip>
@@ -40,9 +46,10 @@ module.exports = function Overlays(props) {
                     </Tip>
                     <Tip title="Even a badge"><Badge variant="info">hover me</Badge></Tip>
                 </div>
-            </Section>
+                </Panel>
 
-            <Section title="Dropdowns" aside={<span className="small text-body-secondary">picked: {chosen}</span>}>
+                <Panel title="Dropdowns"
+                    aside={<span className="small text-body-secondary">picked: {chosen}</span>}>
                 <div className="d-flex flex-wrap gap-2">
                     <Dropdown label="Choose one" items={['alpha', 'beta', 'gamma'].map(function (name) {
                         return { label: name, active: chosen === name, onClick: function () { setChosen(name); } };
@@ -56,9 +63,9 @@ module.exports = function Overlays(props) {
                         { label: 'One' }, { label: 'Two' }, '-', { label: 'Three' }
                     ]} />
                 </div>
-            </Section>
+                </Panel>
 
-            <Section title="Offcanvas placement">
+                <Panel title="Offcanvas placement" lead="the drawer, from each of its four sides">
                 <div className="d-flex flex-wrap gap-2">
                     {['start', 'end', 'top', 'bottom'].map(function (p) {
                         return (
@@ -67,6 +74,8 @@ module.exports = function Overlays(props) {
                         );
                     })}
                 </div>
+                </Panel>
+              </Columns>
             </Section>
 
             <Modal open={modal} onClose={function () { setModal(false); }} title="A modal"

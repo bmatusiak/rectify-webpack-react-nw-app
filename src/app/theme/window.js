@@ -72,12 +72,17 @@ async function plugin(imports, register, config) {
     var locked = false;
 
     function agree() {
-        var painted = isDark(getComputedStyle(document.body).backgroundColor);
-        var showing = painted ? 'dark' : 'light';
+        //ask for what was wanted first. measuring without doing that measures
+        //the answer to the last question, which is how a page that went dark
+        //once could never be asked to come back.
+        document.body.setAttribute('data-bs-theme', stored.mode);
+
+        var showing = isDark(getComputedStyle(document.body).backgroundColor) ? 'dark' : 'light';
 
         //the swatch ignored what it was asked for, so the toggle cannot move it
         locked = showing !== stored.mode;
-        document.body.setAttribute('data-bs-theme', showing);
+        if (locked) document.body.setAttribute('data-bs-theme', showing);
+
         listeners.forEach(function (fn) { fn(showing); });
     }
 

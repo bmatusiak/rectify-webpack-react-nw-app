@@ -7,7 +7,7 @@ var { useState, useEffect } = React;
 
 module.exports = function System(props) {
     var { theme, io, appPackage, toast } = props;
-    var { Section, Stats, Card, Button, Table, Badge, Alert, Icon, Progress } = theme.ui;
+    var { Section, Panel, Columns, Stats, Card, Button, Table, Badge, Alert, Icon, Progress } = theme.ui;
 
     var [info, setInfo] = useState(null);
     var [ping, setPing] = useState(null);
@@ -82,19 +82,22 @@ module.exports = function System(props) {
                 </Alert>
             </Section>
 
-            <Section title="Tray" lead="what is on the menu right now">
+            {/*three short blocks. one under another they were three headings
+               and a lot of white; side by side they are one.*/}
+            <Section title="What it is right now" lead="the tray, the build, and the figure drawn">
+              <Columns of={2}>
+                <Panel title="Tray" lead="what is on the menu">
                 {tray.length ? (
                     <Table small head={['Item']}>
                         {tray.map(function (label, i) {
                             return <tr key={i}><td><Icon name="dot" className="me-1" />{label}</td></tr>;
                         })}
                     </Table>
-                ) : <p className="text-body-secondary">nothing yet</p>}
-            </Section>
+                ) : <p className="text-body-secondary mb-0">nothing yet</p>}
+                </Panel>
 
-            <Section title="Build" lead="which of the three ways this one is">
-                <Card>
-                    <Table small>
+                <Panel title="Build" lead="which of the three ways this one is">
+                    <Table small className="mb-0">
                         <tr><td className="text-body-secondary">app</td><td>{appPackage.title} {appPackage.version}</td></tr>
                         <tr><td className="text-body-secondary">url</td><td><code>{info ? info.url : '—'}</code></td></tr>
                         <tr><td className="text-body-secondary">control socket</td><td><code>{info ? info.socket : '—'}</code></td></tr>
@@ -105,12 +108,13 @@ module.exports = function System(props) {
                             </Badge> : '—'}</td>
                         </tr>
                     </Table>
-                </Card>
-            </Section>
+                </Panel>
 
-            <Section title="Memory" lead="the same figure, drawn">
-                <Progress value={info ? Math.min(100, info.memory / 1048576 / 5) : 0}
-                    variant="info" striped animated label />
+                <Panel title="Memory" lead="the same figure, drawn">
+                    <Progress value={info ? Math.round(Math.min(100, info.memory / 1048576 / 5)) : 0}
+                        variant="info" striped animated label />
+                </Panel>
+              </Columns>
             </Section>
         </>
     );

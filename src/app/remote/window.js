@@ -93,10 +93,28 @@ function text(wanted) {
     var all = Array.prototype.slice.call(document.querySelectorAll(CLICKABLE));
 
     var exact = all.filter(function (el) { return label(el) == want; });
-    if (exact.length) return visible(exact) || exact[0];
+    if (exact.length) return only(exact, wanted);
 
     var partial = all.filter(function (el) { return label(el).indexOf(want) >= 0; });
-    return partial.length ? (visible(partial) || partial[0]) : null;
+    return partial.length ? only(partial, wanted) : null;
+}
+
+//a screen can easily say the same word twice -- the demo has a `light` button
+//variant and a Light mode toggle -- and picking one of them silently is how
+//you end up clicking a thing you never named and believing you clicked the
+//other. matching more than one is an answer, and the answer is which ones.
+function only(list, wanted) {
+    var seen = list.filter(function (el) {
+        var box = el.getBoundingClientRect();
+        return box.width > 0 && box.height > 0;
+    });
+
+    var use = seen.length ? seen : list;
+    if (use.length == 1) return use[0];
+
+    throw new Error('"' + wanted + '" matches ' + use.length + ': ' +
+        use.slice(0, 6).map(function (el) { return describe(el).element; }).join(', ') +
+        (use.length > 6 ? ', ...' : '') + '. name one with a css selector');
 }
 
 function label(el) {
