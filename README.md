@@ -16,6 +16,7 @@ src/
   main.js       boot: nw's node context. loaded off disk, never bundled
   server.js     boot: the app's node half. bundled, reloaded on every save
   window.js     boot: the browser. bundled, hot reloaded
+  cli.js        boot: plain node. a terminal talking to a running app
   config.js     settings, sliced per plugin
   index.html
   overlay.js
@@ -25,6 +26,9 @@ src/
     http/       main.js                              express, the swappable router
     io/         main.js server.js window.js          socket.io, all three sides
                 serve.js mock.js                     shared between two of them
+    ipc/        main.js server.js cli.js             the control socket
+                endpoint.js                          where it lives, both sides
+    cli/        cli.js                               the command table
     window/     main.js server.js                    the nw window, and its handle
     tray/       main.js server.js                    the tray, and its menu api
     devtools/   main.js                              the two Inspect items
@@ -32,7 +36,7 @@ src/
     react/      window.js                            createRoot
     storage/    window.ts                            session + config stores
     theme/      window.js + components/ + scss       the theme kit
-    example/    server.js window.js                  delete this one
+    example/    server.js window.js cli.js           delete this one
 ```
 
 Each boot gathers its own half and nothing else:
@@ -204,6 +208,57 @@ And `nwjc` output is tied to **one platform and one nw.js version**, so the
 build has to run on each target with the runtime it will ship against. That is
 why `tools/pack.js` takes its version from the same `nw` pin that compiled the
 binary.
+
+## the cli
+
+```
+npm run cli                    what it understands
+npm run cli -- status          is the app up, and where
+npm run cli -- open            bring the window back
+npm run cli -- quit            shut it down
+npm run cli -- hello '{"a":1}' anything the app answers, with json in
+```
+
+`src/cli.js` is a fourth boot, run by plain node with no nw.js and no window.
+It gathers every `src/app/*/cli.js`, exactly as the other three gather their
+own halves.
+
+**A command is local unless it is not.** Anything the table does not know is
+forwarded to the running app, so a plugin that answers over ipc is reachable
+from the terminal without a `cli.js` at all — `open`, `hide` and `quit` are
+registered by `src/app/window/server.js` and nothing declares them here.
+
+### the control socket
+
+It is a **named pipe** on windows and a **unix domain socket** elsewhere, not a
+port. Both sides derive the address from the package name, so nothing has to be
+discovered or written down, and the cli needs no dependency beyond `net`.
+
+One json object per line, both directions:
+
+```
+{"id":1,"command":"open","data":{}}
+{"id":1,"ok":true,"result":"shown"}
+```
+
+The listener is in `ipc/main.js` rather than the reloadable half, for the same
+reason the window and the tray are: a reload would drop every connected client
+and then race to listen on an address still held. `ipc/server.js` hands app
+plugins a `handle(name, fn)` that comes back off on reload — otherwise the
+previous build keeps answering.
+
+```js
+//src/app/my-thing/server.js
+var answered = ipc && ipc.handle('my-thing', async function (data) {
+    return { ok: true };
+});
+
+await register(null, { onDestroy: function () { if (answered) answered.remove(); } });
+```
+
+On posix a hard kill leaves the socket file behind, so the listener unlinks a
+stale one before binding. Under `npm run dev` there is no main half at all, so
+the `ipc` service is `undefined` — check for it, the example plugin does.
 
 ## install
 

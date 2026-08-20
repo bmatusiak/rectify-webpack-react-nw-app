@@ -3,15 +3,28 @@
 //the window itself is owned by ./main.js, because it has to outlive the bundle
 //this half lives in. what arrives here is a controller, handed over on the host.
 
-plugin.consumes = ['app'];
+plugin.consumes = ['app', 'ipc'];
 plugin.provides = ['window'];
 async function plugin(imports, register) {
     var control = imports.app.host.window;
+    var ipc = imports.ipc;
 
     //no nw at all under `npm run dev`
     if (!control) return register(null, { window: void 0 });
 
+    //the cli asks for these, and this plugin is what owns them
+    var answered = !ipc ? [] : [
+        ipc.handle('open', function () { control.show(); return 'shown'; }),
+        ipc.handle('hide', function () { control.hide(); return 'hidden'; }),
+        ipc.handle('quit', function () {
+            //answer before going, or the caller only ever sees a dropped socket
+            setTimeout(function () { control.quit('asked over ipc'); }, 50);
+            return 'quitting';
+        })
+    ];
+
     await register(null, {
+        onDestroy: function () { while (answered.length) answered.pop().remove(); },
         window: {
             get url() { return control.url; },
             get isOpen() { return control.isOpen; },

@@ -12,10 +12,10 @@
 //reach it — a `require('webpack')` in an unreachable function is still bundled,
 //and dragging webpack into a packaged app is exactly what this avoids.
 
-plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'lifecycle'];
+plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle'];
 plugin.provides = ['build'];
 async function plugin(imports, register) {
-    var { app, http, io, window: win, tray, lifecycle } = imports;
+    var { app, http, io, window: win, tray, ipc, lifecycle } = imports;
 
     //what the node half is handed. the window and the tray are passed as
     //controllers rather than objects, because they outlive the bundle.
@@ -39,6 +39,12 @@ async function plugin(imports, register) {
         tray: !tray ? undefined : {
             add: function (options) { return tray.add(options); },
             labels: function () { return tray.labels(); }
+        },
+
+        ipc: !ipc ? undefined : {
+            get address() { return ipc.address; },
+            handle: function (name, fn) { return ipc.handle(name, fn); },
+            commands: function () { return ipc.commands(); }
         }
     };
 

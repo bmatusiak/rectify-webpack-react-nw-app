@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node tools/nw.js",
     "dev": "node ./main.js",
+    "cli": "node src/cli.js",
     "build": "node tools/build.js",
     "dist": "node tools/build.js && node tools/pack.js",
     "typecheck": "tsc --noEmit",
