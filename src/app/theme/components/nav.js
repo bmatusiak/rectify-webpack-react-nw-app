@@ -7,7 +7,7 @@ function Navbar(props) {
     var { brand, expand, fixed, className, children, right } = props;
     return (
         <nav className={cx('navbar', 'navbar-expand-' + (expand || 'lg'),
-            fixed && 'fixed-' + fixed, 'bg-body-tertiary', className)}>
+            fixed && 'fixed-' + fixed, 'theme-surface', className)}>
             <div className="container-fluid">
                 {brand ? <span className="navbar-brand mb-0 h1">{brand}</span> : null}
                 {children ? (
@@ -108,7 +108,7 @@ function Pagination(props) {
 function Sidebar(props) {
     var { items, active, onSelect, header, footer, className } = props;
     return (
-        <div className={cx('d-flex flex-column flex-shrink-0 p-3 border-end bg-body-tertiary', className)}>
+        <div className={cx('d-flex flex-column flex-shrink-0 p-3 border-end theme-surface', className)}>
             {header ? <div className="mb-3">{header}</div> : null}
             <ul className="nav nav-pills flex-column mb-auto">
                 {items.map(function (item) {

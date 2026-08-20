@@ -55,7 +55,7 @@ function Footer(props) {
     var { left, right, className } = props;
     return (
         <footer className={cx('d-flex justify-content-between align-items-center',
-            'border-top px-4 py-2 small text-body-secondary', className)}>
+            'border-top px-4 py-2 small theme-surface', className)}>
             <span>{left}</span>
             <span>{right}</span>
         </footer>

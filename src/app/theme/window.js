@@ -64,8 +64,28 @@ async function plugin(imports, register, config) {
     link.id = 'theme-swatch';
     document.head.appendChild(link);
 
+    //eight of the bootswatch themes are dark designs. asking one of those for
+    //light mode gets you a dark page either way, so the honest thing is to
+    //believe the stylesheet rather than the setting: once it has loaded, look
+    //at what the body actually became and make data-bs-theme say that. the
+    //shell then always agrees with the page it frames.
+    var locked = false;
+
+    function agree() {
+        var painted = isDark(getComputedStyle(document.body).backgroundColor);
+        var showing = painted ? 'dark' : 'light';
+
+        //the swatch ignored what it was asked for, so the toggle cannot move it
+        locked = showing !== stored.mode;
+        document.body.setAttribute('data-bs-theme', showing);
+        listeners.forEach(function (fn) { fn(showing); });
+    }
+
     function wear(name) {
         if (!swatches[name]) name = 'default';
+
+        //a stylesheet that has not arrived yet still measures as the last one
+        link.onload = agree;
         link.href = swatches[name];
         stored.swatch = name;
         return name;
@@ -85,12 +105,24 @@ async function plugin(imports, register, config) {
 
     var listeners = [];
 
+    //what a swatch painted, rather than what it was asked to paint
+    function isDark(colour) {
+        var parts = String(colour).match(/[0-9]+(\.[0-9]+)?/g);
+        if (!parts || parts.length < 3) return false;
+        return (parts[0] * 299 + parts[1] * 587 + parts[2] * 114) / 1000 < 128;
+    }
+
     var $theme = {
         bs: bootstrap,
         $: $,
 
         get mode() { return stored.mode; },
         get swatch() { return stored.swatch; },
+
+        //true when the swatch is a dark design and light was asked for, or the
+        //other way about. a control that offers a choice it cannot honour is
+        //worse than one that says so.
+        get modeLocked() { return locked; },
 
         swatches: Object.keys(swatches).sort(),
 
@@ -101,11 +133,13 @@ async function plugin(imports, register, config) {
         },
 
         themeSwitcher: function () {
-            var next = $('body').attr('data-bs-theme') == 'dark' ? 'light' : 'dark';
-            $('body').attr('data-bs-theme', next);
+            var next = stored.mode == 'dark' ? 'light' : 'dark';
             stored.mode = next;
-            listeners.forEach(function (fn) { fn(next); });
-            return next;
+            document.body.setAttribute('data-bs-theme', next);
+
+            //and then find out whether the swatch went along with it
+            agree();
+            return stored.mode;
         },
 
         //so a component can re-render when the mode flips

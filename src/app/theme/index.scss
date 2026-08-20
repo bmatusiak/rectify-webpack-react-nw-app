@@ -22,15 +22,46 @@ label {
     height: 1rem;
 }
 
+//every surface the shell paints is mixed from the two custom properties a
+//swatch is guaranteed to set, because bootstrap's own are not safe here.
+//`bg-body-tertiary` looks like the right answer and is not: the bootswatch
+//dark themes redefine it only under [data-bs-theme=dark], so choosing one of
+//them in light mode left the sidebar pale while its text went pale with it,
+//and the navigation disappeared.
+//
+//setting --bs-border-color rather than the border itself is deliberate: the
+//border utilities read that property, so `border-end` keeps working and
+//nothing needs !important to win.
+.theme-surface {
+    --bs-border-color: color-mix(in srgb, var(--bs-body-color) 18%, var(--bs-body-bg));
+    background-color: color-mix(in srgb, var(--bs-body-color) 4%, var(--bs-body-bg));
+    color: var(--bs-body-color);
+}
+
 //the shell is a fixed frame with one scrolling pane, so the sidebar and the
 //navbar stay put while a page moves
 .app-sidebar {
     width: 15rem;
 }
 
+//navigation is not link text. left as links it takes the swatch's link colour,
+//which on some of them is a pale blue that a pale sidebar swallows.
 .app-sidebar .nav-link {
+    --bs-nav-link-color: color-mix(in srgb, var(--bs-body-color) 80%, transparent);
+    --bs-nav-link-hover-color: var(--bs-body-color);
     font-size: .875rem;
     font-weight: 500;
+}
+
+//a readout is not a button. left as a disabled one it takes the swatch's
+//disabled colour, and on lux that is white on white -- the number vanished
+//while the two buttons either side of it stayed.
+.btn-readout {
+    --bs-btn-disabled-color: var(--bs-body-color);
+    --bs-btn-disabled-bg: var(--bs-body-bg);
+    --bs-btn-disabled-border-color: color-mix(in srgb, var(--bs-body-color) 25%, var(--bs-body-bg));
+    --bs-btn-disabled-opacity: 1;
+    min-width: 4.5rem;
 }
 
 //a desktop window is not a document: dragging a selection across a button is

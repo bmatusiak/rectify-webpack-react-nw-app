@@ -3,6 +3,9 @@ var { useState } = React;
 
 var VARIANTS = ['primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark'];
 
+//the six that carry their own contrast either way round
+var COLOURS = ['primary', 'secondary', 'success', 'danger', 'warning', 'info'];
+
 module.exports = function Buttons(props) {
     var { theme, toast } = props;
     var { Section, Button, ButtonGroup, Badge, Spinner, Placeholder, Progress, Alert, Icon, Card } = theme.ui;
@@ -27,10 +30,28 @@ module.exports = function Buttons(props) {
                     })}
                 </div>
                 <div className="d-flex flex-wrap gap-2">
-                    {VARIANTS.map(function (v) {
+                    {COLOURS.map(function (v) {
                         return <Button key={v} variant={v} outline
                             onClick={function () { setCount(count + 1); }}>{v}</Button>;
                     })}
+                </div>
+
+                {/*an outline button is its own colour and nothing else, so
+                   outline-light on a light page is invisible and so is
+                   outline-dark on a dark one. bootstrap's own examples put
+                   each on the ground it was drawn for, and so does this.*/}
+                <div className="d-flex flex-wrap gap-3 mt-3">
+                    <div className="d-inline-flex gap-2 p-2 rounded bg-dark">
+                        <Button variant="light" outline
+                            onClick={function () { setCount(count + 1); }}>light</Button>
+                    </div>
+                    <div className="d-inline-flex gap-2 p-2 rounded bg-light">
+                        <Button variant="dark" outline
+                            onClick={function () { setCount(count + 1); }}>dark</Button>
+                    </div>
+                    <span className="align-self-center small text-body-secondary">
+                        each on the ground it was drawn for
+                    </span>
                 </div>
             </Section>
 
@@ -51,7 +72,7 @@ module.exports = function Buttons(props) {
                     <Button outline variant="secondary" onClick={function () { setProgress(Math.max(0, progress - 10)); }}>
                         <Icon name="dash-lg" />
                     </Button>
-                    <Button outline variant="secondary" disabled>{progress}%</Button>
+                    <Button outline variant="secondary" disabled className="btn-readout">{progress}%</Button>
                     <Button outline variant="secondary" onClick={function () { setProgress(Math.min(100, progress + 10)); }}>
                         <Icon name="plus-lg" />
                     </Button>

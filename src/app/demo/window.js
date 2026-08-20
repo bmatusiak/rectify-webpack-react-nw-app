@@ -80,6 +80,10 @@ async function plugin(imports, register) {
                                     </select>
                                     <Button size="sm" outline variant="secondary"
                                         icon={mode === 'dark' ? 'sun' : 'moon-stars'}
+                                        disabled={theme.modeLocked}
+                                        title={theme.modeLocked
+                                            ? swatch + ' is a ' + mode + ' design, so there is no other way to wear it'
+                                            : 'switch between light and dark'}
                                         onClick={function () { theme.themeSwitcher(); }}>
                                         {mode === 'dark' ? 'Light' : 'Dark'}
                                     </Button>

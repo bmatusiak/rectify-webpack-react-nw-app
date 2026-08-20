@@ -34,7 +34,14 @@ async function plugin(imports, register, config) {
     //it. nw cannot be asked whether it was already pinned, so the undo puts it
     //back the way the config asked for rather than the way it was found.
     function onTop() {
-        try { win.setAlwaysOnTop(true); }
+        try {
+            //off first. a capture that was killed mid-flight leaves the flag
+            //set, and setting it again on a window that already has it does
+            //not move anything -- so the window stays where it was, behind
+            //whatever is covering it, and the next photograph is of nothing.
+            win.setAlwaysOnTop(false);
+            win.setAlwaysOnTop(true);
+        }
         catch (e) { return function () {}; }//not every platform has it
 
         return function () {
