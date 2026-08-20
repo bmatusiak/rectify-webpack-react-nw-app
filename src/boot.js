@@ -26,13 +26,11 @@ module.exports = async function boot(plugins, host) {
     console.log('listening on ' + url);
     services.lifecycle.publish(url);
 
-    if (services.window) {
-        if (services.tray) services.tray.start();
-        services.window.open();
+    services.tray.start();
+    services.window.open();
 
-        //nw.js is single instance: a second launch is handed to this one
-        nw.App.on('open', function () { services.window.show(); });
-    }
+    //nw.js is single instance: a second launch is handed to this one
+    nw.App.on('open', function () { services.window.show(); });
 
     services.app.emit('start');
     return app;

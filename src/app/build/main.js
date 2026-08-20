@@ -26,7 +26,7 @@ async function plugin(imports, register) {
         io: io,
         appPackage: app.appPackage,
 
-        window: !win ? undefined : {
+        window: {
             get url() { return http.url; },
             get isOpen() { return win.isOpen; },
             open: function () { win.show(); },
@@ -36,12 +36,12 @@ async function plugin(imports, register) {
             quit: function (reason) { lifecycle.shutdown(reason || 'asked to quit'); }
         },
 
-        tray: !tray ? undefined : {
+        tray: {
             add: function (options) { return tray.add(options); },
             labels: function () { return tray.labels(); }
         },
 
-        ipc: !ipc ? undefined : {
+        ipc: {
             get address() { return ipc.address; },
             handle: function (name, fn) { return ipc.handle(name, fn); },
             commands: function () { return ipc.commands(); }

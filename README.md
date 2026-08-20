@@ -256,8 +256,7 @@ await register(null, { onDestroy: function () { if (answered) answered.remove();
 ```
 
 On posix a hard kill leaves the socket file behind, so the listener unlinks a
-stale one before binding. Under `npm run dev` there is no main half at all, so
-the `ipc` service is `undefined` — check for it, the example plugin does.
+stale one before binding.
 
 ## install
 
@@ -274,7 +273,7 @@ nw`, then reinstall.
 
 ```
 npm start        # nw.js: node context + window, then gives the terminal back
-npm run dev      # the same server under plain node, it prints the url
+npm run cli      # talk to a running app over its control socket
 npm run build    # production bundles, compiled and staged into build/app
 npm run dist     # build, then nw-builder -> build/out
 npm test         # node --test
@@ -282,6 +281,11 @@ npm test         # node --test
 
 `npm start` also takes `--build` and `--package` to run what those two produced
 — see [building a package](#building-a-package).
+
+The app runs under nw.js and only under nw.js. There is no plain-node mode, and
+dropping it took about a dozen "might not have a window" branches out of the
+plugins: the host always carries a window, a tray and a control socket, so
+nothing has to ask.
 
 `npm start` returns straight away and the app keeps running. Run it again and
 it says so, and brings the window back:
@@ -428,8 +432,7 @@ not in the halves that reload: they have to outlive the bundle that is being
 thrown away. The `server.js` halves wrap a controller and own only what they
 added.
 
-Under `npm run dev` there is no nw.js at all, so both services are `undefined`
-— check for them, the example plugin does.
+Both are always there, so a `server.js` can use them without asking.
 
 Two things you will see if a copy is somehow still up:
 

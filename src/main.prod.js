@@ -32,7 +32,6 @@ plugins.config = Config();
 var root = process.cwd();
 
 boot(plugins, {
-    isNw: true,
     isPackaged: true,
     root: root,
     argv: nw.App.argv,

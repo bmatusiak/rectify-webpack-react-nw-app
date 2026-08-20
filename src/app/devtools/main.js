@@ -9,7 +9,7 @@ plugin.provides = [];
 async function plugin(imports, register) {
     var { app, window: win, tray } = imports;
 
-    if (!app.isNw || !tray) return register(null, {});
+    if (!tray) return register(null, {});
 
     //the window is a normal nw window and can be told to show its own devtools
     function inspectWindow() {

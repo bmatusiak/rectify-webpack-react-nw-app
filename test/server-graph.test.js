@@ -33,13 +33,23 @@ before(async () => {
     const bundle = path.join(serverConfig.output.path, serverConfig.output.filename);
     delete require.cache[require.resolve(bundle)];
 
+    //the app only ever runs under nw, so the host always carries all of this.
+    //standing in for it here is what lets the node half be exercised without one.
+    const handle = () => ({ remove() {} });
+
     loaded = await require(bundle)({
         express,
         router,
         httpServer: server,
         io: ioServer,
-        appPackage: { title: 'Test App', name: 'test-app', version: '9.9.9' }
-        //no window and no tray: this is the plain node case, same as `npm run dev`
+        appPackage: { title: 'Test App', name: 'test-app', version: '9.9.9' },
+        window: {
+            url: 'http://127.0.0.1:0/',
+            isOpen: false,
+            open() {}, show() {}, hide() {}, openInBrowser() {}, quit() {}
+        },
+        tray: { add: handle, labels: () => [] },
+        ipc: { address: 'test', handle, commands: () => [] }
     });
 
     await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -53,7 +63,7 @@ after(() => {
 
 test('the plugin graph resolves on the server side', () => {
     const services = loaded.app.services;
-    for (const name of ['app', 'io', 'appPackage', 'window', 'tray'])
+    for (const name of ['app', 'io', 'appPackage', 'window', 'tray', 'ipc'])
         assert.ok(name in services, 'missing service: ' + name);
 });
 
@@ -64,10 +74,11 @@ test('the window half is not in this bundle at all', () => {
         assert.ok(!(name in services), name + ' leaked into the server bundle');
 });
 
-test('nw services are absent without nw.js, rather than half present', () => {
+test('the nw services wrap what the host handed over', () => {
     const services = loaded.app.services;
-    assert.equal(services.window, undefined);
-    assert.equal(services.tray, undefined);
+    assert.equal(typeof services.window.show, 'function');
+    assert.equal(typeof services.tray.add, 'function');
+    assert.equal(typeof services.ipc.handle, 'function');
 });
 
 test('a plugin server half mounts its routes on the swappable router', async () => {

@@ -9,8 +9,6 @@ plugin.provides = ['tray'];
 async function plugin(imports, register) {
     var control = imports.app.host.tray;
 
-    if (!control) return register(null, { tray: void 0 });
-
     var added = [];
 
     await register(null, {

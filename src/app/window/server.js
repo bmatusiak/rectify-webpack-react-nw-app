@@ -9,11 +9,8 @@ async function plugin(imports, register) {
     var control = imports.app.host.window;
     var ipc = imports.ipc;
 
-    //no nw at all under `npm run dev`
-    if (!control) return register(null, { window: void 0 });
-
     //the cli asks for these, and this plugin is what owns them
-    var answered = !ipc ? [] : [
+    var answered = [
         ipc.handle('open', function () { control.show(); return 'shown'; }),
         ipc.handle('hide', function () { control.hide(); return 'hidden'; }),
         ipc.handle('quit', function () {

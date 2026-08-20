@@ -5,10 +5,6 @@ plugin.provides = ['window'];
 async function plugin(imports, register, config) {
     var { app, http, lifecycle } = imports;
 
-    //`npm run dev` runs this same list under plain node, where there is no
-    //window to open and nothing to open it with
-    if (!app.isNw) return register(null, { window: void 0 });
-
     var size = config.window || {};
     var win = null;
     var keepAlive = null;

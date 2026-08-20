@@ -30,10 +30,8 @@ async function plugin(imports, register) {
             Promise.resolve(app.destroyAll()).catch(function (e) {
                 console.error('teardown failed', e && e.stack || e);
             }).then(function () {
-                if (app.isNw) {
-                    try { nw.App.closeAllWindows(); } catch (e) { /* already gone */ }
-                    try { nw.App.quit(); } catch (e) { /* already gone */ }
-                }
+                try { nw.App.closeAllWindows(); } catch (e) { /* already gone */ }
+                try { nw.App.quit(); } catch (e) { /* already gone */ }
                 //nw.App.quit() on its own can leave this context alive: the
                 //server, socket.io and webpack's watchers are open handles
                 var t = setTimeout(function () { process.exit(0); }, 300);
@@ -42,9 +40,8 @@ async function plugin(imports, register) {
         },
 
         publish: function (url) {
-            //`npm run dev` is not a running app to the launcher, and a
-            //package has no launcher reading this at all
-            if (!app.isNw || app.isPackaged) return;
+            //a package has no launcher reading this
+            if (app.isPackaged) return;
             try {
                 fs.writeFileSync(INSTANCE_FILE, JSON.stringify({ pid: process.pid, url: url }, null, 2));
             } catch (e) {

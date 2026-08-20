@@ -34,10 +34,9 @@ var plugins = fs.readdirSync(PLUGINS)
 plugins.config = Config();
 
 boot(plugins, {
-    isNw: typeof nw != 'undefined',
     isPackaged: false,
     root: path.dirname(__dirname),
-    argv: typeof nw != 'undefined' ? nw.App.argv : process.argv.slice(2),
+    argv: nw.App.argv,
     appPackage: {
         title: pkg.title || pkg.name,
         name: pkg.name,

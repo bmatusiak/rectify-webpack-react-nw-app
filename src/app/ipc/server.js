@@ -9,9 +9,6 @@ plugin.provides = ['ipc'];
 async function plugin(imports, register) {
     var control = imports.app.host.ipc;
 
-    //`npm run dev` under plain node has no main half to hand one over
-    if (!control) return register(null, { ipc: void 0 });
-
     var added = [];
 
     await register(null, {

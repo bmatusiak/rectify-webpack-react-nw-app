@@ -8,8 +8,6 @@ plugin.provides = ['tray'];
 async function plugin(imports, register, config) {
     var { app, http, window: win, lifecycle } = imports;
 
-    if (!app.isNw) return register(null, { tray: void 0 });
-
     var tray = null;//module scope on purpose: a collected Tray takes its icon with it
     var items = [];//what other plugins added, replayed on every rebuild
 
