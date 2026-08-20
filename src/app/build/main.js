@@ -58,8 +58,14 @@ async function plugin(imports, register) {
 
         //---- packaged ---------------------------------------------------
 
+        var path = require('path');
+
         //the window half, built before packaging and carried here as strings
         var assets = require('../../../dist/assets.json');
+
+        //the stylesheets sit beside the app rather than inside main.bin: they
+        //are not code, and the swatches are megabytes of them
+        http.app.use(http.express.static(path.join(app.root, 'theme')));
 
         http.app.get('/', function (req, res) {
             res.type('html').send(assets['index.html']);

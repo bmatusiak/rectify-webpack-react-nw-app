@@ -22,6 +22,7 @@ async function plugin(imports, register) {
     function Demo() {
         var [page, setPage] = useState(ui.page);
         var [mode, setMode] = useState(theme.mode);
+        var [swatch, setSwatch] = useState(theme.swatch);
         var [toasts, setToasts] = useState([]);
         var [connected, setConnected] = useState(io.connected !== false);
 
@@ -68,9 +69,15 @@ async function plugin(imports, register) {
                                     <Badge variant={connected ? 'success' : 'danger'} pill>
                                         {connected ? 'connected' : 'offline'}
                                     </Badge>
-                                    <span className="text-body-secondary small d-none d-md-inline">
-                                        v{appPackage.version}
-                                    </span>
+                                    <select className="form-select form-select-sm" style={{ width: '9rem' }}
+                                        value={swatch} aria-label="Theme"
+                                        onChange={function (e) {
+                                            setSwatch(theme.setSwatch(e.target.value));
+                                        }}>
+                                        {theme.swatches.map(function (name) {
+                                            return <option key={name} value={name}>{name}</option>;
+                                        })}
+                                    </select>
                                     <Button size="sm" outline variant="secondary"
                                         icon={mode === 'dark' ? 'sun' : 'moon-stars'}
                                         onClick={function () { theme.themeSwitcher(); }}>

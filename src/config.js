@@ -18,7 +18,8 @@ module.exports = function () {
 
         //app plugins
         theme: {
-            mode: null//'light' | 'dark', or null to follow the os
+            mode: null,//'light' | 'dark', or null to follow the os
+            swatch: 'default'//any folder name under src/app/theme/swatch
         }
 
     };

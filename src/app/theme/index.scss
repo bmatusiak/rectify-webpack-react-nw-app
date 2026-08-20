@@ -1,44 +1,19 @@
-//the example kit's stylesheet. replace it along with the rest of this
-//directory when you bring your own style — nothing outside depends on it.
+//the kit's own rules, and only those.
 //
-//bare specifier, not "~bootstrap/...": sass-loader's webpack importer cannot
-//run inside nw's node context, so sass resolves this itself through the
-//loadPaths in webpack.config.js.
-@use "bootstrap/scss/bootstrap" as *;
-
-:root,
-[data-bs-theme="light"] {
-    .bg-default {
-        @extend .bg-light;
-        @extend .text-dark;
-    }
-
-    .nav {
-        .nav-link.active {
-            @extend .bg-secondary;
-            @extend .text-white;
-        }
-    }
-}
-
-[data-bs-theme="dark"] {
-
-    .bg-default {
-        @extend .bg-dark;
-    }
-
-    .nav {
-        .nav-link.active {
-            @extend .bg-danger;
-            //@extend .text-danger;
-        }
-    }
-}
+//bootstrap itself is not imported here any more: it arrives as a stylesheet
+//link that the swatch picker swaps, so it can be exchanged at runtime. If it
+//were compiled in, style-loader would inject it after that link and every
+//swatch would lose to it.
+//
+//which means no @extend and no bootstrap variables in this file. what it needs
+//instead is bootstrap's own custom properties, which every swatch defines.
 
 label {
-    color: $gray-600;
+    color: var(--bs-secondary-color);
 }
 
+//the icon sprite is one document, and every <use> resolves against it. these
+//are the sizes the Icon component leaves to css.
 .bi {
     vertical-align: -.125em;
     fill: currentColor;
@@ -47,27 +22,26 @@ label {
     height: 1rem;
 }
 
+//the shell is a fixed frame with one scrolling pane, so the sidebar and the
+//navbar stay put while a page moves
+.app-sidebar {
+    width: 15rem;
+}
 
-/*
-* Sidebar
-*/
-
-@media (min-width: 768px) {}
-
-.sidebar .nav-link {
+.app-sidebar .nav-link {
     font-size: .875rem;
     font-weight: 500;
 }
 
-.sidebar-heading {
-    font-size: .75rem;
+//a desktop window is not a document: dragging a selection across a button is
+//never what was meant
+body {
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-body {
-    -webkit-user-select: none;
-    /* Safari */
-    -ms-user-select: none;
-    /* IE 10 and IE 11 */
-    user-select: none;
-    /* Standard syntax */
+//except where it is
+code, pre, input, textarea {
+    user-select: text;
+    -webkit-user-select: text;
 }

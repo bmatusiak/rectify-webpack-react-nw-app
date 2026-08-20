@@ -12,6 +12,9 @@
 //  ui               every component, in ./components
 //  themeSwitcher    flips light/dark, remembered through the `config` store
 //  mode             which of the two is on
+//  swatches         the stylesheets in ./swatch, by name
+//  swatch           which one is on
+//  setSwatch        wear a different one, now
 //  bs               the kit's own library, bootstrap's javascript
 //  $                the kit's dom helper, jquery. deliberately not a top level
 //                   service, since another kit may not want one
@@ -28,6 +31,7 @@ var nav = require('./components/nav');
 var layout = require('./components/layout');
 var makeOverlays = require('./components/overlay');
 var makeDisclosure = require('./components/disclosure');
+var swatches = require('./swatches');
 
 plugin.consumes = ['react', 'config', 'appPackage'];
 plugin.provides = ['theme'];
@@ -46,7 +50,28 @@ async function plugin(imports, register, config) {
     var startingMode = (config.theme && config.theme.mode) ||
         (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
-    var stored = imports.config('theme', { mode: startingMode });
+    var stored = imports.config('theme', {
+        mode: startingMode,
+        swatch: (config.theme && config.theme.swatch) || 'default'
+    });
+
+    //bootstrap arrives as a link rather than compiled into index.scss, so it
+    //can be swapped without a rebuild. the kit's own rules are injected by
+    //style-loader afterwards, which is what keeps them on top of whichever
+    //swatch is wearing.
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.id = 'theme-swatch';
+    document.head.appendChild(link);
+
+    function wear(name) {
+        if (!swatches[name]) name = 'default';
+        link.href = swatches[name];
+        stored.swatch = name;
+        return name;
+    }
+
+    wear(stored.swatch);
 
     //the icon sprite is one document injected once, so every <use> in every
     //component resolves without another request
@@ -65,6 +90,15 @@ async function plugin(imports, register, config) {
         $: $,
 
         get mode() { return stored.mode; },
+        get swatch() { return stored.swatch; },
+
+        swatches: Object.keys(swatches).sort(),
+
+        setSwatch: function (name) {
+            var applied = wear(name);
+            listeners.forEach(function (fn) { fn(stored.mode); });
+            return applied;
+        },
 
         themeSwitcher: function () {
             var next = $('body').attr('data-bs-theme') == 'dark' ? 'light' : 'dark';

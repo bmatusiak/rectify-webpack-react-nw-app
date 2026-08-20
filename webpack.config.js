@@ -31,6 +31,22 @@ module.exports = (env, argv = {}) => {
     //inlined as a string, ie the bootstrap-icons sprite sheet
     const asString = { test: /\.(txt|svg)$/i, type: 'asset/source' };
 
+    //the swatches, and vanilla bootstrap, are whole stylesheets the theme kit
+    //swaps between at runtime. they are emitted as files rather than inlined,
+    //so only the chosen one is ever parsed — and named after the folder they
+    //came from, since every one of them is called bootstrap.min.css.
+    const stylesheets = {
+        test: /\.css$/i,
+        type: 'asset/resource',
+        generator: {
+            filename: function (pathData) {
+                var parts = String(pathData.filename).split('/');
+                var i = parts.indexOf('swatch');
+                return 'swatch-' + (i >= 0 ? parts[i + 1] : 'default') + '.css';
+            }
+        }
+    };
+
     const windowBundle = {
         name: 'window',
         target: 'web',
@@ -73,6 +89,7 @@ module.exports = (env, argv = {}) => {
                     ]
                 },
                 asString,
+                stylesheets,
                 { test: /\.(eot|ttf|woff|woff2|png|jpg|gif)$/i, type: 'asset' }
             ]
         },

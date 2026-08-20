@@ -512,9 +512,36 @@ replaced. What this kit carries:
 theme.ui            every component
 theme.themeSwitcher flips light/dark, remembered in the config store
 theme.mode          which one is on
+theme.swatches      the stylesheets in ./swatch, by name
+theme.swatch        which one is worn
+theme.setSwatch     wear a different one, now
 theme.bs            bootstrap's own javascript
 theme.$             jquery, this kit's dom helper
 ```
+
+### swatches
+
+`src/app/theme/swatch/<name>/` is a [bootswatch](https://bootswatch.com) build,
+and the folder is the registry again: drop one in and it appears in the picker,
+delete one and it does not. `default` is vanilla bootstrap.
+
+Which means **bootstrap is not compiled into `index.scss`** — it arrives as a
+stylesheet link that `setSwatch` swaps. If it were compiled in, style-loader
+would inject it after that link and every swatch would lose to it. So the
+kit's own rules use bootstrap's custom properties rather than `@extend`, and
+they stay on top of whichever swatch is worn because style-loader injects them
+last.
+
+Two things worth knowing before shipping 27 of them:
+
+- They are **~230kb each**, and they are all in the package. Inside `main.bin`
+  they took it from 4mb to 17mb, so `tools/build.js` leaves stylesheets out of
+  the binary and ships them as files beside it — they are not code. Deleting
+  the folders you will not use is how to get the rest back.
+- **20 of the 27 pull their fonts from Google Fonts** with an `@import`. A
+  desktop app that is offline will fall back to a system face, so the colours
+  arrive and the typography does not. Self-hosting the fonts, or picking from
+  the seven that do not, is the fix.
 
 `theme.ui` covers what bootstrap's examples do — `Alert Badge Button
 ButtonGroup Card ListGroup Table Spinner Progress Placeholder Icon`, the form

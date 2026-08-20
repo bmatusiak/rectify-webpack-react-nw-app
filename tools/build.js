@@ -56,14 +56,20 @@ function nwjcPath () {
   console.log('building the window and server halves')
   await run(configs({}, { mode: 'production' }))
 
-  // 2. the window half becomes data, so no .js of it reaches the package
+  // 2. the window half becomes data, so no .js of it reaches the package.
+  //    stylesheets are left out on purpose: they are not code, and the theme
+  //    kit's swatches are megabytes of them — inside main.bin they tripled it,
+  //    and only one is ever used at a time. They ship as ordinary files.
   const assets = {}
+  const styles = []
   for (const name of fs.readdirSync(DIST)) {
     if (name === 'server.js' || name.endsWith('.map') || name === 'assets.json') continue
+    if (name.endsWith('.css')) { styles.push(name); continue }
     assets[name] = fs.readFileSync(path.join(DIST, name), 'utf8')
   }
   fs.writeFileSync(path.join(DIST, 'assets.json'), JSON.stringify(assets))
   console.log('folded ' + Object.keys(assets).join(', ') + ' into assets.json')
+  console.log('and left ' + styles.length + ' stylesheets as files')
 
   // 3. one bundle with everything in it
   console.log('building the packaged main')
@@ -76,6 +82,8 @@ function nwjcPath () {
 
   // 5. stage exactly what ships
   fs.mkdirSync(STAGE, { recursive: true })
+  fs.mkdirSync(path.join(STAGE, 'theme'), { recursive: true })
+  for (const name of styles) fs.copyFileSync(path.join(DIST, name), path.join(STAGE, 'theme', name))
 
   // nw-builder wants an .ico for the executable on windows. an ico can just
   // carry a png, so this is derived from icon.png rather than kept beside it.
