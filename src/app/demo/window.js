@@ -1,0 +1,107 @@
+var React = require('react');
+var { useState, useEffect, useCallback } = React;
+
+var pages = require('./pages');
+
+//the demo shell: a sidebar, a page, and somewhere for toasts to land.
+//
+//delete this folder and the app is the scaffold again. everything here is
+//built out of `theme.ui`, and everything it does goes through a real service —
+//the stores remember, the socket answers, the tray and the window are the
+//app's own.
+
+plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'config', 'session'];
+plugin.provides = [];
+async function plugin(imports, register) {
+    var { react, theme, appPackage, io, config, session } = imports;
+    var { Page, Sidebar, Navbar, Footer, Button, Badge, Icon, Toasts } = theme.ui;
+
+    //which page you were on survives a reload, because it is in the store
+    var ui = session('demo.ui', { page: pages[0].id });
+
+    function Demo() {
+        var [page, setPage] = useState(ui.page);
+        var [mode, setMode] = useState(theme.mode);
+        var [toasts, setToasts] = useState([]);
+        var [connected, setConnected] = useState(io.connected !== false);
+
+        useEffect(function () { return theme.onModeChange(setMode); }, []);
+
+        useEffect(function () {
+            var up = function () { setConnected(true); };
+            var down = function () { setConnected(false); };
+            io.on('connect', up);
+            io.on('disconnect', down);
+            return function () { io.off('connect', up); io.off('disconnect', down); };
+        }, []);
+
+        var toast = useCallback(function (message, variant, icon) {
+            var id = Date.now() + Math.random();
+            setToasts(function (list) { return list.concat({ id: id, message: message, variant: variant, icon: icon }); });
+            setTimeout(function () {
+                setToasts(function (list) { return list.filter(function (t) { return t.id !== id; }); });
+            }, 4000);
+        }, []);
+
+        function open(id) {
+            setPage(id);
+            ui.page = id;//the store writes through on assignment
+        }
+
+        //the window's own title, which is also what the tray tooltip and the
+        //taskbar show
+        useEffect(function () {
+            var current = pages.filter(function (p) { return p.id === page; })[0];
+            document.title = appPackage.title + (current ? ' | ' + current.label : '');
+        }, [page]);
+
+        var current = pages.filter(function (p) { return p.id === page; })[0] || pages[0];
+        var Body = current.Page;
+
+        return (
+            <>
+                <Page
+                    header={
+                        <Navbar brand={<span><Icon name="box-seam" className="me-2" />{appPackage.title}</span>}
+                            right={
+                                <div className="d-flex align-items-center gap-2">
+                                    <Badge variant={connected ? 'success' : 'danger'} pill>
+                                        {connected ? 'connected' : 'offline'}
+                                    </Badge>
+                                    <span className="text-body-secondary small d-none d-md-inline">
+                                        v{appPackage.version}
+                                    </span>
+                                    <Button size="sm" outline variant="secondary"
+                                        icon={mode === 'dark' ? 'sun' : 'moon-stars'}
+                                        onClick={function () { theme.themeSwitcher(); }}>
+                                        {mode === 'dark' ? 'Light' : 'Dark'}
+                                    </Button>
+                                </div>
+                            } />
+                    }
+                    sidebar={
+                        <Sidebar items={pages} active={page} onSelect={open}
+                            className="d-none d-md-flex" style={{ width: '15rem' }}
+                            footer={<span>{pages.length} pages, all live</span>} />
+                    }
+                    footer={
+                        <Footer left={current.label}
+                            right={<span>{appPackage.name}</span>} />
+                    }>
+                    <Body theme={theme} io={io} appPackage={appPackage}
+                        config={config} session={session} toast={toast} open={open}
+                        services={imports.app.services} />
+                </Page>
+
+                <Toasts items={toasts} onDismiss={function (id) {
+                    setToasts(function (list) { return list.filter(function (t) { return t.id !== id; }); });
+                }} />
+            </>
+        );
+    }
+
+    react.root.render(<Demo />);
+
+    await register(null, {});
+}
+module.exports = plugin;

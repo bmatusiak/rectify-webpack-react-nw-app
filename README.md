@@ -35,7 +35,8 @@ src/
     react/      window.js                            createRoot
     storage/    window.js                            session + config stores
     theme/      window.js + components/ + scss       the theme kit
-    example/    server.js window.js cli.js           delete this one
+    demo/       window.js server.js cli.js          delete this one
+                pages/                               one file per page
 ```
 
 Each boot gathers its own half and nothing else:
@@ -476,6 +477,26 @@ Service names are the contract between halves and between plugins; rectify
 resolves the order from `consumes` and `provides`, so the order of the folders
 never matters.
 
+### the demo
+
+`src/app/demo` is an app built out of the kit: a sidebar, seven pages, and a
+toast stack. It is meant to be poked at rather than read — most of what is on
+screen does something real:
+
+- **System** — pid, uptime, memory and round-trip time, live off the socket.
+  The buttons hide the window, open it in your browser, and add and remove
+  items on the actual tray menu.
+- **Forms** — a validated form whose values go into the `config` store, so they
+  survive a restart. The panel beside it shows what is stored.
+- **Data** — the service graph of both halves, searchable, sortable, paged.
+- **Overlays** — modals that return a value, an offcanvas from any of the four
+  edges, toasts, tooltips, popovers, dropdowns that change the page.
+- **Disclosure** — tabs, accordions, collapse and a carousel that runs itself.
+- **Layouts** — hero, features, stats, pricing and album, from bootstrap's own
+  examples. The pricing choice is remembered.
+
+Delete the folder and the app is the scaffold again.
+
 ### the theme kit
 
 `theme` is a slot, and bringing your own style is the expected thing to do.
@@ -483,12 +504,31 @@ Bootstrap, jquery and bootstrap-icons are in `src/app/theme/` because something
 had to be — tailwind, plain css, a component library or nothing at all all fit
 the same slot.
 
-The service name is the only thing anything outside that directory knows:
-`src/app/example/window.js` asks for `theme` and reads `theme.navbar`. So a swap is the
-whole directory replaced. What this kit happens to carry is `navbar`, `dialog`,
-`themeSwitcher`, `bs` (its own library) and `$` (its dom helper, deliberately
-not a top level service since another kit may not want one) — none of which are
-required of a replacement, only of the example plugin that uses them.
+The service name is the only thing anything outside that directory knows: a
+plugin asks for `theme` and reads `theme.ui`. So a swap is the whole directory
+replaced. What this kit carries:
+
+```
+theme.ui            every component
+theme.themeSwitcher flips light/dark, remembered in the config store
+theme.mode          which one is on
+theme.bs            bootstrap's own javascript
+theme.$             jquery, this kit's dom helper
+```
+
+`theme.ui` covers what bootstrap's examples do — `Alert Badge Button
+ButtonGroup Card ListGroup Table Spinner Progress Placeholder Icon`, the form
+controls `Form Input Textarea Select Check Range InputGroup`, navigation
+`Navbar Tabs Breadcrumb Pagination Sidebar`, the javascript-backed `Modal
+Offcanvas Toasts Tip Dropdown Accordion Collapse Carousel`, and the page shapes
+`Page Section Hero Footer Features Pricing Album Stats`.
+
+The split is deliberate: anything bootstrap drives from a data attribute is
+left as markup, and only the parts that need one of its instances — modal,
+offcanvas, tooltip, popover, carousel — create and dispose one.
+
+None of those names are required of a replacement, only of the demo that uses
+them.
 
 ### config
 

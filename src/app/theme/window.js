@@ -5,24 +5,29 @@
 //library, or nothing at all.
 //
 //`theme` is the slot. it is the only name anything outside this directory
-//knows: src/app/index.js asks for `theme` and reads `theme.navbar`. so a kit
-//swap is this whole directory replaced by one that provides the same service
-//with whatever it carries. the pieces here happen to be:
+//knows: a plugin asks for `theme` and reads `theme.ui`. so a kit swap is this
+//whole directory replaced by one that provides the same service with whatever
+//it carries. what this one carries:
 //
-//  navbar, dialog   the components, in ./components
+//  ui               every component, in ./components
 //  themeSwitcher    flips light/dark, remembered through the `config` store
-//  bs               the kit's own library, bootstrap's js in this one
-//  $                the kit's dom helper, jquery here. deliberately not a top
-//                   level service, since another kit may not want one
+//  mode             which of the two is on
+//  bs               the kit's own library, bootstrap's javascript
+//  $                the kit's dom helper, jquery. deliberately not a top level
+//                   service, since another kit may not want one
 //
-//none of those names are required either. they are what this kit provides,
-//and what the example plugin happens to use.
+//none of those names are required either. they are what this kit provides and
+//what the demo happens to use.
 //
 //src/config.js pins the starting colour mode, if you want one.
 //---------------------------------------------------------------------------
 
-var navbar = require('./components/navbar');
-var dialog = require('./components/dialog');
+var ui = require('./components/ui');
+var form = require('./components/form');
+var nav = require('./components/nav');
+var layout = require('./components/layout');
+var makeOverlays = require('./components/overlay');
+var makeDisclosure = require('./components/disclosure');
 
 plugin.consumes = ['react', 'config', 'appPackage'];
 plugin.provides = ['theme'];
@@ -38,39 +43,53 @@ async function plugin(imports, register, config) {
     const bootstrap = require('bootstrap');
 
     //src/config.js can pin this, otherwise follow the os
-    var default_color_mode = config.theme.mode ||
+    var startingMode = (config.theme && config.theme.mode) ||
         (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
-    var config = imports.config('theme', {
-        mode: default_color_mode
-    })
+    var stored = imports.config('theme', { mode: startingMode });
 
+    //the icon sprite is one document injected once, so every <use> in every
+    //component resolves without another request
     if ($('#bootstrap-icon-svg').length == 0)
         $(bootstrapSVG)
             .attr('id', 'bootstrap-icon-svg')
             .attr('class', 'd-none')
-            .prependTo(document.body)
+            .prependTo(document.body);
 
+    $('body').attr('data-bs-theme', stored.mode);
 
-    var themeSwitcher = function () {
-        var newMode = $('body').attr('data-bs-theme') == 'dark' ? 'light' : 'dark';
-        $('body').attr('data-bs-theme', newMode);
-        config.mode = newMode;
-    }
-
-    $('body').attr('data-bs-theme', config.mode);
+    var listeners = [];
 
     var $theme = {
-        bs: bootstrap,//the kit itself, swap this file to swap kits
-        $,//the kit's dom helper. not a top level service, another kit may not want one
-        themeSwitcher,
-    }
-    imports.theme = $theme;
-    $theme.navbar = await navbar(imports);
-    $theme.dialog = await dialog(imports);
+        bs: bootstrap,
+        $: $,
 
-    await register(null, {
-        theme: $theme
-    });
+        get mode() { return stored.mode; },
+
+        themeSwitcher: function () {
+            var next = $('body').attr('data-bs-theme') == 'dark' ? 'light' : 'dark';
+            $('body').attr('data-bs-theme', next);
+            stored.mode = next;
+            listeners.forEach(function (fn) { fn(next); });
+            return next;
+        },
+
+        //so a component can re-render when the mode flips
+        onModeChange: function (fn) {
+            listeners.push(fn);
+            return function () {
+                var i = listeners.indexOf(fn);
+                if (i >= 0) listeners.splice(i, 1);
+            };
+        }
+    };
+
+    //the parts that need bootstrap's own instances are built against it
+    var overlays = makeOverlays(bootstrap);
+    var disclosure = makeDisclosure(bootstrap);
+
+    $theme.ui = Object.assign({}, ui, form, nav, layout, overlays, disclosure);
+
+    await register(null, { theme: $theme });
 }
 module.exports = plugin;

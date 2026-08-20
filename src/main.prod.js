@@ -11,6 +11,18 @@
 
 var path = require('path');
 
+//this bundle runs inside a hidden window rather than nw's node context, and
+//that context is missing a node global or two. socket.io reaches for this one
+//under load, and an app that dies on its first busy moment is worse than one
+//that never started.
+if (typeof setImmediate === 'undefined') {
+    global.setImmediate = function (fn) {
+        var args = Array.prototype.slice.call(arguments, 1);
+        return setTimeout(function () { fn.apply(null, args); }, 0);
+    };
+    global.clearImmediate = function (t) { clearTimeout(t); };
+}
+
 var boot = require('./boot');
 var pkg = require('../package.json');
 var Config = require('./config');

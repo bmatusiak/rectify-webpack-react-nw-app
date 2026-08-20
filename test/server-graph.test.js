@@ -82,10 +82,10 @@ test('the nw services wrap what the host handed over', () => {
 });
 
 test('a plugin server half mounts its routes on the swappable router', async () => {
-    const res = await fetch(url + '/api/hello');
+    const res = await fetch(url + '/api/status');
     assert.equal(res.status, 200);
     const body = await res.json();
-    assert.equal(body.hello, 'Test App');
+    assert.equal(typeof body.pid, 'number');
 });
 
 test('socket.io answers the handshake and the ping', async () => {

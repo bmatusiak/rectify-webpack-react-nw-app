@@ -20,6 +20,10 @@ async function plugin(imports, register) {
     //what the node half is handed. the window and the tray are passed as
     //controllers rather than objects, because they outlive the bundle.
     var host = {
+        //which of the three builds this is, so the node half can say so
+        isPackaged: !!app.isPackaged,
+        root: app.root,
+
         express: http.express,
         router: http.router,
         httpServer: http.server,
