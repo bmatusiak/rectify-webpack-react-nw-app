@@ -209,6 +209,25 @@ build has to run on each target with the runtime it will ship against. That is
 why `tools/pack.js` takes its version from the same `nw` pin that compiled the
 binary.
 
+### the examples it is built from
+
+`bootstrap-5.3.8-examples` is the source, and the page-shaped ones are
+components in `src/app/theme/components/examples.js` rather than markup to
+copy. Each demo page is the example with the parts that were static made to
+work:
+
+| page | what the original does | what this one does |
+|---|---|---|
+| **Dashboard** | chart.js drawing seven numbers | an svg polyline drawing the memory of the process you are talking to, sampled over the socket, pausable |
+| **Checkout** | a cart whose total is typed in | a cart that adds up, a promo code that is real (`DEMO10`), and a form the store remembers |
+| **Blog** | posts of lorem, links that go nowhere | notes about this app, and the sidebar actually opens them |
+| **Cover** | a whole window, three dead links | the same page in a box, and the three links switch it |
+| **Cheatsheet** | every component listed | the values underneath them, read off the live page, so it says what the swatch you are wearing resolved to |
+
+The chart is deliberately not a dependency. It is a `polyline` in a `viewBox`,
+which is all that example draws, and it takes its colour from the swatch like
+everything else.
+
 ## the cli
 
 ```

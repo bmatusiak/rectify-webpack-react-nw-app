@@ -29,6 +29,7 @@ var ui = require('./components/ui');
 var form = require('./components/form');
 var nav = require('./components/nav');
 var layout = require('./components/layout');
+var examples = require('./components/examples');
 var makeOverlays = require('./components/overlay');
 var makeDisclosure = require('./components/disclosure');
 var swatches = require('./swatches');
@@ -165,7 +166,7 @@ async function plugin(imports, register, config) {
     var overlays = makeOverlays(bootstrap);
     var disclosure = makeDisclosure(bootstrap);
 
-    $theme.ui = Object.assign({}, ui, form, nav, layout, overlays, disclosure);
+    $theme.ui = Object.assign({}, ui, form, nav, layout, examples, overlays, disclosure);
 
     await register(null, { theme: $theme });
 }
