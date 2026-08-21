@@ -1,9 +1,9 @@
-//WHICH TEST PLUGINS A --selftest RUN SHOULD LOAD.
+//WHICH SUITES A TARGETED RUN SHOULD TAKE.
 //
-//Four places gather them -- src/main.js off disk, src/server.js and
-//src/window.js through require.context, and tools/selftest.js for the cli --
-//and all four have to agree about what `--selftest=core/ipc` means, or running
-//one plugin on its own would quietly run a different set in each context.
+//Four places ask this -- src/main.js off disk, src/server.js and src/window.js
+//through require.context, and tools/selftest.js for the cli -- and all four have
+//to agree about what `npm test -- core/ipc` means, or singling out one plugin
+//would quietly run a different set in each context.
 //
 //so the rule lives here and they all ask it. It is deliberately a substring
 //rather than anything cleverer: a plugin is named by its folder under src/app
@@ -44,5 +44,14 @@ module.exports.tag = function tag(plugin, name) {
 
     wrapped.consumes = plugin.consumes;
     wrapped.provides = plugin.provides;
+
+    //AND IT KEEPS THE NAME. rectify names a plugin after its setup function, so
+    //a wrapper called `wrapped` renamed every test plugin in the app to
+    //`wrapped` -- in app.plugins, and in the message naming a plugin that could
+    //not be resolved. The tag is the folder path, which is a better name than
+    //the one it replaced. Found by drawing the graph.
+    try { Object.defineProperty(wrapped, 'name', { value: name, configurable: true }); }
+    catch (e) { /* frozen Function.name, older engine */ }
+
     return wrapped;
 };

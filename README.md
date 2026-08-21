@@ -50,11 +50,26 @@ source so they cannot quietly stop being true.
 | [storage](src/app/core/storage/) | `window` | the `session` and `settings` stores |
 | [selftest](src/app/core/selftest/) | all four | running the suites in place |
 
-### the rest
+### `ui/` — what is on screen
 
 | plugin | contexts | what it is |
 |---|---|---|
 | [ui/theme](src/app/ui/theme/) | `window` | the theme kit: components, swatches, light/dark |
+| [ui/editor](src/app/ui/editor/) | `window` | ace: code that is read rather than scrolled past |
+| [ui/markdown](src/app/ui/markdown/) | `window` | marked, rendered where it cannot do anything |
+| [ui/xterm](src/app/ui/xterm/) | `window` | a terminal: bytes that arrived from somewhere else |
+| [ui/litegraph](src/app/ui/litegraph/) | `window` | a graph: things, and what connects them |
+
+Each of the last four wraps a vendored library in its own `vendor/` folder, and
+each is a slot: swap one and the pages that use it are the only thing that
+changes. `webpack.config.js` keeps every `vendor/` folder away from babel —
+these are shipped builds, and babel rewriting a top-level `this` breaks a UMD
+file on its first line.
+
+### the rest
+
+| plugin | contexts | what it is |
+|---|---|---|
 | [remote](src/app/remote/) | `server` `window` `cli` | click, fill and read the page |
 | [demo](src/app/demo/) | `server` `window` `cli` | the example app. Delete this one |
 

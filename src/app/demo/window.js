@@ -10,7 +10,13 @@ var pages = require('./pages');
 //the stores remember, the socket answers, the tray and the window are the
 //app's own.
 
-plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'settings', 'session'];
+//THE FOUR VENDORED SURFACES ARE CONSUMED HERE RATHER THAN BY THE THEME.
+//Each has a page that shows what it is for, and the demo is the thing that
+//shows what things are for. Hanging them off the theme instead would make the
+//theme -- which the README calls a slot you are expected to replace -- fail to
+//load if you deleted one of them.
+plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'settings', 'session',
+    'editor', 'markdown', 'xterm', 'litegraph', 'ext'];
 plugin.provides = [];
 async function plugin(imports, register) {
     var { react, theme, appPackage, io, settings, session } = imports;
@@ -114,7 +120,10 @@ async function plugin(imports, register) {
                     }>
                     <Body theme={theme} io={io} appPackage={appPackage}
                         settings={settings} session={session} toast={toast} open={open}
-                        services={imports.app.services} />
+                        services={imports.app.services} plugins={imports.app.plugins}
+                        ext={imports.ext}
+                        editor={imports.editor} markdown={imports.markdown}
+                        xterm={imports.xterm} litegraph={imports.litegraph} />
                 </Page>
 
                 <Toasts items={toasts} onDismiss={function (id) {

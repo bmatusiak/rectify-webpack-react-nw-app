@@ -11,9 +11,19 @@ module.exports = (env, argv = {}) => {
     const isProduction = ((argv.mode || process.env.NODE_ENV) == 'production');
     const mode = isProduction ? 'production' : 'development';
 
+    //A VENDORED LIBRARY IS NOT OURS TO TRANSPILE. ace, xterm, marked and
+    //litegraph are shipped builds -- already down-levelled, and UMD, which means
+    //a top-level `this` that babel rewrites to undefined when it decides a file
+    //is a module. Running them through preset-env costs seconds a build (babel
+    //gives up pretty-printing ace.js at 500KB and says so) to change code that
+    //was finished when it was published.
+    function inVendor(file) {
+        return String(file).split(path.sep).join('/').split('/').indexOf('vendor') >= 0;
+    }
+
     const babel = {
         test: /\.jsx?$/,
-        exclude: /node_modules/,
+        exclude: function (file) { return /node_modules/.test(file) || inVendor(file); },
         use: {
             loader: 'babel-loader',
             options: {
@@ -31,12 +41,21 @@ module.exports = (env, argv = {}) => {
     //inlined as a string, ie the bootstrap-icons sprite sheet
     const asString = { test: /\.(txt|svg)$/i, type: 'asset/source' };
 
-    //the swatches, and vanilla bootstrap, are whole stylesheets the theme kit
-    //swaps between at runtime. they are emitted as files rather than inlined,
-    //so only the chosen one is ever parsed — and named after the folder they
-    //came from, since every one of them is called bootstrap.min.css.
+    //TWO KINDS OF .css, AND THEY MUST NOT SHARE A RULE.
+    //
+    //These are whole stylesheets the theme kit swaps between at runtime: the
+    //bootswatch builds and vanilla bootstrap. They are emitted as files rather
+    //than inlined, so only the chosen one is ever fetched and parsed — and named
+    //after the folder they came from, since every one of them is called
+    //bootstrap.min.css.
+    const swatchSources = [
+        path.join(__dirname, 'src', 'app', 'ui', 'theme', 'swatch'),
+        path.join(__dirname, 'node_modules', 'bootstrap', 'dist', 'css')
+    ];
+
     const stylesheets = {
         test: /\.css$/i,
+        include: swatchSources,
         type: 'asset/resource',
         generator: {
             filename: function (pathData) {
@@ -45,6 +64,22 @@ module.exports = (env, argv = {}) => {
                 return 'swatch-' + (i >= 0 ? parts[i + 1] : 'default') + '.css';
             }
         }
+    };
+
+    //And these belong to the plugin that required them: xterm cannot lay out a
+    //row without its stylesheet, litegraph cannot draw a node without its. They
+    //are injected, so they arrive with the code that needs them and go wherever
+    //it goes -- including into a packaged build, which has no server to fetch a
+    //file from.
+    //
+    //SHARING ONE RULE WITH THE ABOVE IS NOT A STYLE QUESTION. Every .css was
+    //being named for the swatch folder it came from, and one that came from no
+    //swatch folder was named swatch-default.css -- so the second such file broke
+    //the build outright: "Multiple chunks emit assets to the same filename".
+    const pluginStyles = {
+        test: /\.css$/i,
+        exclude: swatchSources,
+        use: ['style-loader', 'css-loader']
     };
 
     const windowBundle = {
@@ -95,6 +130,7 @@ module.exports = (env, argv = {}) => {
                 },
                 asString,
                 stylesheets,
+                pluginStyles,
                 { test: /\.(eot|ttf|woff|woff2|png|jpg|gif)$/i, type: 'asset' }
             ]
         },

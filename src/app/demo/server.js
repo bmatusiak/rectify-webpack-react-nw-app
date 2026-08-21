@@ -1,3 +1,6 @@
+var fs = require('fs');
+var path = require('path');
+
 //the demo's node half. every button on the System page lands in one of these,
 //so nothing on that page is a mock — the numbers are this process, and the
 //window and tray it moves are the app's own.
@@ -38,11 +41,53 @@ async function plugin(imports, register) {
         });
     }
 
+    //WHAT THE GRAPH PAGE DRAWS. rectify keeps the resolved dependency graph on
+    //the app service -- frozen { name, provides, consumes } records, in load
+    //order -- because only the container can know it. It is the same thing
+    //rectify works out to sort the load, kept rather than discarded.
+    //
+    //THIS HALF'S, WHICH IS A DIFFERENT GRAPH FROM THE WINDOW'S. Same service
+    //names on both sides, different plugins behind them, which is the thing the
+    //picture makes obvious and a list does not.
+    function graph() {
+        return (app.plugins || []).map(function (entry) {
+            return {
+                name: entry.name,
+                provides: entry.provides.concat(),
+                consumes: entry.consumes.concat()
+            };
+        });
+    }
+
+    //WHAT THE TERMINAL PAGE READS. The launcher runs nw detached with its output
+    //going to nw.log, so this file is the only account of what the app did --
+    //and it is exactly the kind of thing a terminal is for and a <pre> is not.
+    //
+    //RAW, DELIBERATELY. tools/log.js unwraps and filters this for a person
+    //reading it in a shell; here the point is the bytes as they were written.
+    //Requiring that file would also drag tools/ into the server bundle, and
+    //none of tools/ ships.
+    function log(count) {
+        var file = path.join(host.root || '.', 'nw.log');
+        var text;
+        try { text = fs.readFileSync(file, 'utf8'); }
+        catch (e) {
+            //A PACKAGED APP HAS NO LAUNCHER AND NO nw.log, and neither does one
+            //whose log was cleared. Both are facts about how it was started
+            //rather than failures, so they are said rather than thrown.
+            return { file: file, missing: true, lines: [] };
+        }
+        var all = text.split(String.fromCharCode(10)).filter(function (one) { return one.trim(); });
+        return { file: file, missing: false, total: all.length, lines: all.slice(-(count || 200)) };
+    }
+
     //named rather than inline, so teardown can remove this one and leave the
     //io plugin's own connection handler where it is
     function onConnection(socket) {
         socket.on('demo:info', function (data, ack) { if (ack) ack(info()); });
         socket.on('demo:services', function (data, ack) { if (ack) ack(services()); });
+        socket.on('demo:graph', function (data, ack) { if (ack) ack(graph()); });
+        socket.on('demo:log', function (data, ack) { if (ack) ack(log(data && data.count)); });
 
         socket.on('demo:hide', function (data, ack) { win.hide(); if (ack) ack({ ok: true }); });
         socket.on('demo:browser', function (data, ack) { win.openInBrowser(); if (ack) ack({ ok: true }); });

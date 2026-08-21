@@ -77,6 +77,13 @@ src/app/
   remote/          a feature, beside the groups rather than inside them
 ```
 
+**A `vendor/` folder inside a plugin is that plugin's own library.** `ui/editor`,
+`ui/markdown`, `ui/xterm` and `ui/litegraph` each carry one. Two rules follow:
+the plugin discovery regexes skip a `vendor` level, so nothing in there is ever
+loaded as a plugin; and `webpack.config.js` excludes every `vendor/` path from
+babel, because these are shipped builds and several are UMD, where babel
+rewriting a top-level `this` to undefined throws on the first line.
+
 One folder per plugin, one file per context inside it, plus whatever that plugin's own
 helpers are (`io/serve.js`, `ipc/endpoint.js`, `bridge/wire.js` -- files with no
 `provides`, required by the plugin next to them).
@@ -114,6 +121,14 @@ sign it was the right cut.
 `session` and `settings`: two stores from one factory, differing only in which browser
 storage they sit on. Splitting those would be dogma. The test is whether one can change
 without the other -- if it can, it is two plugins.
+
+**Two kinds of `.css`, and they must not share a rule.** The swatches under
+`ui/theme/swatch` and vanilla bootstrap are emitted as files the kit swaps
+between at runtime; every other stylesheet belongs to the plugin that required it
+and is injected by style-loader. They were one rule, which named every `.css`
+after the swatch folder it came from -- so the second stylesheet that came from
+no swatch folder broke the build outright with "Multiple chunks emit assets to
+the same filename". `webpack.config.js` splits them by path.
 
 **Do not name a store field `save`.** `settings(...)` and `session(...)` return an object
 whose own writer is `save()`, and the loop that defines the rest skips a default of that
