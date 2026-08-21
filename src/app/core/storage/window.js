@@ -45,7 +45,15 @@ async function plugin(_imports, register) {
             };
 
             for (var i in typeStore_defaults) {
-                if (i === 'save') continue;
+                //save is this object's own writer, so a default of that name
+                //cannot be defined without shadowing it. Skipping it in silence
+                //is how a form field called save ended up handing react a
+                //function as `checked` -- say so instead.
+                if (i === 'save') {
+                    console.warn('storage: the ' + typeStore_name +
+                        ' store has a field named save, which is its own method. Ignored.');
+                    continue;
+                }
                 ((typeStore_property, default_value) => {
                     Object.defineProperty($typeStore_obj, typeStore_property, {
                         get() {

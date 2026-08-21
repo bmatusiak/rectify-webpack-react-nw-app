@@ -19,7 +19,11 @@ module.exports = function Checkout(props) {
     //the form survives a reload, because it is in the store
     var saved = settings('demo.checkout', {
         first: '', last: '', email: '', address: '', country: '', state: '', zip: '',
-        same: false, save: false
+        //NOT `save`. The store's own writer is called that, and its loop skips
+        //a default of that name rather than shadowing it -- so `form.save` was
+        //the function, react was handed a function as `checked`, and the only
+        //sign was a warning nobody was reading.
+        same: false, remember: false
     });
 
     var [form, setForm] = useState(saved);
@@ -117,7 +121,7 @@ module.exports = function Checkout(props) {
                             <Check id="c-same" label="Shipping address is the same as billing"
                                 checked={form.same} onChange={set('same')} />
                             <Check id="c-save" label="Save this information for next time"
-                                checked={form.save} onChange={set('save')} />
+                                checked={form.remember} onChange={set('remember')} />
 
                             <hr className="my-4" />
 

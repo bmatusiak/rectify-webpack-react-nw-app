@@ -83,6 +83,12 @@ sign it was the right cut.
 storage they sit on. Splitting those would be dogma. The test is whether one can change
 without the other -- if it can, it is two plugins.
 
+**Do not name a store field `save`.** `settings(...)` and `session(...)` return an object
+whose own writer is `save()`, and the loop that defines the rest skips a default of that
+name rather than shadowing it. A checkout field called `save` was therefore the function,
+which react received as `checked` and complained about into a console nobody was reading.
+It warns now, and `demo/window.test.js` is what found it.
+
 **Do not name a service `config`.** Every plugin already receives a `config` as its third
 setup argument: its own slice of `src/config.js`, keyed by what it provides. A service by
 the same name puts two different things called `config` in one function, which is why the
