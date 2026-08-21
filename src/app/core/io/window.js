@@ -2,7 +2,7 @@ var { io: connect } = require('socket.io-client');
 var serve = require('./serve');
 var mockPair = require('./mock');
 var bridge = require('../bridge/page');
-var showError = require('../../overlay');
+var showError = require('../../../overlay');
 
 //the window has no node in it, so everything the node side knows arrives over
 //this socket.

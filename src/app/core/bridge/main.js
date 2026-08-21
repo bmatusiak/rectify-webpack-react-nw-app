@@ -22,7 +22,7 @@ async function plugin(imports, register) {
     //which is what keeps javascript off disk with no server to serve it from.
     var source = null;
     if (BUILD_PROD) {
-        var assets = require('../../../dist/assets.json');
+        var assets = require('../../../../dist/assets.json');
         source = assets['window.js'];
     }
 

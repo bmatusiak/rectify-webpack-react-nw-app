@@ -64,7 +64,7 @@ async function plugin(imports, register) {
         //page loads relatively -- so a packaged build opens no port at all.
         //
         //no separate bundle to load either, and no reason to reload it
-        ready = require('../../server.js')(host);
+        ready = require('../../../server.js')(host);
 
     } else {
 
@@ -74,7 +74,7 @@ async function plugin(imports, register) {
         var webpack = require('webpack');
         var devMiddleware = require('webpack-dev-middleware');
         var hotMiddleware = require('webpack-hot-middleware');
-        var configs = require('../../../webpack.config.js');
+        var configs = require('../../../../webpack.config.js');
 
         var built = configs({}, { mode: process.env.NODE_ENV });
         var windowConfig = built.find(function (c) { return c.name == 'window'; });

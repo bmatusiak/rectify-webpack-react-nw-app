@@ -9,6 +9,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
+const net = require('node:net')
 
 const NW_ROOT = path.resolve(__dirname, '..', 'node_modules', 'nw')
 const APP = path.resolve(__dirname, '..')
@@ -101,6 +102,20 @@ const FLAGS = ['--enable-logging=stderr']
 // writes .nw-instance.json with its pid and url, and this reads it. A stale
 // file from a hard kill is caught by signalling the pid, which throws when
 // nothing is there.
+// The app's control socket, derived the same way the app derives it. A
+// packaged build writes no instance file -- lifecycle only does that in
+// development, because an installed app has no launcher reading it -- but it
+// does listen here, and a pipe exists only while the process holding it does.
+// So this is the one "it is up" that answers in all three modes.
+//
+// Reaching into src/app/core for it is the one path in this file that a plugin
+// move would break, which is the trade for not writing the address out twice.
+const controlSocket = require('../src/app/core/ipc/endpoint.js')(require('../package.json').name)
+
+const NEWLINE = String.fromCharCode(10)
+const BACKSLASH = String.fromCharCode(92)
+const STACK_BREAK = new RegExp(BACKSLASH + BACKSLASH + 'n(?=[ ])', 'g')
+const ESCAPED_QUOTE = BACKSLASH + String.fromCharCode(34)
 const INSTANCE_FILE = path.join(APP, '.nw-instance.json')
 const LOG_FILE = path.join(APP, 'nw.log')
 
@@ -184,7 +199,183 @@ if (attach) {
   child.on('exit', code => process.exit(code === null ? 1 : code))
 } else {
   const log = fs.openSync(LOG_FILE, 'a')
+  const from = fs.existsSync(LOG_FILE) ? fs.statSync(LOG_FILE).size : 0
   const child = spawn(launcher, args, { detached: true, stdio: ['ignore', log, log] })
   child.unref()
   if (!running) console.log(`logging to ${path.relative(APP, LOG_FILE)}  (--attach to watch it live)`)
+
+  watchStartup(child, from)
+}
+
+// DID IT ACTUALLY START.
+//
+// The child is detached and its output goes to a file, so a boot that throws
+// looks exactly like a boot that worked: this script has already printed
+// "launching" and returned the terminal. The app then never appears, and
+// whoever is waiting has nothing to wait ON -- the last time this happened it
+// cost a two and a half minute poll against a process that had died in the
+// first second.
+//
+// So: hold the terminal until one of three things is true. The instance file
+// shows up, which is main.js saying it is up; the child exits, which is a
+// crash and the reason is in the log we just wrote; or neither happens for
+// long enough that a slow machine is the likelier explanation than a fault.
+//
+// This does mean `npm start` no longer returns in half a second. It returns
+// when the app is up, which in development is a few seconds, and that is the
+// trade: a silent failure is worth more than those seconds.
+function watchStartup (child, from) {
+  const deadline = Date.now() + 30000
+  let settled = false
+
+  function finish (code) {
+    if (settled) return
+    settled = true
+    clearInterval(poll)
+    process.exit(code)
+  }
+
+  child.on('exit', code => {
+    if (settled) return
+    console.error(NEWLINE + `it exited (code ${code}) before it came up.`)
+
+    // Its stdio is a file handle, and what it wrote on the way down is not
+    // necessarily on disk yet. Reading the instant it exited got 38 bytes and
+    // none of the stack -- so wait for the file to stop growing, briefly.
+    settle(from)
+      .then(alreadyUp)
+      .then(handed => {
+        // Exiting is also what a SECOND launch does. nw is single instance: it
+        // passes the arguments to the copy already running and quits, code 0,
+        // having written almost nothing. That is a success, and calling it a
+        // crash sent me looking for a fault in the app that was working -- so
+        // ask whether something is answering before blaming the exit.
+        if (handed) {
+          console.log('already running -- handed over to it')
+          return finish(0)
+        }
+
+        explain(from)
+        finish(1)
+      })
+  })
+
+  let probing = false
+
+  const poll = setInterval(() => {
+    const up = runningInstance()
+    if (up) {
+      console.log(`up at ${up.url}`)
+      return finish(0)
+    }
+
+    // In development the instance file is the signal and it is worth waiting
+    // for: it is written after the server is listening, whereas the control
+    // socket comes up early in the boot. Reporting the socket here said "up"
+    // while the node half still had no handlers on it -- true, and useless.
+    if (mode === 'source') {
+      if (Date.now() > deadline) { late(from); finish(0) }
+      return
+    }
+
+    if (probing) return
+    probing = true
+
+    answering().then(yes => {
+      probing = false
+      if (yes) {
+        console.log('up, on ' + controlSocket)
+        finish(0)
+      }
+    })
+
+    if (Date.now() > deadline) {
+      late(from)
+      finish(0)
+    }
+  }, 250)
+}
+
+function late (from) {
+  console.log('still not up after 30s. It may yet be; the log is where to look.')
+  explain(from)
+}
+
+// Give the log a moment to finish arriving: poll until it stops growing, or
+// until waiting longer is worse than reporting whatever is there.
+function settle (from) {
+  const until = Date.now() + 2000
+  let last = -1
+
+  return new Promise(resolve => {
+    const tick = setInterval(() => {
+      let size = 0
+      try { size = fs.statSync(LOG_FILE).size } catch (err) { /* not written yet */ }
+
+      if ((size > from && size === last) || Date.now() > until) {
+        clearInterval(tick)
+        resolve()
+      }
+      last = size
+    }, 150)
+  })
+}
+
+function alreadyUp () {
+  if (runningInstance()) return Promise.resolve(true)
+  return answering()
+}
+
+// Connecting is the whole question -- it says something is holding the address.
+// The app wants a token before it will answer anything, and this does not have
+// one and does not need one.
+function answering () {
+  return new Promise(resolve => {
+    const probe = net.connect(controlSocket)
+    const done = yes => { probe.destroy(); resolve(yes) }
+
+    probe.on('connect', () => done(true))
+    probe.on('error', () => done(false))
+  })
+}
+
+// What this run put in the log, minus chromium talking about itself. The
+// console lines nw writes are quoted, so the message is unwrapped where it can
+// be -- a stack trace is worth more on its own lines than inside a string.
+function explain (from) {
+  let fresh = ''
+  try { fresh = fs.readFileSync(LOG_FILE, 'utf8').slice(from) } catch (err) { return }
+
+  const noise = /WARNING:|INFO:CONSOLE\(\d+\)|DevTools listening|Extension does not provide/
+  const worth = /error|cannot|failed|undefined|not a function|throw|at /i
+
+  const lines = []
+  for (const raw of fresh.split(NEWLINE)) {
+    if (!raw.trim() || noise.test(raw)) continue
+    if (!worth.test(raw)) continue
+
+    //the message is between the first quote and the last. Written with
+    //indexOf rather than a regex because the pattern for "a quoted string with
+    //escapes in it" needs backslashes, and every layer between here and this
+    //file has an opinion about those.
+    var open = raw.indexOf('"')
+    var close = raw.lastIndexOf('"')
+
+    var text = (open >= 0 && close > open) ? raw.slice(open + 1, close) : raw
+    //only where a stack frame follows. A windows path is full of the same two
+    //characters, and splitting on every one of them turned
+    //`...nw-app\node_modules` into a line break and an orphaned ode_modules.
+    text = text.replace(STACK_BREAK, NEWLINE).split(ESCAPED_QUOTE).join('"')
+
+    for (const one of text.split(NEWLINE)) if (one.trim()) lines.push(one)
+  }
+
+  if (!lines.length) {
+    console.error(`nothing obvious in ${path.relative(APP, LOG_FILE)} -- read it, or start again with --attach`)
+    return
+  }
+
+  console.error('')
+  for (const line of lines.slice(0, 12)) console.error('  ' + line)
+  console.error(`\n  ...${path.relative(APP, LOG_FILE)} has the rest`)
 }
