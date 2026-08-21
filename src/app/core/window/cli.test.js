@@ -1,6 +1,5 @@
 var os = require('os');
 var path = require('path');
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //`npm run cli -- capture` is the window plugin's terminal half. It does one
 //thing the other halves cannot: it decides where the file goes.
@@ -9,11 +8,10 @@ var harness = require('@bmatusiak/rectify/harness.js');
 //directory is wherever it was launched from and yours is wherever you are
 //standing. A bare `shot.png` should land in front of you.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['cli', 'ipc'];
+plugin.consumes = ['selftest', 'cli', 'ipc'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var cli = imports.cli;
     var ipc = imports.ipc;
 

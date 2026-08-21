@@ -111,8 +111,11 @@ plugin has one job, not by the length of the list.
 
 ## Tests
 
-`npm test` runs `node --test` over `test/`. Two of them are load-bearing beyond their own
-subject:
+`npm test` runs `node --test` over `test/`, and what lives there is what can be answered
+**without a running app**: the shape of the tree, the build, and pure logic. Everything about
+behaviour lives beside its plugin and runs inside the app -- see the two sections below.
+
+Three of these are load-bearing beyond their own subject:
 
 - `server-graph.test.js` builds the real server entry with webpack and boots it against
   express and socket.io. It is the only place the bundled node half is exercised outside
@@ -124,13 +127,11 @@ subject:
   main-side require is read off disk by nw at boot -- so nothing else here catches it.
   Regrouping under `core/` broke four of them and left the suite green.
 
-The window half needs a DOM and is not booted from here. `npm run drive` covers it by
-starting the real app and driving it over its own control socket: every page opened, every
-heading and every piece of muted text measured for contrast, optionally in every swatch.
-
-That is the only check that can see the window, and it earns its place -- it found the
-active sidebar pill unreadable on thirteen of the twenty-eight swatches, which nothing in
-`test/` could have.
+`npm run drive` is the other half of it: start the real app and drive it over its own
+control socket -- every page opened, every heading and every piece of muted text measured
+for contrast, optionally in every swatch. It is the only check that can see the window, and
+it earns its place: it found the active sidebar pill unreadable on thirteen of the
+twenty-eight swatches, which nothing in `test/` could have.
 
 **A number that moves is not a result.** Three separate things here need waiting for
 rather than a fixed delay: a captured frame (the compositor), a crash report (the log
@@ -141,18 +142,16 @@ value to stop changing.
 
 ## Tests that live beside the plugin
 
-A plugin may also carry `<context>.test.js` next to its `<context>.js` -- a test that is
-itself a plugin. It consumes the services it is about, so the container hands it the real
-ones and loads it after whatever made them: nothing to mock, and no second wiring to keep
-in step.
+A plugin may carry `<context>.test.js` next to its `<context>.js` -- a test that is itself a
+plugin. It consumes the services it is about, so the container hands it the real ones and
+loads it after whatever made them: nothing to mock, and no second wiring to keep in step.
 
 ```js
-var harness = require('@bmatusiak/rectify/harness.js');
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['cli'];
+plugin.consumes = ['selftest', 'cli'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
+
     describe('what it does', function () {
         it('does it', function () { assert.ok(imports.cli.command); });
     });
@@ -160,43 +159,44 @@ function plugin(imports, register) {
 }
 ```
 
-`test/in-app.test.js` is the boot that runs them, reporting each suite as a subtest. It
-does **two contexts**:
+**`selftest` is a service, not a module.** `require('@bmatusiak/rectify/harness.js')` exports
+one shared instance, and in development `main` and `server` are the same node process -- both
+contexts collected into one set of suites and each reported the other's results as its own.
+`src/app/core/selftest/<context>.js` calls `harness.create()` and hands out its own, so a test
+belongs to a context by consuming the one in that graph.
 
-- **cli**, against the real services, because it runs in plain node with nothing around it.
-- **server**, against a mock host. Every server half loads unbundled, so this needs no
-  webpack -- `server-graph.test.js` is still what proves the *bundle* works, which is a
-  different question.
+The harness has `ok`, `equal` and `notEqual` and **no `deepEqual`** -- these run inside the
+app, which is not always node.
 
-`main` needs nw around it and `window` needs a document, so neither is booted here -- they
-are run **inside the app instead**, which is not the same as not being tested.
+## All four contexts run inside the app
 
-## The two contexts that test themselves
+`npm run drive -- --selftest` starts the app, tells it to load its own test plugins, runs them
+where they are, and reports each one.
 
-`npm run drive -- --selftest` starts the app, tells it to load its own
-`main.test.js` and `window.test.js` plugins, runs them in place, and reports each one.
+| context | where its suites run | loaded when |
+|---|---|---|
+| `main` | nw's node side | `src/main.js` sees `--selftest` |
+| `server` | the node half | `src/server.js` reads `host.selftest` |
+| `window` | the page | `src/window.js` sees `?selftest`, put there by `core/window/main.js` |
+| `cli` | the drive process | `tools/drive.js`, which builds a cli graph anyway |
 
-- `src/main.js` takes `--selftest` and walks for `main.test.js`.
-- `src/app/core/window/main.js` passes it on to the page as `?selftest`, and `src/window.js`
-  adds a second `require.context` for `window.test.js` **inside the `if`** -- webpack drops
-  the whole thing from a production bundle, so a packaged build cannot load its own tests
-  even if asked. `src/main.prod.js` has no equivalent path at all.
-- `src/app/core/selftest` is the collector: one ipc command that runs the main harness here,
-  asks the window for its own over the socket, and hands back both.
+`src/app/core/selftest/main.js` is the collector: one ipc command that runs the main harness
+here, calls the node half's through `ipc.invoke`, asks the window over the socket, and hands
+back all three. The cli context is not part of the running app, so the driver runs that one
+itself.
 
-This is the only way to test what only exists at runtime. The window suite reads
-`getComputedStyle` against a stylesheet that actually loaded; the main suite opens a raw
-socket to the app's own control pipe and checks that an unauthenticated client is turned
-away. Neither is mockable, and mocking either would test the mock.
+**A packaged build cannot load its own tests.** Each `require.context` sits inside the check,
+so webpack drops it, and `main.prod.js` has no equivalent path. `npm run drive -- --build
+--selftest` says so rather than reporting three empty contexts as failures.
+
+**There is no mock host any more.** The server half used to be booted in the test process
+against a stand-in for nw, and that hid things: its `quit` was a no-op, so a test that called
+`quit` passed and proved nothing -- against the real app it shut the whole thing down
+mid-suite. Its `fakeSocket` meant the io handshake test checked that a listener was attached
+rather than that anything could reach it; that test now opens a real socket.io client to the
+app's own port.
 
 **Measure what is read, not what contains it.** The sidebar test passed happily while every
 link in it was the colour of the ground, because it measured `.app-sidebar` rather than the
 links inside it. Sabotage the thing before trusting the test that watches it.
 
-The mock host keeps a **ledger** of everything registered on it, which is how the boot asks
-the one question no plugin can ask about itself: after `app.destroy()`, is anything left
-behind? That is the failure this app is most prone to -- the node half is rebuilt on every
-save, and a handler left on the socket is the previous build still answering.
-
-`.test.js` deliberately does not match any of the five discovery regexes, so the app never
-loads its own tests. `in-app.test.js` checks that rather than trusting it.

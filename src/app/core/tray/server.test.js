@@ -1,15 +1,13 @@
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //the tray icon belongs to main.js because it outlives this bundle. This half
 //hands items to it and remembers what it handed, so a save does not leave a
 //second copy of every menu entry behind -- which is what happened before the
 //handles existed, and what the ledger in the boot watches for.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['app', 'tray'];
+plugin.consumes = ['selftest', 'app', 'tray'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var { app, tray } = imports;
     var control = app.host.tray;
 

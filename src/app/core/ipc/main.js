@@ -157,7 +157,17 @@ async function plugin(imports, register) {
         ipc: self.api({
             address: address,
             handle: handle,
-            commands: function () { return Object.keys(handlers).sort(); }
+            commands: function () { return Object.keys(handlers).sort(); },
+
+            //calling a handler without going through a socket. The window and
+            //the cli reach these over the wire; something in this process has
+            //no wire to reach them by, and opening a connection to ourselves to
+            //ask ourselves a question would be a strange way to do it.
+            invoke: function (name, data) {
+                var fn = handlers[name];
+                if (!fn) return Promise.reject(new Error('no handler for ' + name));
+                return Promise.resolve(fn(data || {}));
+            }
         }),
         onDestroy: self.unload
     });

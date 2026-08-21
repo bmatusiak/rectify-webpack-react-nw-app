@@ -32,7 +32,8 @@ const wantSelftest = process.argv.includes('--selftest')
 
 //the app has to be started with it too: it decides at boot whether to load its
 //own test plugins, and the window is told by the url it is opened with
-if (wantSelftest) passthrough.push('--selftest')
+const packaged = passthrough.includes('--build') || passthrough.includes('--package')
+if (wantSelftest && !packaged) passthrough.push('--selftest')
 
 // WCAG's floor for body text. Large text is allowed 3, and nothing here checks
 // font size, so this is the strict reading on purpose.
@@ -55,18 +56,26 @@ function note (line) { console.log(line) }
 async function client () {
   const plugins = []
 
-  const walk = (dir, depth) => {
+  const walk = (dir, depth, name) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue
       if (entry.name[0] === '_' || entry.name[0] === '.' || entry.name === 'vendor') continue
 
       const here = path.join(dir, entry.name)
-      const file = path.join(here, 'cli.js')
+      const file = path.join(here, name)
       if (fs.existsSync(file)) plugins.push(require(file))
-      if (depth > 1) walk(here, depth - 1)
+      if (depth > 1) walk(here, depth - 1, name)
     }
   }
-  walk(path.join(ROOT, 'src', 'app'), 2)
+  walk(path.join(ROOT, 'src', 'app'), 2, 'cli.js')
+
+  //THE CLI CONTEXT'S OWN TESTS RUN HERE.
+  //
+  //It is the one context that is not part of the running app: a short-lived
+  //process that talks to it. There is nothing to ask, so whatever builds the
+  //graph runs the suites, and that is this -- which needs a cli graph anyway to
+  //drive the app with.
+  if (wantSelftest) walk(path.join(ROOT, 'src', 'app'), 2, 'cli.test.js')
 
   plugins.push(rectify.PluginBase)
   plugins.config = require(path.join(ROOT, 'src', 'config.js'))()
@@ -79,11 +88,11 @@ async function client () {
     appPackage: { title: pkg.title || pkg.name, name: pkg.name, version: pkg.version }
   }).start()
 
-  return app.services.ipc
+  return { ipc: app.services.ipc, selftest: app.services.selftest }
 }
 
 async function main () {
-  const ipc = await client()
+  const { ipc, selftest: cli } = await client()
 
   const wasRunning = await ipc.running()
   if (!wasRunning) {
@@ -150,7 +159,7 @@ async function main () {
   }
 
   await swatches(ipc)
-  await selftest(ipc)
+  await selftest(ipc, cli)
   await finish(wasRunning, ipc)
 }
 
@@ -161,28 +170,40 @@ async function main () {
 // running app is already in both. It loads its own main.test.js and
 // window.test.js when started with --selftest, runs them in place, and hands
 // the results back over the same socket everything else here uses.
-async function selftest (ipc) {
+async function selftest (ipc, cli) {
   if (!wantSelftest) return
+
+  //a packaged build has no path that loads its own tests -- the require.context
+  //for them sits inside a check webpack drops, and main.prod.js has no
+  //equivalent at all. Asking anyway would report three empty contexts as three
+  //failures, which reads as a fault rather than as the design.
+  if (packaged) {
+    note(NEWLINE + 'a packaged build carries no tests to run -- that is the point of it')
+    return
+  }
+
+  //this process first, since its graph is already built and holding the suites
+  const here = await cli.run({ log: () => {} })
+  report('cli', here)
 
   note(NEWLINE + 'asking the app to test itself')
   const out = await ipc.call('selftest', {}, 60000).catch(e => ({ error: e.message }))
 
   if (out.error) return void check('the app runs its own suites', false, out.error)
 
-  for (const context of out.contexts) {
-    if (context.missing) {
-      check(context.context + ': runs its own suites', false, context.missing)
-      continue
-    }
+  for (const context of out.contexts) report(context.context, context)
+}
 
-    const ran = context.suites.reduce((n, suite) => n + suite.tests.length, 0)
-    check(context.context + ': runs its own suites', ran > 0, ran + ' in ' + context.suites.length + ' suites')
+function report (name, results) {
+  if (results.missing) return void check(name + ': runs its own suites', false, results.missing)
 
-    for (const suite of context.suites) {
-      for (const one of suite.tests) {
-        check(context.context + ' -- ' + suite.name + ' -- ' + one.name, one.ok,
-          one.error && String(one.error).split(NEWLINE)[0])
-      }
+  const ran = results.suites.reduce((n, suite) => n + suite.tests.length, 0)
+  check(name + ': runs its own suites', ran > 0, ran + ' in ' + results.suites.length + ' suites')
+
+  for (const suite of results.suites) {
+    for (const one of suite.tests) {
+      check(name + ' -- ' + suite.name + ' -- ' + one.name, one.ok,
+        one.error && String(one.error).split(NEWLINE)[0])
     }
   }
 }

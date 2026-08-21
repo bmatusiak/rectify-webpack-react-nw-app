@@ -1,4 +1,3 @@
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //a test is a plugin. It consumes the services it is about, so the container
 //hands it the real ones and loads it after them -- there is nothing to mock
@@ -10,11 +9,10 @@ var harness = require('@bmatusiak/rectify/harness.js');
 //data, and a command that never named an argument has to say so rather than
 //silently dropping it.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['cli'];
+plugin.consumes = ['selftest', 'cli'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var cli = imports.cli;
 
     //a command that records what it was handed, rather than doing anything

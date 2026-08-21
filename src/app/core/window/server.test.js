@@ -1,18 +1,16 @@
 var fs = require('fs');
 var os = require('os');
 var path = require('path');
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //the window belongs to main.js; what is here is a controller and the four
 //commands the terminal reaches it by. The one with real logic is capture: the
 //buffer stops here and becomes a file, and where that file lands is decided
 //here rather than by whoever asked.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['app', 'ipc', 'window'];
+plugin.consumes = ['selftest', 'app', 'ipc', 'window'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var { app, window: win } = imports;
     var control = app.host.ipc;
 
@@ -53,19 +51,30 @@ function plugin(imports, register) {
             fs.unlinkSync(out.path);
         });
 
-        it('reports the size and shape it wrote, not the request', async function () {
+        it('reports the size it wrote, read out of the file rather than asked for', async function () {
+            //against a mock this asserted the numbers the mock made up. The
+            //real window is whatever size it is, so what is worth checking is
+            //that the figures describe the file that landed.
             var out = await ask('capture', { path: path.join(os.tmpdir(), 'probe-shape-' + process.pid + '.png') });
 
             assert.equal(out.format, 'png');
-            assert.equal(out.width, 8);
-            assert.equal(out.height, 4);
+            assert.ok(out.width > 0 && out.height > 0, out.width + 'x' + out.height);
+            assert.equal(out.bytes, fs.statSync(out.path).size);
+
+            //the png says the same thing its header does
+            var head = fs.readFileSync(out.path);
+            assert.equal(head.readUInt32BE(16), out.width);
+            assert.equal(head.readUInt32BE(20), out.height);
 
             fs.unlinkSync(out.path);
         });
 
-        it('answers quit before going, or the caller only sees a dropped socket', async function () {
-            var said = await ask('quit', {});
-            assert.equal(said, 'quitting');
+        it('offers quit without this test taking it up on that', function () {
+            //these run inside the running app now, against the real window
+            //controller. Calling quit here shut the whole thing down mid-suite,
+            //which is exactly the sort of thing a mock host hid: it had a
+            //no-op quit, so the test passed and proved nothing about either.
+            assert.ok(control.commands().indexOf('quit') >= 0, 'quit is not registered');
         });
     });
 

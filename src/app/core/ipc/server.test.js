@@ -1,4 +1,3 @@
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //the server half of ipc is a wrapper around the listener main.js owns, and its
 //whole job is bookkeeping: hand out a handle for everything registered, and
@@ -8,11 +7,10 @@ var harness = require('@bmatusiak/rectify/harness.js');
 //behind is the previous build still answering, which looks like the app
 //working until two of them answer at once.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['app', 'ipc'];
+plugin.consumes = ['selftest', 'app', 'ipc'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var { app, ipc } = imports;
     var control = app.host.ipc;
 

@@ -1,6 +1,5 @@
 var fs = require('fs');
 var net = require('net');
-var harness = require('@bmatusiak/rectify/harness.js');
 
 var endpoint = require('./endpoint');
 
@@ -12,13 +11,12 @@ var endpoint = require('./endpoint');
 //with the right permissions, and that a client which cannot repeat it is
 //actually turned away. Those are facts about a running process.
 
-var { describe, it, assert } = harness;
-
 var NL = String.fromCharCode(10);
 
-plugin.consumes = ['app', 'ipc'];
+plugin.consumes = ['selftest', 'app', 'ipc'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var { app, ipc } = imports;
     var tokenFile = endpoint.token(app.appPackage.name);
 

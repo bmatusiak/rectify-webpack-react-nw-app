@@ -1,15 +1,13 @@
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //`npm run cli -- status` is the demo's terminal half, and the only command
 //here that has to behave when there is nothing to talk to. That is its whole
 //job: say plainly whether the app is up, and leave with the right exit code so
 //a script can act on it.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['cli', 'ipc'];
+plugin.consumes = ['selftest', 'cli', 'ipc'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var cli = imports.cli;
     var ipc = imports.ipc;
 

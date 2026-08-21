@@ -1,15 +1,13 @@
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //click, fill and read exist on the terminal side only to name their arguments.
 //The app answers all three over ipc, so they would be reachable without this
 //file at all -- just as json. What it buys is `click Save` instead of
 //`click {"selector":"Save"}`, and that mapping is the thing worth pinning.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['cli', 'ipc'];
+plugin.consumes = ['selftest', 'cli', 'ipc'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var cli = imports.cli;
     var ipc = imports.ipc;
 

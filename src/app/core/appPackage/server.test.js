@@ -1,4 +1,3 @@
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //appPackage exists as its own plugin because it used to be registered by io --
 //convenient, since in the window it arrives over the socket, and wrong, because
@@ -7,11 +6,10 @@ var harness = require('@bmatusiak/rectify/harness.js');
 //so what is worth checking is that the cut held: this is the host's own copy,
 //handed over unchanged, with nothing of the transport left on it.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['app', 'appPackage'];
+plugin.consumes = ['selftest', 'app', 'appPackage'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var { app, appPackage } = imports;
 
     describe('appPackage, server side', function () {

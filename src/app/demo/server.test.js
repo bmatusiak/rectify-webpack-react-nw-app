@@ -1,15 +1,13 @@
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //the demo's node half answers the System and Data pages. Every number on those
 //pages comes from here, so what is worth pinning is that they are answers about
 //THIS process rather than anything made up. That was a real bug once: the Data
 //page read the filesystem for its list, which is empty in a package.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['app', 'ipc'];
+plugin.consumes = ['selftest', 'app', 'ipc'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var host = imports.app.host;
 
     //the window and the cli reach these over a socket. A test in the same

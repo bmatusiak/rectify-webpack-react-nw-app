@@ -1,6 +1,5 @@
 var os = require('os');
 var path = require('path');
-var harness = require('@bmatusiak/rectify/harness.js');
 
 var endpoint = require('./endpoint');
 
@@ -12,11 +11,10 @@ var endpoint = require('./endpoint');
 //either way -- that both ends work out the same address, and that the secret
 //is not kept inside the thing it guards.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['app', 'ipc'];
+plugin.consumes = ['selftest', 'app', 'ipc'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var { app, ipc } = imports;
     var name = app.appPackage.name;
 

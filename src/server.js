@@ -18,6 +18,19 @@ var plugins = found.keys().map(found);
 //it here is what makes it available; nothing is obliged to use it.
 plugins.push(rectify.PluginBase);
 
+//AND THIS CONTEXT'S OWN TESTS, when the app was started with --selftest.
+//
+//The server half is bundled and never sees argv, so it learns this from the
+//host. The context sits inside the check for the same reason the window's does:
+//webpack drops it from a production bundle, so a packaged build cannot load its
+//own tests even if something asked it to.
+function testPlugins() {
+    if (process.env.NODE_ENV === 'production') return [];
+
+    var tests = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/server\.test\.js$/);
+    return tests.keys().map(tests);
+}
+
 plugins.config = Config();
 
 //the node half of the app. src/main.js builds this bundle, hands it the host,
@@ -30,7 +43,18 @@ module.exports = async function server(host) {
   //services.app already carries `window` (the dom window, or `global` in node),
   //`services`, `on`, `emit` and the is* flags -- so anything spread in there is
   //one name away from a collision that looks like it works.
-  var app = rectify.build(plugins, { isServer: true, host: host });
+  var loading = plugins;
+
+  if (host.selftest) {
+      var tests = testPlugins();
+      //a fresh list, or a reload would stack another copy of every test onto
+      //the module-level array that survives it
+      loading = plugins.concat(tests);
+      loading.config = plugins.config;
+      console.log('selftest: loaded ' + tests.length + ' server test plugins');
+  }
+
+  var app = rectify.build(loading, { isServer: true, host: host });
 
   var failed = null;
   app.on('error', function (err) {

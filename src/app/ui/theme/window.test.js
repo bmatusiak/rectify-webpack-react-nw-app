@@ -1,4 +1,3 @@
-var harness = require('@bmatusiak/rectify/harness.js');
 
 //THE TESTS THAT NEED A BROWSER.
 //
@@ -10,11 +9,10 @@ var harness = require('@bmatusiak/rectify/harness.js');
 //which makes them the tests for the work that was previously only checkable by
 //taking a screenshot and looking at it.
 
-var { describe, it, assert } = harness;
-
-plugin.consumes = ['theme'];
+plugin.consumes = ['selftest', 'theme'];
 plugin.provides = [];
 function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
     var theme = imports.theme;
 
     function read(name) {
