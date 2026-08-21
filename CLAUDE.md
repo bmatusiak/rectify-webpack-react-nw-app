@@ -120,3 +120,33 @@ subject:
   Regrouping under `core/` broke four of them and left the suite green.
 
 The window half needs a DOM and is covered by running the app, not from here.
+
+## Tests that live beside the plugin
+
+A plugin may also carry `<context>.test.js` next to its `<context>.js` -- a test that is
+itself a plugin. It consumes the services it is about, so the container hands it the real
+ones and loads it after whatever made them: nothing to mock, and no second wiring to keep
+in step.
+
+```js
+var harness = require('@bmatusiak/rectify/harness.js');
+var { describe, it, assert } = harness;
+
+plugin.consumes = ['cli'];
+plugin.provides = [];
+function plugin(imports, register) {
+    describe('what it does', function () {
+        it('does it', function () { assert.ok(imports.cli.command); });
+    });
+    register();
+}
+```
+
+`test/in-app.test.js` is the boot that runs them: `src/cli.js` with the test plugins added
+to the list, reporting each suite as a subtest. **The cli context only, for now** -- it is
+the one that runs in plain node. `main` needs nw around it, `window` needs a document, and
+`server` is bundled, which `server-graph.test.js` does the long way instead. The pattern is
+the same for all four; what differs is what has to exist first.
+
+`.test.js` deliberately does not match any of the five discovery regexes, so the app never
+loads its own tests. `in-app.test.js` checks that rather than trusting it.
