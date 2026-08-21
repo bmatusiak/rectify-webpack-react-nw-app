@@ -1,0 +1,62 @@
+# Every push, on every platform the app is built for.
+#
+# `npm test` is the whole chain now: the checks that need no app -- the shape of
+# the tree, the webpack config, pure logic -- and then test/selftest.test.js,
+# which STARTS THE APP and asks it to run the suites that live beside each
+# plugin. Four contexts, one command.
+#
+# which is why this needs more than a node runtime. nw.js is chromium: it wants
+# a display, and on a headless linux runner there is not one. xvfb-run gives it
+# a virtual one. Windows and macOS runners have a session already.
+
+name: test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # one platform failing should not hide whether the others passed
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # not `npm ci --ignore-scripts`: nw's postinstall is what downloads the
+      # runtime, and there is no app to test without it
+      - name: Install
+        run: npm ci --foreground-scripts
+
+      - name: Test (linux, under a virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a --server-args="-screen 0 1600x1200x24" npm test
+
+      - name: Test
+        if: runner.os != 'Linux'
+        run: npm test
+
+      # what the app was doing while it failed, which is the only account of it
+      # on a machine nobody can look at
+      - name: The app's log
+        if: failure()
+        run: cat nw.log || true
+        shell: bash
+
+      - name: Keep the log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nw-log-${{ matrix.os }}
+          path: nw.log
+          if-no-files-found: ignore

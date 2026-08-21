@@ -16,12 +16,16 @@
 
 const path = require('node:path')
 const fs = require('node:fs')
-const { spawnSync } = require('node:child_process')
 
-const rectify = require('@bmatusiak/rectify')
+// The cli graph, the walk, the launcher and the wait all live in ./selftest.js,
+// because test/selftest.test.js needs the same four and two copies of them
+// would drift the first time either was fixed.
+const shared = require('./selftest')
+
+
 
 const NEWLINE = String.fromCharCode(10)
-const ROOT = path.join(__dirname, '..')
+const ROOT = shared.ROOT
 const SHOTS = path.join(ROOT, 'shots')
 
 const OPTIONS = ['--shots', '--swatches', '--selftest']
@@ -51,48 +55,8 @@ function check (what, ok, detail) {
 
 function note (line) { console.log(line) }
 
-// The app's own cli graph, built once, so every command below is an ipc call
-// rather than a process. Same client the terminal uses.
-async function client () {
-  const plugins = []
-
-  const walk = (dir, depth, name) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
-      if (entry.name[0] === '_' || entry.name[0] === '.' || entry.name === 'vendor') continue
-
-      const here = path.join(dir, entry.name)
-      const file = path.join(here, name)
-      if (fs.existsSync(file)) plugins.push(require(file))
-      if (depth > 1) walk(here, depth - 1, name)
-    }
-  }
-  walk(path.join(ROOT, 'src', 'app'), 2, 'cli.js')
-
-  //THE CLI CONTEXT'S OWN TESTS RUN HERE.
-  //
-  //It is the one context that is not part of the running app: a short-lived
-  //process that talks to it. There is nothing to ask, so whatever builds the
-  //graph runs the suites, and that is this -- which needs a cli graph anyway to
-  //drive the app with.
-  if (wantSelftest) walk(path.join(ROOT, 'src', 'app'), 2, 'cli.test.js')
-
-  plugins.push(rectify.PluginBase)
-  plugins.config = require(path.join(ROOT, 'src', 'config.js'))()
-
-  const pkg = require(path.join(ROOT, 'package.json'))
-  const app = await rectify.build(plugins, {
-    isCli: true,
-    root: ROOT,
-    argv: [],
-    appPackage: { title: pkg.title || pkg.name, name: pkg.name, version: pkg.version }
-  }).start()
-
-  return { ipc: app.services.ipc, selftest: app.services.selftest }
-}
-
 async function main () {
-  const { ipc, selftest: cli } = await client()
+  const { app, ipc, selftest: cli } = await shared.cliGraph({ withTests: wantSelftest })
 
   const wasRunning = await ipc.running()
   if (!wasRunning) {
@@ -100,10 +64,7 @@ async function main () {
 
     // tools/nw.js already knows how to wait and how to report a boot that
     // throws, so this does not reimplement either
-    const started = spawnSync(process.execPath, [path.join(__dirname, 'nw.js')].concat(passthrough),
-      { stdio: 'inherit', cwd: ROOT })
-
-    if (started.status !== 0) {
+    if (!shared.start(passthrough)) {
       console.log('\nit did not start, so there is nothing to drive')
       process.exit(1)
     }
@@ -114,7 +75,7 @@ async function main () {
   // "up" from tools/nw.js means the server is listening, which is earlier than
   // the window having loaded and opened its socket. Driving needs the second
   // one, so wait for it rather than assuming the first implies it.
-  const views = await waitForView(ipc)
+  const views = await shared.waitForView(ipc)
   check('a view connects', views.views.length > 0, views.connected + ' connected')
 
   if (!views.views.length) return finish(wasRunning, ipc)
@@ -238,17 +199,6 @@ async function swatches (ipc) {
   await ipc.call('fill', { selector: '.navbar select', value: 'default' }).catch(() => {})
 }
 
-async function waitForView (ipc, seconds = 45) {
-  const deadline = Date.now() + seconds * 1000
-  let seen = { views: [], connected: 0 }
-
-  while (Date.now() < deadline) {
-    seen = await ipc.call('views', {}).catch(() => ({ views: [], connected: 0 }))
-    if (seen.views.length) return seen
-    await new Promise(r => setTimeout(r, 500))
-  }
-  return seen
-}
 
 // A stylesheet arrives, and then the theme service looks at what it painted and
 // decides whether data-bs-theme has to move with it. Measuring in between reads

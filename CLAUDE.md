@@ -111,11 +111,19 @@ plugin has one job, not by the length of the list.
 
 ## Tests
 
-`npm test` runs `node --test` over `test/`, and what lives there is what can be answered
-**without a running app**: the shape of the tree, the build, and pure logic. Everything about
-behaviour lives beside its plugin and runs inside the app -- see the two sections below.
+`npm test` is the whole chain. Most of `test/` is what can be answered **without a running
+app** -- the shape of the tree, the build, pure logic -- and then `selftest.test.js` starts
+the app and asks it to run the suites that live beside each plugin. Four contexts, one
+command, and `.github/workflows/test.yml` runs it on every push.
 
-Three of these are load-bearing beyond their own subject:
+On a headless linux runner that needs `xvfb-run`: nw.js is chromium and wants a display.
+
+`test/selftest.test.js` leaves an app that was already running alone, in both directions. It
+does not shut down something it did not start, and it does not restart one that was started
+without `--selftest` just to get its suites -- those three contexts are reported as skipped,
+with the reason, rather than failing or quietly passing.
+
+Three of the rest are load-bearing beyond their own subject:
 
 - `server-graph.test.js` builds the real server entry with webpack and boots it against
   express and socket.io. It is the only place the bundled node half is exercised outside
@@ -171,7 +179,9 @@ app, which is not always node.
 ## All four contexts run inside the app
 
 `npm run drive -- --selftest` starts the app, tells it to load its own test plugins, runs them
-where they are, and reports each one.
+where they are, and reports each one. `npm test` does the same through `test/selftest.test.js`,
+and both go through `tools/selftest.js` -- the walk, the cli graph, the launcher and the wait
+are written once, or the day one is fixed the other keeps the old behaviour.
 
 | context | where its suites run | loaded when |
 |---|---|---|
