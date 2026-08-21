@@ -7,6 +7,12 @@ var rectify = require('@bmatusiak/rectify');
 var found = require.context('./app', true, /^\.\/[^_.][^/]*\/server\.jsx?$/);
 var plugins = found.keys().map(found);
 
+//and the base class rectify ships as a plugin rather than as part of the
+//container, so a plugin that wants an emitter, a "ready" it can act on, or
+//teardown collected where it is created can say `consumes: ['Plugin']`. Adding
+//it here is what makes it available; nothing is obliged to use it.
+plugins.push(rectify.PluginBase);
+
 plugins.config = Config();
 
 //the node half of the app. src/main.js builds this bundle, hands it the host,

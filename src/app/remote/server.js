@@ -1,10 +1,15 @@
 //the middle of it: a command off the control socket, out over socket.io, into
 //whichever view is the app.
 
-plugin.consumes = ['io', 'ipc'];
+plugin.consumes = ['io', 'ipc', 'Plugin'];
 plugin.provides = [];
 async function plugin(imports, register) {
     var { io, ipc } = imports;
+
+    //`own` collects the undo beside the thing being done. This half is rebuilt
+    //on every save, and a listener left on the socket server outlives the
+    //bundle that made it -- two of them answer the next command twice.
+    var self = new imports.Plugin('remote');
 
     //there can be more than one view. `open in browser` makes a second, and it
     //is a real client of the same server -- so a command has to choose, and say
@@ -45,6 +50,7 @@ async function plugin(imports, register) {
     }
 
     io.on('connection', watch);
+    self.own(function () { io.off('connection', watch); });
     //this half reloads on every save. the sockets that were already up do not
     //get a second `connection` for our benefit, so they are collected by hand.
     io.sockets.sockets.forEach(watch);
@@ -93,33 +99,34 @@ async function plugin(imports, register) {
         };
     }
 
-    var answered = [
-        //what is out there to be driven, and what this half can see of it
-        ipc.handle('views', async function () {
-            io.sockets.sockets.forEach(watch);
-            io.emit('remote:who');
-            await new Promise(function (r) { setTimeout(r, 400); });
+    function answer(name, fn) {
+        var handle = ipc.handle(name, fn);
+        self.own(function () { handle.remove(); });
+    }
 
-            return {
-                connected: io.engine ? io.engine.clientsCount : 0,
-                views: views.map(function (v) {
-                    return { id: v.socket.id, app: v.app, title: v.title, href: v.href };
-                })
-            };
-        }),
+    //what is out there to be driven, and what this half can see of it
+    answer('views', async function () {
+        io.sockets.sockets.forEach(watch);
+        io.emit('remote:who');
+        await new Promise(function (r) { setTimeout(r, 400); });
 
-        ipc.handle('click', ask('click')),
-        ipc.handle('fill', ask('fill')),
-        ipc.handle('read', ask('read'))
-    ];
-
-    await register(null, {
-        onDestroy: function () {
-            while (answered.length) answered.pop().remove();
-            io.off('connection', watch);
-            views.length = 0;
-            watched.clear();
-        }
+        return {
+            connected: io.engine ? io.engine.clientsCount : 0,
+            views: views.map(function (v) {
+                return { id: v.socket.id, app: v.app, title: v.title, href: v.href };
+            })
+        };
     });
+
+    answer('click', ask('click'));
+    answer('fill', ask('fill'));
+    answer('read', ask('read'));
+
+    self.own(function () {
+        views.length = 0;
+        watched.clear();
+    });
+
+    await register(null, { onDestroy: self.unload });
 }
 module.exports = plugin;

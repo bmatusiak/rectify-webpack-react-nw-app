@@ -16,6 +16,7 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 //webpack replaces this in the packaged bundle; here it just has to exist
 global.BUILD_PROD = false;
 
+var rectify = require('@bmatusiak/rectify');
 var fs = require('fs');
 var path = require('path');
 
@@ -30,6 +31,12 @@ var plugins = fs.readdirSync(PLUGINS)
     .map(function (name) { return path.join(PLUGINS, name, 'main.js'); })
     .filter(function (file) { return fs.existsSync(file); })
     .map(function (file) { return require(file); });
+
+//and the base class rectify ships as a plugin rather than as part of the
+//container, so a plugin that wants an emitter, a "ready" it can act on, or
+//teardown collected where it is created can say `consumes: ['Plugin']`. Adding
+//it here is what makes it available; nothing is obliged to use it.
+plugins.push(rectify.PluginBase);
 
 plugins.config = Config();
 

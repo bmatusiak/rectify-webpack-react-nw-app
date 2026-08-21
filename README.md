@@ -228,6 +228,41 @@ The chart is deliberately not a dependency. It is a `polyline` in a `viewBox`,
 which is all that example draws, and it takes its colour from the swatch like
 everything else.
 
+### Plugin, when a plain object is not enough
+
+Rectify ships a base class **as a plugin rather than as part of the container**,
+so every boot puts `rectify.PluginBase` in its list and a plugin that wants it
+says `consumes: ['Plugin']` like any other dependency.
+
+Four plugins here use it, all for the same reason: **`own`**. Teardown is
+written beside the thing being undone rather than in a block at the far end of
+the file, and runs in reverse.
+
+```js
+var self = new imports.Plugin('ipc');
+
+fs.writeFileSync(tokenFile, secret, { mode: 0o600 });
+self.own(function () { fs.unlinkSync(tokenFile); });
+```
+
+That matters more here than it looks. The node half is **torn down and rebuilt
+on every save**, so a listener left behind is a second copy answering the next
+command — and `src/app/ipc` alone owns four separate resources whose ordering
+used to be implied by where the lines happened to sit.
+
+`self.api(surface)` is the other half: it copies the surface onto the instance
+with `Object.defineProperty`, so **getters stay getters** — `window.url` and
+`window.isOpen` are still live reads — and freezes it. What gets registered is
+the plugin itself, an emitter with a stated set of methods.
+
+**What this scaffold does not use is `ready`**, which is the feature the base
+class is really for: a plugin cannot otherwise know when the whole load has
+finished. It does not fit here because our order is not "everything loaded" but
+"everything **started**" — `tray.start()` wants `http.url`, and nothing has
+listened yet when the load completes. That sequence stays in
+[src/boot.js](src/boot.js), in one readable place. An app whose plugins start
+themselves should use `ready` and delete most of that file.
+
 ## the cli
 
 ```

@@ -9,6 +9,7 @@
 //evalNWBin is a Window method and the node context has no window to call it on.
 //that window is local, so it has node; the visible one is remote and does not.
 
+var rectify = require('@bmatusiak/rectify');
 var path = require('path');
 
 //this bundle runs inside a hidden window rather than nw's node context, and
@@ -30,6 +31,12 @@ var Config = require('./config');
 //the same folder scan src/main.js does off disk, done by webpack at build time
 var found = require.context('./app', true, /^\.\/[^_.][^/]*\/main\.js$/);
 var plugins = found.keys().map(found);
+
+//and the base class rectify ships as a plugin rather than as part of the
+//container, so a plugin that wants an emitter, a "ready" it can act on, or
+//teardown collected where it is created can say `consumes: ['Plugin']`. Adding
+//it here is what makes it available; nothing is obliged to use it.
+plugins.push(rectify.PluginBase);
 
 plugins.config = Config();
 

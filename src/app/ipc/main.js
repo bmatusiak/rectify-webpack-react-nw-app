@@ -17,10 +17,16 @@ var endpoint = require('./endpoint');
 
 var NL = String.fromCharCode(10);
 
-plugin.consumes = ['app'];
+plugin.consumes = ['app', 'Plugin'];
 plugin.provides = ['ipc'];
 async function plugin(imports, register) {
     var app = imports.app;
+
+    //teardown declared beside each thing that needs it, and run in reverse.
+    //this one owns four separate resources and used to undo them in a block
+    //at the far end of the file, where the ordering was implied by where the
+    //lines happened to sit.
+    var self = new imports.Plugin('ipc');
 
     var address = endpoint(app.appPackage.name);
     var handlers = {};
@@ -37,6 +43,9 @@ async function plugin(imports, register) {
         //writeFileSync only applies the mode when it creates the file, so a
         //leftover from a previous run would keep whatever it had
         fs.chmodSync(tokenFile, 0o600);
+        self.own(function () {
+            try { fs.unlinkSync(tokenFile); } catch (e) { /* already gone */ }
+        });
     } catch (e) {
         console.error('could not write ' + tokenFile + ': ' + (e && e.message));
     }
@@ -85,6 +94,10 @@ async function plugin(imports, register) {
         }
     }
 
+    self.own(function () {
+        open.slice().forEach(function (s) { try { s.destroy(); } catch (e) { /* gone */ } });
+    });
+
     var server = net.createServer(function (socket) {
         open.push(socket);
         socket.setEncoding('utf8');
@@ -128,24 +141,25 @@ async function plugin(imports, register) {
         });
         server.listen(address, function () {
             console.log('ipc listening on ' + address);
+
+            self.own(function () {
+                try { server.close(); } catch (e) { /* never listened */ }
+                if (process.platform != 'win32') {
+                    try { fs.unlinkSync(address); } catch (e) { /* already gone */ }
+                }
+            });
+
             resolve();
         });
     });
 
     await register(null, {
-        ipc: {
+        ipc: self.api({
             address: address,
             handle: handle,
             commands: function () { return Object.keys(handlers).sort(); }
-        },
-        onDestroy: function () {
-            open.slice().forEach(function (s) { try { s.destroy(); } catch (e) { /* gone */ } });
-            try { server.close(); } catch (e) { /* never listened */ }
-            if (process.platform != 'win32') {
-                try { fs.unlinkSync(address); } catch (e) { /* already gone */ }
-            }
-            try { fs.unlinkSync(tokenFile); } catch (e) { /* already gone */ }
-        }
+        }),
+        onDestroy: self.unload
     });
 }
 module.exports = plugin;

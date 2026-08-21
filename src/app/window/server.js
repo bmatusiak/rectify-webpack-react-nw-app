@@ -6,41 +6,57 @@
 var fs = require('fs');
 var path = require('path');
 
-plugin.consumes = ['app', 'ipc'];
+plugin.consumes = ['app', 'ipc', 'Plugin'];
 plugin.provides = ['window'];
 async function plugin(imports, register) {
     var control = imports.app.host.window;
     var ipc = imports.ipc;
 
+    //rectify ships this base class as a plugin rather than as part of the
+    //container, so wanting it is a dependency like any other. What it buys
+    //here is `own`: the undo is written where the thing is done, rather than
+    //in a teardown function kept in step with it by hand. This half is torn
+    //down and rebuilt on every save, so that is not a small distinction --
+    //a handler left behind is a second copy answering the next command.
+    var self = new imports.Plugin('window');
+
     //the cli asks for these, and this plugin is what owns them
-    var answered = [
-        ipc.handle('open', function () { control.show(); return 'shown'; }),
-        ipc.handle('hide', function () { control.hide(); return 'hidden'; }),
-        //the buffer stops here rather than going down the socket: the wire is
-        //one json object per line, and a megabyte of base64 on it would be a
-        //waste of both ends when the file wants to be a file anyway
-        ipc.handle('capture', async function (data) {
-            var shot = await control.capture(data);
-            var file = path.resolve(data.path || ('capture.' + (shot.format == 'jpeg' ? 'jpg' : 'png')));
+    function answer(name, fn) {
+        var handle = ipc.handle(name, fn);
+        self.own(function () { handle.remove(); });
+    }
 
-            await fs.promises.writeFile(file, shot.buffer);
+    answer('open', function () { control.show(); return 'shown'; });
+    answer('hide', function () { control.hide(); return 'hidden'; });
 
-            return {
-                path: file, bytes: shot.buffer.length, format: shot.format,
-                width: shot.width, height: shot.height
-            };
-        }),
+    //the buffer stops here rather than going down the socket: the wire is one
+    //json object per line, and a megabyte of base64 on it would be a waste of
+    //both ends when the file wants to be a file anyway
+    answer('capture', async function (data) {
+        var shot = await control.capture(data);
+        var file = path.resolve(data.path || ('capture.' + (shot.format == 'jpeg' ? 'jpg' : 'png')));
 
-        ipc.handle('quit', function () {
-            //answer before going, or the caller only ever sees a dropped socket
-            setTimeout(function () { control.quit('asked over ipc'); }, 50);
-            return 'quitting';
-        })
-    ];
+        await fs.promises.writeFile(file, shot.buffer);
+
+        return {
+            path: file, bytes: shot.buffer.length, format: shot.format,
+            width: shot.width, height: shot.height
+        };
+    });
+
+    answer('quit', function () {
+        //answer before going, or the caller only ever sees a dropped socket
+        setTimeout(function () { control.quit('asked over ipc'); }, 50);
+        return 'quitting';
+    });
 
     await register(null, {
-        onDestroy: function () { while (answered.length) answered.pop().remove(); },
-        window: {
+        onDestroy: self.unload,
+
+        //api() copies the surface onto the instance and freezes it, so what
+        //this registers is the plugin itself: an emitter with a stated set of
+        //methods, rather than whatever object happened to be returned here.
+        window: self.api({
             get url() { return control.url; },
             get isOpen() { return control.isOpen; },
             open: function () { control.open(); },
@@ -48,7 +64,7 @@ async function plugin(imports, register) {
             hide: function () { control.hide(); },
             openInBrowser: function () { control.openInBrowser(); },
             quit: function (reason) { control.quit(reason); }
-        }
+        })
     });
 }
 module.exports = plugin;
