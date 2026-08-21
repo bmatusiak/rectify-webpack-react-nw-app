@@ -32,8 +32,13 @@ async function plugin(imports, register) {
         return found;
     }
 
-    function absent(context, why) {
-        return { context: context, suites: [], passed: 0, failed: 0, missing: why };
+    //`missing` is a context that had nothing to run, which is a fact about how
+    //the app was started. `stuck` is a context that had something to run and
+    //did not finish, which is a failure -- telling them apart matters, because
+    //one is reported as a skip and reporting the other that way would let a
+    //window test that hangs pass in silence.
+    function absent(context, why, stuck) {
+        return { context: context, suites: [], passed: 0, failed: stuck ? 1 : 0, missing: why, stuck: !!stuck };
     }
 
     function fromWindow(timeout) {
@@ -42,7 +47,7 @@ async function plugin(imports, register) {
 
         return new Promise(function (resolve) {
             var timer = setTimeout(function () {
-                resolve(absent('window', 'the window did not answer within ' + timeout + 'ms'));
+                resolve(absent('window', 'the window did not answer within ' + timeout + 'ms', true));
             }, timeout);
 
             socket.emit('selftest:run', {}, function (results) {
@@ -65,7 +70,9 @@ async function plugin(imports, register) {
         var here = Object.assign({ context: 'main' }, await mine.run({ log: function () {} }));
 
         var server = await fromServer();
-        var window_ = await fromWindow((data && data.timeout) || 30000);
+        //generous on purpose: the window suite opens every page and waits for
+        //each to settle, which is slower than everything else here put together
+        var window_ = await fromWindow((data && data.timeout) || 120000);
 
         var all = [here, server, window_];
 

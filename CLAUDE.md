@@ -201,6 +201,18 @@ here, calls the node half's through `ipc.invoke`, asks the window over the socke
 back all three. The cli context is not part of the running app, so the driver runs that one
 itself.
 
+**Every plugin has a test beside it except `core/selftest` itself**, which is the runner --
+testing it with itself proves nothing that its passing does not already prove. When adding a
+plugin, add its `<context>.test.js` too; the audit is one command:
+
+```sh
+for c in main server window cli; do
+  for f in $(find src/app -name "$c.js"); do
+    [ -f "$(dirname $f)/$c.test.js" ] || echo "$f has no tests"
+  done
+done
+```
+
 **A packaged build cannot load its own tests.** Each `require.context` sits inside the check,
 so webpack drops it, and `main.prod.js` has no equivalent path. `npm run drive -- --build
 --selftest` says so rather than reporting three empty contexts as failures.

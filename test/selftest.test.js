@@ -59,6 +59,15 @@ test('the plugins, tested inside the app', { timeout: TIMEOUT }, async (t) => {
 
 //each suite the context registered, one subtest each, so a failure names itself
 async function report(t, name, results) {
+    if (results.stuck) {
+        //it had suites and did not finish. Skipping that would be reporting a
+        //hang as an absence.
+        await t.test(name + ' -- ' + results.missing, () => {
+            throw new Error(results.missing);
+        });
+        return;
+    }
+
     if (results.missing) {
         await t.test(name + ' -- ' + results.missing, { skip: results.missing }, () => {});
         return;

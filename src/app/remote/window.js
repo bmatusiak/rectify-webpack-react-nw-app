@@ -9,7 +9,7 @@
 //the exact thing nwjc was for. so: verbs, and only these.
 
 plugin.consumes = ['io'];
-plugin.provides = [];
+plugin.provides = ['remote'];
 async function plugin(imports, register) {
     var io = imports.io;
 
@@ -45,6 +45,12 @@ async function plugin(imports, register) {
     io.on('remote:read', answer(read));
 
     await register(null, {
+        //the three verbs as a service as well as over the socket. The socket is
+        //how the terminal reaches them; this is how anything in the page does,
+        //including the tests -- which cannot use the socket, because emitting
+        //on it sends to the server rather than back to this window.
+        remote: { click: click, fill: fill, read: read },
+
         onDestroy: function () {
             io.off('connect', hello);
             io.off('remote:who', hello);
