@@ -46,9 +46,9 @@ async function plugin(imports, register) {
             labels: function () { return tray.labels(); }
         },
 
-        //whether the app was asked to run its own suites, and which of them.
-        //The server half is bundled and never sees argv, so this is how it
-        //finds out: false, true, or the plugin that was singled out.
+        //the control socket, forwarded rather than handed over: the listener
+        //lives in main and outlives this bundle, so the node half gets the four
+        //calls it needs and not the socket itself.
         ipc: {
             get address() { return ipc.address; },
             handle: function (name, fn) { return ipc.handle(name, fn); },

@@ -14,9 +14,11 @@ var suites = require('./suites');
 //and handing it out as a service is what makes a test plugin say which context
 //it belongs to -- by consuming the one in its own graph.
 //
-//the test plugins are only loaded when asked for. src/main.js takes
-//`--selftest`, src/server.js reads it off the host, and src/window.js takes
-//`?selftest` on the url. A packaged build has no path that loads them at all.
+//the test plugins are loaded ALWAYS, in development, by all four boots. That is
+//what lets a running app be asked for any one of them without being started
+//again, and webpack carries an edited test straight into it. Which one runs is
+//decided when the run is asked for -- see ./suites.js and src/target.js.
+//A packaged build has no path that loads them at all.
 
 plugin.consumes = ['app', 'ipc', 'io'];
 plugin.provides = ['selftest'];

@@ -125,8 +125,9 @@ async function plugin(imports, register, config) {
             //will not let a background process take the foreground, and
             //whatever you are typing into keeps it.
             //
-            //nw only draws a frame for a
-            //callback unanswered forever — the timeout turns that hang into a
+            //nw only draws a frame for a window something can see, and a
+            //window nothing can see leaves the callback unanswered forever
+            //rather than erroring -- the timeout turns that hang into a
             //sentence somebody can act on.
             capture: function (options) {
                 options = options || {};

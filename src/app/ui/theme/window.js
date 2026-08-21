@@ -10,7 +10,7 @@
 //it carries. what this one carries:
 //
 //  ui               every component, in ./components
-//  themeSwitcher    flips light/dark, remembered through the `config` store
+//  themeSwitcher    flips light/dark, remembered in the `settings` store
 //  mode             which of the two is on
 //  swatches         the stylesheets in ./swatch, by name
 //  swatch           which one is on

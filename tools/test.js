@@ -52,7 +52,7 @@ function plugins () {
 
 function list () {
   console.log('\ncontexts')
-  console.log('  node                 the tests that need no app')
+  console.log('  ' + 'node'.padEnd(20) + 'the tests that need no app')
   for (const context of CONTEXTS) console.log('  ' + context.padEnd(20) + describe(context))
 
   console.log('\nfiles in test/')

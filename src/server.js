@@ -19,15 +19,14 @@ var plugins = found.keys().map(found);
 //it here is what makes it available; nothing is obliged to use it.
 plugins.push(rectify.PluginBase);
 
-//AND THIS CONTEXT'S OWN TESTS, when the app was started with --selftest.
+//AND THIS CONTEXT'S OWN TESTS -- always, in development. Loading them is what
+//lets a running app be asked for any one of them without being started again,
+//and webpack reloads this half on every save, so an edited test is in the app a
+//second later. Which one runs is decided when the run is asked for, not here.
 //
-//The server half is bundled and never sees argv, so it learns this from the
-//host. The context sits inside the check for the same reason the window's does:
+//the context sits inside the check for the same reason the window's does:
 //webpack drops it from a production bundle, so a packaged build cannot load its
 //own tests even if something asked it to.
-//always, in development. Loading them is what lets the running app be asked
-//for any one of them without being started again -- and webpack reloads this
-//half on every save, so an edited test is in the app a second later.
 function testPlugins() {
     if (process.env.NODE_ENV === 'production') return [];
 

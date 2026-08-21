@@ -4,5 +4,6 @@
 //neighbours. this hands over to it as an ordinary module, where relative paths
 //mean what they look like.
 //
-//the three boots are src/main.js, src/server.js and src/window.js.
+//the boots are src/main.js (or src/main.prod.js when packaged), src/server.js,
+//src/window.js and src/cli.js. what they share is src/boot.js.
 require('./src/main.js');
