@@ -142,11 +142,21 @@ function plugin(imports, register) {
 }
 ```
 
-`test/in-app.test.js` is the boot that runs them: `src/cli.js` with the test plugins added
-to the list, reporting each suite as a subtest. **The cli context only, for now** -- it is
-the one that runs in plain node. `main` needs nw around it, `window` needs a document, and
-`server` is bundled, which `server-graph.test.js` does the long way instead. The pattern is
-the same for all four; what differs is what has to exist first.
+`test/in-app.test.js` is the boot that runs them, reporting each suite as a subtest. It
+does **two contexts**:
+
+- **cli**, against the real services, because it runs in plain node with nothing around it.
+- **server**, against a mock host. Every server half loads unbundled, so this needs no
+  webpack -- `server-graph.test.js` is still what proves the *bundle* works, which is a
+  different question.
+
+`main` needs nw around it and `window` needs a document, so neither is booted here. The
+pattern is the same for all four; what differs is what has to exist first.
+
+The mock host keeps a **ledger** of everything registered on it, which is how the boot asks
+the one question no plugin can ask about itself: after `app.destroy()`, is anything left
+behind? That is the failure this app is most prone to -- the node half is rebuilt on every
+save, and a handler left on the socket is the previous build still answering.
 
 `.test.js` deliberately does not match any of the five discovery regexes, so the app never
 loads its own tests. `in-app.test.js` checks that rather than trusting it.
