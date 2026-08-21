@@ -4,46 +4,74 @@ Minimal scaffold: a [rectify](https://github.com/bmatusiak/rectify) plugin app,
 bundled by webpack, rendered with React, running live inside an nw.js window.
 
 `webpack-rectify-react` (plugin architecture + theme kit) merged with
-`react-nw-app` (nw.js shell). There is no build/packaging step — nw.js runs
-everything, and the code it runs is the code in `src/`.
+`react-nw-app` (nw.js shell). In development nw.js runs the code in `src/`;
+`npm run build` compiles it into a package that opens no port and keeps no
+javascript on disk — see [building a package](#building-a-package).
 
-## three boots, one folder of plugins
+## four contexts, one folder of plugins
 
 A plugin is a folder in `src/app/`, and the files inside say where it runs:
 
 ```
 src/
   main.js       boot: nw's node context. loaded off disk, never bundled
+  main.prod.js  boot: the same, from the bundle, when packaged
   server.js     boot: the app's node half. bundled, reloaded on every save
   window.js     boot: the browser. bundled, hot reloaded
   cli.js        boot: plain node. a terminal talking to a running app
+  boot.js       the startup order, shared by both main boots
   config.js     settings, sliced per plugin
   index.html
-  overlay.js
-  app/
-    lifecycle/  main.js                              shutdown, crashes, instance file
-    http/       main.js                              express, the swappable router
-    io/         main.js server.js window.js          socket.io, all three sides
-                serve.js mock.js                     shared between two of them
-    ipc/        main.js server.js cli.js             the control socket
-                endpoint.js                          where it lives, both sides
-    cli/        cli.js                               the command table
-    window/     main.js server.js                    the nw window, and its handle
-    tray/       main.js server.js                    the tray, and its menu api
-    devtools/   main.js                              the two Inspect items
-    build/      main.js                              webpack and the reload
-    react/      window.js                            createRoot
-    storage/    window.js                            session + config stores
-    theme/      window.js + components/ + scss       the theme kit
-    demo/       window.js server.js cli.js          delete this one
-                pages/                               one file per page
+  overlay.js    the message drawn over a page whose boot threw
+  target.js     which suites a targeted test run should take
+  app/          the plugins, below
 ```
+
+**Every plugin carries its own README.** This one is about the app; those are
+about the parts, and `test/readme.test.js` reads their tables back off the
+source so they cannot quietly stop being true.
+
+### `core/` — how the app talks to itself and the outside
+
+| plugin | contexts | what it is |
+|---|---|---|
+| [lifecycle](src/app/core/lifecycle/) | `main` | shutdown, crashes, the instance file |
+| [http](src/app/core/http/) | `main` | express and the swappable router. Nothing, in a package |
+| [io](src/app/core/io/) | `main` `server` `window` | socket.io, all three sides |
+| [bridge](src/app/core/bridge/) | `main` | what replaces socket.io when there is no server |
+| [ipc](src/app/core/ipc/) | `main` `server` `cli` | the control socket, and its token |
+| [appPackage](src/app/core/appPackage/) | `server` `window` | the app's own name and version |
+| [cli](src/app/core/cli/) | `cli` | the command table |
+| [window](src/app/core/window/) | `main` `server` `cli` | the nw window, and photographs of it |
+| [tray](src/app/core/tray/) | `main` `server` | the icon, and the menu others add to |
+| [devtools](src/app/core/devtools/) | `main` | the two Inspect items |
+| [build](src/app/core/build/) | `main` | webpack, and the reload |
+| [react](src/app/core/react/) | `window` | `createRoot`, once |
+| [storage](src/app/core/storage/) | `window` | the `session` and `settings` stores |
+| [selftest](src/app/core/selftest/) | all four | running the suites in place |
+
+### the rest
+
+| plugin | contexts | what it is |
+|---|---|---|
+| [ui/theme](src/app/ui/theme/) | `window` | the theme kit: components, swatches, light/dark |
+| [remote](src/app/remote/) | `server` `window` `cli` | click, fill and read the page |
+| [demo](src/app/demo/) | `server` `window` `cli` | the example app. Delete this one |
+
+**Two levels, and no more.** `src/app/demo/window.js` and
+`src/app/core/io/window.js` are both found; nothing three deep is ever looked
+at, which is what keeps `ui/theme/swatch/*` out of it. A folder starting with
+`_` or `.`, or named `vendor`, is skipped.
+
+Beside each of those sits a `<context>.test.js` where there is one — a test that
+is itself a plugin, run inside the running app. See [testing](#testing).
 
 Each boot gathers its own half and nothing else:
 
 ```js
 //src/window.js
-var found = require.context('./app', true, /^\.\/[^_.][^/]*\/window\.jsx?$/);
+var found = require.context('./app', true,
+    /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.(js|jsx)$/);
 var plugins = found.keys().map(found);
 ```
 
@@ -59,7 +87,7 @@ bundle.
 
 ### how the halves join
 
-They are three separate rectify apps with three service graphs, so a plugin
+They are four separate rectify apps with four service graphs, so a plugin
 that spans runtimes joins itself:
 
 - `window/main.js` owns the real nw window and provides `window` on the main
@@ -69,6 +97,10 @@ that spans runtimes joins itself:
 - `io/main.js` creates the socket.io server, `io/server.js` registers the
   handlers, `io/window.js` connects — and both of the latter share `serve.js`,
   which is the one function `?mock` runs in the page.
+- `ipc/` is what the fourth graph joins through: `ipc/main.js` listens on the
+  control socket, `ipc/cli.js` provides the same `ipc` name in a terminal
+  process that dials it. `window/cli.js` and `remote/cli.js` are then written
+  against `ipc` and know nothing about where the app is.
 
 Main hands the app side a **host** object — `express`, `router`, `httpServer`,
 `io`, `appPackage`, and controllers for `window` and `tray` — and it arrives as
@@ -77,8 +109,8 @@ carries `window` (the dom window, or `global` in node), `services`, `on`,
 `emit` and the `is*` flags, so anything spread in there is one name away from a
 collision that looks like it works.
 
-The startup order lives in `src/main.js` rather than inside whichever plugin
-happens to depend on all the others:
+The startup order lives in `src/boot.js`, shared by both main boots, rather
+than inside whichever plugin happens to depend on all the others:
 
 ```js
 await services.build.ready();          //first bundle built and loaded
@@ -105,7 +137,9 @@ npm run build   production bundles, compiled, staged into build/app
 npm run dist    build, then nw-builder -> build/out
 ```
 
-`npm start` runs whichever of the three you ask for:
+`npm start` runs whichever of the three you ask for, and each is strictly later
+output than the one above it — so something that works in the first and not the
+third narrows to the step between them:
 
 ```
 npm start              the source tree. webpack in memory, both halves reload
@@ -113,120 +147,30 @@ npm start -- --build   build/app: the compiled main.bin, run by the sdk runtime
 npm start -- --package build/out: the executable, exactly what a user runs
 ```
 
-Each runs strictly later output than the one above it, so something that works
-in the first and not the third narrows to the step between them. `--build` still
-has the sdk runtime under it, so its console is audible and devtools work;
-`--package` is the normal flavour and has neither.
+What comes out has **no javascript on disk and opens no port**: a manifest, two
+html files with nothing executable in them, `main.bin` compiled by `nwjc`, the
+stylesheets, and an icon. The window half rides inside the binary as a string
+and is evaluated into the page; what used to be socket.io is
+[bridge](src/app/core/bridge/). The tray loses its two Inspect items and **Open
+in browser** — see [devtools](src/app/core/devtools/) and
+[tray](src/app/core/tray/).
 
-`npm run build` produces four files and no javascript:
+**It is not encryption.** It means the app runs what it shipped with: there is
+no `.js` to edit and no `node_modules` to shim. The window half is still
+delivered to a browser context to run, so it is readable by anyone who opens
+devtools, as any client code is.
 
-```
-build/app/
-  package.json   main: app.html, window hidden
-  app.html       one line: evalNWBin(null, 'main.bin')
-  main.bin       native code, compiled by nwjc
-  icon.png
-```
+The pipeline, why the packaged app boots differently, what does and does not
+survive the move, and how the release workflow builds all three platforms:
+[tools](tools/).
 
-What goes into `main.bin`: `src/main.prod.js`, every `main.js` plugin half,
-`src/server.js` and every `server.js` half, express, socket.io — and the window
-half as a string, so it is served out of memory and never written to disk
-either. Nothing is external, because there is no `node_modules` beside it.
+## rectify, as used here
 
-### why it boots differently
-
-`evalNWBin` is a `Window` method, and nw's node context has no window —
-`nw.Window.get()` throws `No current window` there. So the packaged app's
-`main` is a hidden local page whose only job is to load the binary. Local means
-it has node; being a window means `evalNWBin` exists at all. The visible window
-is still remote and still has no node.
-
-That is the whole reason for the second boot: `src/main.js` reads plugins off
-disk for development, `src/main.prod.js` gets the same list from the bundle
-through `require.context`, and both hand off to `src/boot.js`.
-
-`src/app/build` is where the two modes actually diverge — webpack, watching and
-reloading on one side; assets served from memory and the node half simply
-required on the other. `BUILD_PROD` gates the requires directly rather than
-sitting inside a function, because webpack collects a dependency wherever it
-can reach it, and a `require('webpack')` in an unreachable function would still
-be bundled.
-
-### paths inside a package
-
-Nothing about the app's own location survives the move intact, so the two
-places that need it are worth knowing:
-
-- **`app.root` is `process.cwd()`** in the packaged boot. nw sets the working
-  directory to the app's own directory, whichever directory it was launched
-  from — measured both ways. The obvious alternatives all fail: `location.href`
-  is a `chrome-extension://` url rather than `file://`, so `fileURLToPath`
-  throws; `__dirname` does not exist in that context; `process.execPath` is the
-  runtime; and `nw.App.startPath` is wherever the launch happened.
-- **The tray icon goes in relative**, and nw resolves it against the app. The
-  same value then works from the source tree and from inside a package.
-
-Watch for that second one. An icon path that does not resolve is not an error —
-`new nw.Tray()` succeeds, the menu works, and you get an invisible entry in the
-notification area. It cost a while to notice, and longer to believe.
-
-### builds from CI
-
-`.github/workflows/prerelease.yml` builds all three platforms and attaches the
-zips to a release, so a prerelease does not have to be built by hand. It runs
-on `release: published` — which covers prereleases — and on
-`workflow_dispatch`, where the zips land on the run itself instead.
-
-The matrix is not a convenience. `nwjc` compiles for one platform and one nw.js
-version, so each target has to be built on its own runner. Note `npm ci` must
-run install scripts there: nw's postinstall is what fetches the sdk, and the
-build needs `nwjc` out of it.
-
-**Nothing is signed**, and no certificate is involved anywhere. What that costs
-whoever downloads it:
-
-- **Windows** — SmartScreen warns. More info, then Run anyway.
-- **macOS** — the workflow ad-hoc signs (`codesign --sign -`, no identity
-  needed) because Apple Silicon refuses to run an unsigned binary at all. It is
-  still quarantined on download, so:
-  `xattr -dr com.apple.quarantine "Rectify NW App.app"`, or right-click and Open.
-- **Linux** — `chmod +x` the binary if the zip did not preserve it.
-
-macOS also has no `.icns` here, so it packages without an icon rather than with
-a fabricated one. Drop a real `.icns` in and pass it as `app.icon` in
-`tools/pack.js` when there is one.
-
-### what this does and does not protect
-
-It means the app runs what it shipped with: there is no `.js` on disk to edit,
-and no `node_modules` to shim. Swapping `main.bin` for another one is possible
-but it is not a text edit.
-
-It is not encryption. The window half is delivered to a browser context to run,
-so it is readable there by anyone who opens devtools — as any client code is.
-And `nwjc` output is tied to **one platform and one nw.js version**, so the
-build has to run on each target with the runtime it will ship against. That is
-why `tools/pack.js` takes its version from the same `nw` pin that compiled the
-binary.
-
-### the examples it is built from
-
-`bootstrap-5.3.8-examples` is the source, and the page-shaped ones are
-components in `src/app/theme/components/examples.js` rather than markup to
-copy. Each demo page is the example with the parts that were static made to
-work:
-
-| page | what the original does | what this one does |
-|---|---|---|
-| **Dashboard** | chart.js drawing seven numbers | an svg polyline drawing the memory of the process you are talking to, sampled over the socket, pausable |
-| **Checkout** | a cart whose total is typed in | a cart that adds up, a promo code that is real (`DEMO10`), and a form the store remembers |
-| **Blog** | posts of lorem, links that go nowhere | notes about this app, and the sidebar actually opens them |
-| **Cover** | a whole window, three dead links | the same page in a box, and the three links switch it |
-| **Cheatsheet** | every component listed | the values underneath them, read off the live page, so it says what the swatch you are wearing resolved to |
-
-The chart is deliberately not a dependency. It is a `polyline` in a `viewBox`,
-which is all that example draws, and it takes its colour from the swatch like
-everything else.
+`src/config.js` is attached as `plugins.config` and reaches each plugin as its
+third setup argument, keyed by service name. The second argument to `build()` is
+the host object, merged onto the `app` service: anything the process knows that
+a plugin cannot work out for itself. And **the load order is not in any list** —
+it falls out of `consumes`/`provides`.
 
 ### Plugin, when a plain object is not enough
 
@@ -247,7 +191,7 @@ self.own(function () { fs.unlinkSync(tokenFile); });
 
 That matters more here than it looks. The node half is **torn down and rebuilt
 on every save**, so a listener left behind is a second copy answering the next
-command — and `src/app/ipc` alone owns four separate resources whose ordering
+command — and `src/app/core/ipc` alone owns four separate resources whose ordering
 used to be implied by where the lines happened to sit.
 
 `self.api(surface)` is the other half: it copies the surface onto the instance
@@ -286,156 +230,14 @@ spoken -- `click Save` rather than `click '{"selector":"Save"}'`. Json still
 wins when the names do not cover what you want to say.
 
 **A command is local unless it is not.** Anything the table does not know is
-forwarded to the running app, so a plugin that answers over ipc is reachable
-from the terminal without a `cli.js` at all — `open`, `hide` and `quit` are
-registered by `src/app/window/server.js` and nothing declares them here.
+forwarded to the running app over its control socket, so a plugin that answers
+on `ipc` is reachable from the terminal **without a `cli.js` at all**.
 
-### capture
-
-```
-npm run cli -- capture                              capture-20260820-142201.png
-npm run cli -- capture '{"path":"shot.png"}'        where you say
-npm run cli -- capture '{"format":"jpeg"}'          smaller, lossier
-```
-
-The window plugin is the one that spans all four runtimes, and this is why.
-`nw.Window.capturePage` exists only where the window handle does, which is the
-**main** context, so `main.js` takes the picture; `server.js` answers on the
-socket and writes the file; `cli.js` exists only to resolve the path, because
-the app's working directory is wherever it was launched from and yours is not.
-
-The buffer stops at the file. It never goes down the socket — the wire is one
-json line, and a megabyte of base64 on it would serve nobody when the thing
-wants to be a file anyway. What comes back is the path, the size and the
-dimensions, read out of the image's own header rather than from the window: a
-screen at 2x returns a picture twice the size the window was asked to be.
-
-**A hidden window has no frame.** The compositor draws nothing for it, so
-`capturePage` never calls back at all — not an error, just silence. Hiding and
-showing both go through this plugin, so it knows, and says so instead of
-waiting. A minimized window looks the same from here and is not tracked; that
-one falls to a 15s timeout.
-
-### clicking
-
-`capture` gave it eyes. These are the hands.
-
-```
-npm run cli -- click Save                press it
-npm run cli -- click ".btn-primary"      by selector instead
-npm run cli -- fill "#email" me@here     type into it
-npm run cli -- fill select darkly        choose in it
-npm run cli -- fill "#agree"             toggle it
-npm run cli -- read .nav-link            what is there now
-```
-
-Naming something by its text is refused when the text is not unique. A screen
-says the same word twice more often than you would think -- the demo has a
-`light` button variant and a Light mode toggle -- and picking one silently is
-how you click a thing you never named and believe you clicked the other.
-
-Say which element three ways, tried in that order: a **css selector**, because
-it is exact; the **visible text**, because "the button that says Save" is how
-people think about a screen; or a **point**, `{"x":120,"y":80}`, which is the
-only one of the three that respects what is on top. Text only matches things a
-person could click or type into, and prefers one that is actually on screen --
-a bootstrap app keeps whole pages in the dom with `display:none` on them.
-
-It is **not an `eval` channel**. One would have been three lines and would have
-answered every question this will ever be asked, and would also have handed
-anything that can open a local socket the run of the app -- which is the exact
-thing `nwjc` is there to prevent. So: verbs, and only these.
-
-Two details that took measuring:
-
-- `click` is not `element.click()`. That fires one event, and half of bootstrap
-  listens for the ones around it -- dropdowns close on `pointerdown`, carousels
-  drag on `mousedown`. It sends the sequence a mouse actually produces.
-- `fill` does not assign `el.value`. React remembers the last value it wrote
-  and drops any change event whose value it thinks it already knows, so
-  assigning moves the input on screen and nothing else. Going through the
-  prototype's own setter moves React's copy with it.
-
-### which view gets it
-
-`npm run cli -- views` lists them, because there can be more than one -- **open
-in browser** makes a second, and it is a real client of the same server. The
-app's own window wins; a browser view only gets the click if it is the only
-thing there, and the answer says which one it went to.
-
-Nothing in the page can tell the two apart on its own. Nw 0.114 sends an
-**ordinary chrome user agent** with no mention of nw in it, and the window
-deliberately has no node in it to ask. So the side that opened it says so:
-`src/app/window/main.js` opens the url with `?view=app` and the remote plugin
-reads it back.
-
-### nothing is listening
-
-A **packaged build opens no port at all**. No http server, no socket.io, no
-webpack — `npm run build` leaves a directory with a manifest, two html files
-with nothing executable in them, `main.bin`, an icon and the stylesheets.
-
-The window is opened straight out of the package rather than over a url, and
-its half of the app is evaluated into the page out of `main.bin`. So there is
-still no javascript on disk, and now there is also nothing to serve it with.
-What used to be socket.io is `src/app/bridge`: main injects a way home into the
-page before any of the page's own script runs, and messages go the other way by
-`postMessage`. One json object per line, the same shape the control socket uses.
-
-The shim it hands the rest of the app is socket.io's shape, so **no plugin
-knows which build it is in** — `io.on('connection')`, `socket.emit(name, data,
-ack)`, all of it. `src/app/io/window.js` picks the transport by looking for
-what main injected; `src/app/io/main.js` picks it from `BUILD_PROD`.
-
-Two things go with it. The tray loses **Inspect window**, **Inspect main.js**
-and **Open in browser** — the first two hand back exactly what compiling the
-node half was for, and the third has no page to open. And `http` still exists
-as a service, because the graph is the same in both builds; what it does is
-nothing. A route mounted in a packaged build goes to a stub rather than
-throwing, and `http.url` is `null`, which is the signal anything asking should
-check.
-
-### the control socket
-
-It is a **named pipe** on windows and a **unix domain socket** elsewhere, not a
-port. Both sides derive the address from the package name, so nothing has to be
-discovered or written down, and the cli needs no dependency beyond `net`.
-
-It is **not open to whoever finds it**. A named pipe on windows is reachable by
-anyone logged into the machine, and `/tmp` on posix is world-readable, so being
-hard to find is not the same as being hard to reach. The app writes a fresh
-32-byte token beside the socket every run — in the per-user temp directory, and
-`0600` on posix — and a connection that cannot repeat it gets one sentence and
-nothing else. A client that connects and then says nothing is dropped after
-five seconds.
-
-The comparison is `timingSafeEqual` behind a length check, which it needs
-because that function throws on a length mismatch rather than returning false.
-
-One json object per line, both directions:
-
-```
-{"id":1,"command":"open","data":{}}
-{"id":1,"ok":true,"result":"shown"}
-```
-
-The listener is in `ipc/main.js` rather than the reloadable half, for the same
-reason the window and the tray are: a reload would drop every connected client
-and then race to listen on an address still held. `ipc/server.js` hands app
-plugins a `handle(name, fn)` that comes back off on reload — otherwise the
-previous build keeps answering.
-
-```js
-//src/app/my-thing/server.js
-var answered = ipc && ipc.handle('my-thing', async function (data) {
-    return { ok: true };
-});
-
-await register(null, { onDestroy: function () { if (answered) answered.remove(); } });
-```
-
-On posix a hard kill leaves the socket file behind, so the listener unlinks a
-stale one before binding.
+The pieces, each documented where it lives:
+[cli](src/app/core/cli/) the table ·
+[ipc](src/app/core/ipc/) the socket and its token ·
+[window](src/app/core/window/) `open`, `hide`, `quit`, `capture` ·
+[remote](src/app/remote/) `click`, `fill`, `read`, `views`.
 
 ## install
 
@@ -451,179 +253,171 @@ nw`, then reinstall.
 ## run
 
 ```
-npm start        # nw.js: node context + window, then gives the terminal back
+npm start        # nw.js: node context + window, and waits until it is up
 npm run cli      # talk to a running app over its control socket
+npm run log      # what that app has been saying, minus chromium's noise
+npm test         # everything, or one thing -- see testing
+npm run drive    # open every page and measure it, in one swatch or all 28
 npm run build    # production bundles, compiled and staged into build/app
 npm run dist     # build, then nw-builder -> build/out
-npm test         # node --test
 ```
 
-`npm start` also takes `--build` and `--package` to run what those two produced
-— see [building a package](#building-a-package).
+`npm start` and `npm run drive` both take `--build` and `--package` to run what
+those two produced — see [building a package](#building-a-package).
 
 The app runs under nw.js and only under nw.js. There is no plain-node mode, and
 dropping it took about a dozen "might not have a window" branches out of the
 plugins: the host always carries a window, a tray and a control socket, so
 nothing has to ask.
 
-`npm start` returns straight away and the app keeps running. Run it again and
-it says so, and brings the window back:
+`npm start` hands the terminal back once the app is up, and the app keeps
+running. Run it again and it says so, and brings the window back:
 
 ```
 $ npm start
-launching node_modules\nw\nwjs-sdk-v0.114.2-win-x64\nw.exe
+launching node_modules/nw/nwjs-sdk-v0.114.2-win-x64/nw.exe  (source)
 logging to nw.log  (--attach to watch it live)
+up at http://localhost:53851/
 
 $ npm start
 already running (pid 35788) at http://localhost:57539/
 bringing its window to the front
 ```
 
-nw.js is single instance, so the second launch is handed to the running app,
-which shows its window. That handoff happens inside the nw binary though, so
-the launcher cannot see it — `main.js` writes `.nw-instance.json` with its pid
-and url, and `tools/nw.js` reads that. A stale file left by a hard kill is
-caught by signalling the pid.
-
-Detached means the output goes to `nw.log` instead of your terminal.
-`npm start -- --attach` keeps it in the foreground when you want to watch a run
-happen, and combines with `--build` and `--package`. Other flags pass through
-either way:
+It waits for one of three things rather than returning blind: the app says it is
+up, the app exits, or thirty seconds pass. **A boot that throws prints its stack
+and leaves 1**, which is worth the two or three seconds it costs — the
+alternative looked exactly like a working start, and cost a two and a half
+minute wait on a process that had died in the first second.
 
 ```
-npm start -- --remote-debugging-port=9222
+$ npm start
+it exited (code 0) before it came up.
+
+  [main] a plugin failed to start Error: Cannot find module 'nope.js'
+      at Object.plugin (src/app/core/build/main.js:77:23)
 ```
 
-The port is whatever is free, so two of these can run side by side. `PORT=8080`
-pins it.
+### reading the log
 
-`tools/nw.js` passes `--enable-logging=stderr`, which is what makes the
-window's console audible at all — without it a page that threw on load looks
-exactly like a page with nothing to draw.
+The app is launched detached with its output going to `nw.log`, so that file is
+the only account of what it did — and it is mostly chromium describing its own
+startup. `npm run log` shows what the app itself said, unwrapped, most recent
+last:
 
-### inspecting either half
+```
+$ npm run log
+Uncaught TypeError: Cannot read properties of null (reading 'nope')
+ An error occurred in the <Blog> component.
+```
 
-Devtools does not open by itself. The tray menu has both:
+`--all` for everything, `-f` to keep watching, a number for how many lines. See
+[tools](tools/).
 
-- **Inspect window** — the page. `win.showDevTools()`, the ordinary thing.
-- **Inspect main.js** — the node context. Not the ordinary thing: `main.js`
-  runs in `_generated_background_page.html`, which nw does not treat as a
-  window, so `nw.Window.get()` throws `No current window` there with or without
-  a window object passed to it. The way in is chromium's own debugger. The
-  launcher starts nw with `--remote-debugging-port=0`, chromium picks a free
-  port and writes it to `DevToolsActivePort` in the user data dir, and the
-  `background_page` entry in `/json` carries a frontend url to open.
+## testing
 
-  (`nw.App.dataPath` is `<user data>/Default`; the port file is one level up.)
+```
+npm test                     everything
+npm test -- window           only the browser suites
+npm test -- core/ipc         only that plugin, wherever it has tests
+npm test -- core/ipc/main    only that plugin, in one context
+npm test -- node             only what needs no app
+npm test -- requires         only test/requires.test.js
+npm test -- --list           what there is to aim at
+```
 
-The port is loopback-only and never pinned. Pass your own
-`--remote-debugging-port` to override it.
+Tests live in two places, and the split is not filing — it is about what can be
+answered where.
 
-### reloading
+**`test/`** holds what needs no app: the shape of the tree, the build, pure
+logic. Three of those carry more than their own subject:
 
-Both halves hot reload. The window half goes through webpack-hot-middleware;
-the node half is watched too, and on each rebuild `build/main.js` tears the old
-one down and loads the new bundle in place — same process, no restart.
+- `plugin-scan.test.js` keeps the five discovery sites agreeing about what a
+  plugin is. One taking a file the others miss is a plugin that runs in
+  development and not when packaged, and nothing says a word about it.
+- `requires.test.js` resolves every relative require that climbs out of its own
+  folder. Moving a plugin one level changes what `../../..` means, and a
+  main-side require is read off disk by nw at boot — so nothing else catches it.
+  Regrouping under `core/` broke four and left the suite green.
+- `server-graph.test.js` builds the real server entry with webpack and boots it.
+  It is the only place the bundled node half runs outside nw.
 
-That teardown is why a `server.js` has to clean up after itself. Return an
-`onDestroy` alongside what you provide — the same shape as an effect returning
-its cleanup:
+**Beside each plugin** sits `<context>.test.js` — a test that is itself a
+plugin. It consumes the services it is about, so the container hands it the real
+ones and loads it after whatever made them: nothing to mock, and no second
+wiring to keep in step.
 
 ```js
-//src/app/my-thing/server.js
-async function plugin(imports, register) {
-    imports.app.host.router.get('/api/thing', ...);   //router is swapped for you
+//src/app/my-thing/server.test.js
+plugin.consumes = ['selftest', 'my-thing'];
+plugin.provides = [];
+function plugin(imports, register) {
+    var { describe, it, assert } = imports.selftest;
 
-    await register(null, {
-        'my-thing': ...,
-        onDestroy: function () {                      //anything else, undo it here
-            imports.app.host.io.removeAllListeners('connection');
-        }
-    });
-}
-```
-
-Without it a reload stacks a second copy of every listener. There is a test for
-exactly that.
-
-`onDestroy` is rectify's own slot: `register()` collects it and `app.destroy()`
-runs them, in reverse dependency order, catching so one bad cleanup cannot
-strand the rest. It works for any plugin, including one that provides nothing.
-
-### the window is a view, the tray is the app
-
-Closing the window does not quit. The node half keeps running behind the tray
-icon; reopen from the tray, by left-clicking it, or by running `npm start`
-again, and quit from the tray's Quit.
-
-Two mechanisms hold that up, because one of them is not reliable:
-
-- `close` is intercepted and the window hidden instead, so reopening is instant
-  with the page state intact. Nice when it works — but **a page reload silently
-  drops that listener** while leaving `loaded` firing, and the window half
-  full-reloads on any change it cannot hot swap. So the first edit you make
-  turns close back into a real close. Re-attaching on `loaded` does not fix it;
-  the handle is stale.
-- So `window` also opens a hidden, never-closed keep-alive window. nw quits when
-  the *last* window closes, and that one never does. If the interception held,
-  the window hides; if it did not, the window is destroyed and the app survives
-  anyway — "Open window" then makes a fresh one.
-
-Measured both ways: fresh start, close hides it. After an edit, close destroys
-it and the app is still serving.
-
-Quitting has to be thorough. `nw.App.quit()` alone does not always manage it —
-the http server, socket.io and webpack's watchers are open handles, and the
-node context can outlive the window holding them, which leaves a copy running
-with nothing on screen and the port taken. So `shutdown()` closes the server,
-removes the tray, closes the windows, quits, and then hard exits.
-
-Closing the devtools window does nothing to the app.
-
-### the tray belongs to the app too
-
-`src/app/tray/server.js` provides a `tray` service, so a plugin can put its own
-items on the menu:
-
-```js
-//src/app/my-thing/server.js
-plugin.consumes = ['tray'];
-
-async function plugin(imports, register) {
-    var item = imports.tray && imports.tray.add({
-        label: 'Say hello in the log',
-        click: function () { console.log('hello'); }
+    describe('my-thing, in the running app', function () {
+        it('answers', async function () {
+            assert.ok((await imports['my-thing'].ask()).ok);
+        });
     });
 
-    //nw.MenuItem options all work: type, checked, enabled, submenu, icon, key
-
-    await register(null, { onDestroy: function () { if (item) item.remove(); } });
+    register();
 }
+module.exports = plugin;
 ```
 
-Give the item back on teardown and a reload cannot leave a second copy behind —
-the menu is rebuilt from scratch each time rather than patched by index. The
-`window` service alongside it carries `url`, `isOpen`, `open()`, `show()`,
-`hide()`, `openInBrowser()` and `quit()`.
+Those run **inside the app**, in the context they belong to — `main` wants nw
+around it, `window` wants a document and a stylesheet that really loaded,
+`server` wants the actual host rather than a stand-in. The harness has `ok`,
+`equal` and `notEqual` and **no `deepEqual`**, because these run somewhere that
+is not always node. How the four contexts are collected, and why the harness is
+a service rather than a module, is in [selftest](src/app/core/selftest/).
 
-The icon and the window themselves live in `tray/main.js` and `window/main.js`,
-not in the halves that reload: they have to outlive the bundle that is being
-thrown away. The `server.js` halves wrap a controller and own only what they
-added.
+`test/selftest.test.js` closes the chain: it starts the app if none is up, asks
+it over the control socket for all four contexts, and reports each as a subtest.
+An app that was already running is left alone in both directions — not shut down
+if it was not started here, and not restarted just to collect its suites.
 
-Both are always there, so a `server.js` can use them without asking.
+`.github/workflows/test.yml` runs the whole thing on every push, on all three
+platforms. On a headless linux runner it goes under `xvfb-run`: nw.js is
+chromium and wants a display. If it fails there, `nw.log` is printed and kept as
+an artifact — on a machine nobody can look at, that is the only account of what
+the app was doing.
 
-Two things you will see if a copy is somehow still up:
+### the loop
+
+**Leave the app running.** In development every context loads its test plugins
+as it starts, so a running app can be asked for any of them at any time:
 
 ```
-Opening in existing browser session.        # nw.js is single instance. the
-                                            # second start woke the first one
-                                            # and exited. the window comes back.
+$ npm start
+up at http://localhost:53851/
 
-port 8080 is already taken. another copy    # only if you pinned PORT.
-is probably still running.                  # this one shuts down instead of
-                                            # sitting there dead.
+$ npm test -- ui/theme          # about a second, against the open window
+only ui/theme/window
+ℹ pass 8
 ```
+
+Webpack reloads both halves on save, so an edited test is in the app before you
+can ask for it. That is the loop: change something, run one test, read what came
+back, change it again, without restarting anything.
+
+Targeting happens **when the run is asked for**, not when the app starts.
+`src/target.js` tags each suite with the plugin that registered it and
+`run({ only })` filters on that. A flag deciding what to *load* would mean
+restarting the app to change target, which is the thing this avoids.
+
+**A packaged build cannot load its own tests.** Each `require.context` for them
+sits inside a check webpack drops, and `src/main.prod.js` has no equivalent path
+at all. `npm run drive -- --build --selftest` says so rather than reporting three
+empty contexts as failures.
+
+### driving the real app
+
+`npm run drive` is the only check that can see the window: it starts the app,
+opens every page over the control socket, and measures every heading and every
+piece of muted text against WCAG's 4.5, optionally in every swatch. It earns its
+place — it found the active sidebar pill unreadable on thirteen of the
+twenty-eight swatches, which nothing in `test/` could have. See [tools](tools/).
 
 ## adding a plugin
 
@@ -632,8 +426,22 @@ register:
 
 ```
 src/app/my-thing/
-  server.js     runs in the node half
-  window.js     runs in the window
+  server.js       runs in the node half
+  window.js       runs in the window
+  server.test.js  a test, itself a plugin, run inside the app
+  README.md       what it is
+```
+
+Two of those are checked. `test/readme.test.js` fails if the README is missing
+or its table disagrees with the source, and the audit for a missing test is one
+command:
+
+```sh
+for c in main server window cli; do
+  for f in $(find src/app -name "$c.js"); do
+    [ -f "$(dirname $f)/$c.test.js" ] || echo "$f has no tests"
+  done
+done
 ```
 
 ```js
@@ -655,122 +463,20 @@ Service names are the contract between halves and between plugins; rectify
 resolves the order from `consumes` and `provides`, so the order of the folders
 never matters.
 
-### the demo
+Three things worth deciding before writing one, each learned the hard way and
+each written up where it bit:
 
-`src/app/demo` is an app built out of the kit: a sidebar, seven pages, and a
-toast stack. It is meant to be poked at rather than read — most of what is on
-screen does something real:
+- **A service is one idea.** Do not register something under a second name
+  because that is how it happens to arrive — see [appPackage](src/app/core/appPackage/).
+- **Bundle only what is genuinely one thing.** `storage` provides two stores from
+  one factory because neither can change without the other. The test is whether
+  one can; if it can, it is two plugins.
+- **Do not name a service `config`**, and do not name a store field `save` — see
+  [storage](src/app/core/storage/).
 
-- **System** — pid, uptime, memory and round-trip time, live off the socket.
-  The buttons hide the window, open it in your browser, and add and remove
-  items on the actual tray menu.
-- **Forms** — a validated form whose values go into the `config` store, so they
-  survive a restart. The panel beside it shows what is stored.
-- **Data** — the service graph of both halves, searchable, sortable, paged.
-- **Overlays** — modals that return a value, an offcanvas from any of the four
-  edges, toasts, tooltips, popovers, dropdowns that change the page.
-- **Disclosure** — tabs, accordions, collapse and a carousel that runs itself.
-- **Layouts** — hero, features, stats, pricing and album, from bootstrap's own
-  examples. The pricing choice is remembered.
-
-Delete the folder and the app is the scaffold again.
-
-### the theme kit
-
-`theme` is a slot, and bringing your own style is the expected thing to do.
-Bootstrap, jquery and bootstrap-icons are in `src/app/theme/` because something
-had to be — tailwind, plain css, a component library or nothing at all all fit
-the same slot.
-
-The service name is the only thing anything outside that directory knows: a
-plugin asks for `theme` and reads `theme.ui`. So a swap is the whole directory
-replaced. What this kit carries:
-
-```
-theme.ui            every component
-theme.themeSwitcher flips light/dark, remembered in the config store
-theme.mode          which one is on
-theme.swatches      the stylesheets in ./swatch, by name
-theme.swatch        which one is worn
-theme.setSwatch     wear a different one, now
-theme.bs            bootstrap's own javascript
-theme.$             jquery, this kit's dom helper
-```
-
-### what a swatch is allowed to change
-
-Everything the shell paints is mixed from `--bs-body-bg` and `--bs-body-color`,
-the two custom properties every swatch sets, rather than from bootstrap's
-`bg-body-tertiary`. That utility looks like the right answer and is not: the
-bootswatch **dark** themes redefine it only under `[data-bs-theme=dark]`, so
-picking one in light mode left the sidebar the light grey it is at `:root`
-while the text followed the swatch, and the navigation disappeared.
-
-The mode toggle and the swatch could contradict each other too, and the
-stylesheet wins: once a swatch has loaded, the body's real background decides
-what `data-bs-theme` says. Ask a dark design for light mode and the toggle
-disables itself and says why, rather than offering a choice it cannot honour.
-
-Three things a swatch styles for a page it expected, not the one it got:
-**headings** point at `--bs-heading-color`, which a swatch may pin once and
-never mention again -- `lux` sets `#1a1a1a` at `:root` and says nothing about
-dark, so its headings came out `#1a1a1a` on `#1a1a1a`, a contrast ratio of
-exactly **1**. **Muted text** reads `--bs-secondary-color`, and some set it
-pale enough to fall under the 4.5 floor. And a **navbar** carries its own
-palette written for a coloured bar, which drew `darkly`'s brand at **1.1**
-against the surface behind it. All three are mixed from `--bs-emphasis-color`
-instead, the one bootstrap guarantees stands against the background either way.
-
-Measured rather than eyeballed: `npm run cli -- read <selector>` reports the
-computed colour, what is actually behind it, and the WCAG ratio. Sweeping all
-28 swatches in both modes is how the three above were found and how they are
-known to be fixed -- the lowest heading now sits at 14.2 and the lowest muted
-text at 5.7.
-
-Two components pay for this directly. A **readout** is not a button -- the
-`35%` between the stepper's two buttons was a disabled one, so it took each
-swatch's disabled colour, and on `lux` that is white on white. And
-**`outline-light`** is invisible on every light theme, as `outline-dark` is on
-every dark one; each gets a strip of contrasting ground, the way bootstrap's
-own examples do it.
-
-### swatches
-
-`src/app/theme/swatch/<name>/` is a [bootswatch](https://bootswatch.com) build,
-and the folder is the registry again: drop one in and it appears in the picker,
-delete one and it does not. `default` is vanilla bootstrap.
-
-Which means **bootstrap is not compiled into `index.scss`** — it arrives as a
-stylesheet link that `setSwatch` swaps. If it were compiled in, style-loader
-would inject it after that link and every swatch would lose to it. So the
-kit's own rules use bootstrap's custom properties rather than `@extend`, and
-they stay on top of whichever swatch is worn because style-loader injects them
-last.
-
-Two things worth knowing before shipping 27 of them:
-
-- They are **~230kb each**, and they are all in the package. Inside `main.bin`
-  they took it from 4mb to 17mb, so `tools/build.js` leaves stylesheets out of
-  the binary and ships them as files beside it — they are not code. Deleting
-  the folders you will not use is how to get the rest back.
-- **20 of the 27 pull their fonts from Google Fonts** with an `@import`. A
-  desktop app that is offline will fall back to a system face, so the colours
-  arrive and the typography does not. Self-hosting the fonts, or picking from
-  the seven that do not, is the fix.
-
-`theme.ui` covers what bootstrap's examples do — `Alert Badge Button
-ButtonGroup Card ListGroup Table Spinner Progress Placeholder Icon`, the form
-controls `Form Input Textarea Select Check Range InputGroup`, navigation
-`Navbar Tabs Breadcrumb Pagination Sidebar`, the javascript-backed `Modal
-Offcanvas Toasts Tip Dropdown Accordion Collapse Carousel`, and the page shapes
-`Page Section Hero Footer Features Pricing Album Stats`.
-
-The split is deliberate: anything bootstrap drives from a data attribute is
-left as markup, and only the parts that need one of its instances — modal,
-offcanvas, tooltip, popover, carousel — create and dispose one.
-
-None of those names are required of a replacement, only of the demo that uses
-them.
+A plugin that provides nothing is normal: [devtools](src/app/core/devtools/),
+[remote](src/app/remote/)'s two outer halves and all of [demo](src/app/demo/) do.
+They still declare `provides: []` and still call `register()`.
 
 ### config
 
@@ -786,11 +492,12 @@ async function plugin(imports, register, config) {
 
 ### when a plugin fails to start
 
-All three boots listen for rectify's `error`. Without that the emit throws with
-no indication of which plugin died. `src/main.js` and `src/server.js` log it —
-and the server boot rethrows, so a broken node half fails the reload loudly
-instead of half-starting. `src/window.js` also prints it at the top of the page
-rather than leaving you a blank one.
+All four boots listen for rectify's `error`. Without that the emit throws with
+no indication of which plugin died. `src/boot.js` logs it for both main boots,
+`src/server.js` logs and rethrows so a broken node half fails the reload loudly
+instead of half-starting, `src/cli.js` prints it and exits non-zero, and
+`src/window.js` puts it at the top of the page rather than leaving you a blank
+one.
 
 ## when things break
 

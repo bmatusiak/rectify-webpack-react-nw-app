@@ -17,6 +17,12 @@ npm run log      # what the running app has been saying, minus chromium's noise
 npm run drive    # start the app, drive it, check what only the real app can answer
 ```
 
+Call the cli as `node src/cli.js <cmd>` when driving the app yourself, not
+`npm run cli --`: npm adds ~530ms per call and buries the real exit code and
+stderr behind its own. Poll for readiness rather than sleeping -- incremental
+rebuilds are 55-150ms, a cold start is driveable in ~3.6s, and a server-half
+reload recovers in ~3.2s.
+
 **Leave the app running.** In development every context loads its test plugins as
 it starts, so a running app can be asked for any one of them at any time --
 `npm test -- ui/theme` against an open app takes about a second. Webpack reloads
@@ -45,6 +51,21 @@ The same service name can be provided in several contexts by different files -- 
 implementation per side, and every plugin consuming it is written once and works in all of
 them. When adding a service that both halves need, ask what it is on each side before
 deciding it can only exist on one.
+
+## Where the documentation is
+
+**Every plugin folder carries a `README.md`** -- what the plugin is, a table of
+its contexts with `provides`/`consumes`, and the things about it that took
+measuring. Read that one before changing a plugin; the root `README.md` is about
+the app, not the parts.
+
+`test/readme.test.js` fails if a plugin has no README, if its table lists the
+wrong contexts, or if its `provides`/`consumes` disagree with the source -- the
+table is read back off the plugin files. **A new plugin needs a README with a
+correct table, or the suite goes red.**
+
+Prose in a plugin README is not checked, so when you change behaviour, change
+the paragraph about it too.
 
 ## Where a plugin goes
 
@@ -202,10 +223,15 @@ are written once, or the day one is fixed the other keeps the old behaviour.
 
 | context | where its suites run | loaded when |
 |---|---|---|
-| `main` | nw's node side | `src/main.js` sees `--selftest` |
-| `server` | the node half | `src/server.js` reads `host.selftest` |
-| `window` | the page | `src/window.js` sees `?selftest`, put there by `core/window/main.js` |
+| `main` | nw's node side | always, by `src/main.js`. That boot is never packaged |
+| `server` | the node half | always in development; `src/server.js` gates on `NODE_ENV` |
+| `window` | the page | always in development; `src/window.js` gates on `NODE_ENV` |
 | `cli` | the runner's own process | `tools/test.js` and `tools/drive.js`, which build a cli graph anyway |
+
+**They are loaded always, not on request.** That is what lets a running app be
+asked for any one of them without being restarted. There is no `--selftest` or
+`?selftest` gate on loading -- only the production check, which webpack uses to
+drop the whole `require.context`.
 
 Targeting happens **when the run is asked for**, not when the app starts: `src/target.js`
 tags each suite with the plugin that registered it, and `run({ only })` filters on that. A
