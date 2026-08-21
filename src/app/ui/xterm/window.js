@@ -57,24 +57,62 @@ async function plugin(imports, register) {
     var Terminal = xterm.Terminal;
     var FitAddon = fitAddon.FitAddon;
 
-    //MATCHES THE WINDOW RATHER THAN XTERM'S DEFAULT BLACK, so a terminal sitting
-    //in this page does not look like a hole cut in it. Carried over exactly from
-    //the old window, colours included: they are this app's, not a theme somebody
-    //picked, and changing them here would make one pane disagree with the rest.
-    var LOOK = {
+    //TWO PALETTES, AND THE CALLER PICKS. Not the plugin: it still knows nothing
+    //about the theme, for the same reason as ../editor and ../litegraph. What it
+    //can do is offer both and let whoever knows which mode is showing say so --
+    //`look(mode)`.
+    //
+    //THE SIXTEEN ANSI COLOURS ARE PART OF THE PALETTE, not decoration. xterm's
+    //defaults are chosen for a black terminal, so on a light one the yellows and
+    //greens vanish and the "bright black" a program uses for de-emphasis becomes
+    //invisible. A light terminal that only flips the background is a light
+    //terminal nobody can read.
+    var BASE = {
         fontFamily: 'Consolas, "Cascadia Mono", monospace',
         fontSize: 13,
-        theme: { background: '#0a0d12', foreground: '#c9d1d9', cursor: '#58a6ff' },
         //KEPT, because the whole point of a terminal is reading what went past.
         scrollback: 5000
     };
+
+    var DARK = {
+        background: '#0a0d12', foreground: '#c9d1d9', cursor: '#58a6ff',
+        selectionBackground: '#264f78',
+        black: '#484f58', red: '#ff7b72', green: '#3fb950', yellow: '#d29922',
+        blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39c5cf', white: '#b1bac4',
+        //LIFTED FROM #6e7681, which is what a github-dark palette uses and which
+        //measures 3.6:1 on this background -- under the floor for the grey that
+        //carries prompts and file paths. #8b949e is 6.2:1.
+        brightBlack: '#8b949e', brightRed: '#ffa198', brightGreen: '#56d364',
+        brightYellow: '#e3b341', brightBlue: '#79c0ff', brightMagenta: '#d2a8ff',
+        brightCyan: '#56d4dd', brightWhite: '#f0f6fc'
+    };
+
+    var LIGHT = {
+        background: '#ffffff', foreground: '#1f2328', cursor: '#0969da',
+        selectionBackground: '#b6dcff',
+        black: '#24292f', red: '#cf222e', green: '#116329', yellow: '#4d2d00',
+        blue: '#0969da', magenta: '#8250df', cyan: '#1b7c83', white: '#6e7781',
+        brightBlack: '#57606a', brightRed: '#a40e26', brightGreen: '#1a7f37',
+        brightYellow: '#633c01', brightBlue: '#218bff', brightMagenta: '#a475f9',
+        brightCyan: '#3192aa', brightWhite: '#8c959f'
+    };
+
+    //BUILT ONCE, SO THE IDENTITY IS STABLE. The component watches `look` to
+    //recolour a live terminal, and an object literal rebuilt on every render
+    //would make that effect fire on every render.
+    var LOOKS = {
+        dark: Object.assign({}, BASE, { theme: DARK }),
+        light: Object.assign({}, BASE, { theme: LIGHT })
+    };
+
+    function look(mode) { return mode === 'light' ? LOOKS.light : LOOKS.dark; }
 
     //A REF RATHER THAN A PROP FOR THE BYTES, and that is the whole shape of this
     //component. Output arrives continuously and is APPENDED; a `text` prop would
     //mean re-rendering the terminal on every chunk, and re-rendering a terminal
     //means throwing away the scrollback somebody is reading. So the caller holds
     //a handle and writes into it.
-    var Term = forwardRef(function Term({ onData, onResize, look, height }, ref) {
+    var Term = forwardRef(function Term({ onData, onResize, look: wanted, height }, ref) {
         var host = useRef(null);
         var term = useRef(null);
         var fit = useRef(null);
@@ -82,7 +120,7 @@ async function plugin(imports, register) {
         useEffect(function () {
             if (!host.current) return;
 
-            var t = new Terminal(Object.assign({}, LOOK, look || {}, {
+            var t = new Terminal(Object.assign({}, LOOKS.dark, wanted || {}, {
                 //A CURSOR THAT BLINKS ONLY WHERE SOMETHING CAN BE TYPED. A
                 //captured console is being READ, and a blinking cursor on it is
                 //a promise that a keystroke goes somewhere.
@@ -132,6 +170,25 @@ async function plugin(imports, register) {
             //rebuilding on a prop change would be throwing away scrollback to
             //apply something that did not need it.
         }, []);
+
+        //RECOLOURED IN PLACE, NEVER REBUILT. Flipping the page from dark to
+        //light must not throw away what a person is reading -- which is the same
+        //argument as the ref-instead-of-a-prop above, and would be undone by
+        //putting `look` in the dependency list of the effect that CREATES the
+        //terminal. xterm takes a new theme at runtime, so this sets it.
+        //
+        //A FONT CHANGE MOVES THE CELL, so the columns have to be recounted after
+        //one. A colour change does not, and refitting anyway is harmless.
+        useEffect(function () {
+            var t = term.current;
+            if (!t || !wanted) return;
+
+            if (wanted.theme) t.options.theme = wanted.theme;
+            if (wanted.fontFamily) t.options.fontFamily = wanted.fontFamily;
+            if (wanted.fontSize) t.options.fontSize = wanted.fontSize;
+
+            try { if (fit.current) fit.current.fit(); } catch (e) { /* no box yet */ }
+        }, [wanted]);
 
         useImperativeHandle(ref, function () {
             return {
@@ -202,10 +259,14 @@ async function plugin(imports, register) {
     await register(null, {
         xterm: {
             Term: Term,
-            //THE LOOK, HANDED OUT RATHER THAN COPIED. Anything that wants a
+            //THE PALETTES, HANDED OUT RATHER THAN COPIED. Anything that wants a
             //terminal-ish surface of its own should start from the same colours
             //rather than picking them again.
-            LOOK: LOOK
+            //
+            //`look(mode)` is what a page calls; LOOKS is there for a caller that
+            //wants to build on one of them.
+            look: look,
+            LOOKS: LOOKS
         }
     });
 }

@@ -76,13 +76,20 @@ async function plugin(imports, register, config) {
     //shell then always agrees with the page it frames.
     var locked = false;
 
+    //WHAT THE PAGE REALLY IS, WHICH IS NOT ALWAYS WHAT WAS ASKED FOR. `mode` is
+    //the setting; this is the answer the stylesheet gave. They differ whenever a
+    //dark-only swatch is asked for light, and anything choosing a COLOUR needs
+    //this one -- a terminal painted for light mode inside a page that stayed
+    //dark is a white rectangle in a dark window.
+    var showing = 'light';
+
     function agree() {
         //ask for what was wanted first. measuring without doing that measures
         //the answer to the last question, which is how a page that went dark
         //once could never be asked to come back.
         document.body.setAttribute('data-bs-theme', stored.mode);
 
-        var showing = isDark(getComputedStyle(document.body).backgroundColor) ? 'dark' : 'light';
+        showing = isDark(getComputedStyle(document.body).backgroundColor) ? 'dark' : 'light';
 
         //the swatch ignored what it was asked for, so the toggle cannot move it
         locked = showing !== stored.mode;
@@ -127,6 +134,9 @@ async function plugin(imports, register, config) {
         $: $,
 
         get mode() { return stored.mode; },
+
+        //what the swatch actually painted. See the note by `agree` above.
+        get showing() { return showing; },
         get swatch() { return stored.swatch; },
 
         //true when the swatch is a dark design and light was asked for, or the

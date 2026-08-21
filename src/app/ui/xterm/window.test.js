@@ -25,19 +25,56 @@ function plugin(imports, register) {
 
     //a component that hands the ref back out, so a test can drive the terminal
     //the way a page does
-    function Harness({ take, height }) {
+    function Harness({ take, height, look }) {
         var ref = useRef(null);
         useEffect(function () { take(ref.current); }, []);
-        return React.createElement(xterm.Term, { ref: ref, height: height || 300 });
+        return React.createElement(xterm.Term, { ref: ref, look: look, height: height || 300 });
     }
 
     describe('the terminal, in a real window', function () {
 
-        it('is a component and a set of colours', function () {
+        it('is a component and two palettes', function () {
             assert.equal(typeof xterm.Term, 'object');//forwardRef
-            assert.equal(typeof xterm.LOOK, 'object');
-            assert.ok(xterm.LOOK.fontFamily, 'no font family');
-            assert.ok(xterm.LOOK.scrollback > 0, 'no scrollback');
+            assert.equal(typeof xterm.look, 'function');
+            assert.ok(xterm.LOOKS.dark, 'no dark palette');
+            assert.ok(xterm.LOOKS.light, 'no light palette');
+
+            assert.ok(xterm.look('dark').fontFamily, 'no font family');
+            assert.ok(xterm.look('dark').scrollback > 0, 'no scrollback');
+
+            //ANYTHING UNRECOGNISED IS DARK, because that is what this app was
+            //before there was a choice, and a page that forgets to say should
+            //not get a white rectangle.
+            assert.equal(xterm.look('nonsense'), xterm.LOOKS.dark);
+            assert.equal(xterm.look(), xterm.LOOKS.dark);
+
+            //STABLE IDENTITY, because the component watches `look` to recolour a
+            //live terminal -- a fresh object per call would recolour on every
+            //render of the page.
+            assert.equal(xterm.look('light'), xterm.look('light'));
+        });
+
+        //A LIGHT TERMINAL THAT ONLY FLIPS THE BACKGROUND IS UNREADABLE. xterm's
+        //ansi defaults are picked for a black terminal, so a palette that does
+        //not carry its own sixteen leaves the yellows and greens invisible and
+        //the "bright black" a program uses for de-emphasis gone entirely.
+        it('carries a full ansi palette on both sides', function () {
+            var named = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
+
+            ['dark', 'light'].forEach(function (which) {
+                var palette = xterm.LOOKS[which].theme;
+                assert.ok(palette.background, which + ' has no background');
+                assert.ok(palette.foreground, which + ' has no foreground');
+
+                named.forEach(function (name) {
+                    assert.ok(palette[name], which + ' has no ' + name);
+                    var bright = 'bright' + name.charAt(0).toUpperCase() + name.slice(1);
+                    assert.ok(palette[bright], which + ' has no ' + bright);
+                });
+            });
+
+            assert.notEqual(xterm.LOOKS.dark.theme.background, xterm.LOOKS.light.theme.background);
+            assert.notEqual(xterm.LOOKS.dark.theme.foreground, xterm.LOOKS.light.theme.foreground);
         });
 
         it('reads its screen back through the terminal, not through the dom', async function () {
@@ -165,6 +202,38 @@ function plugin(imports, register) {
                 await wrote(handle, 'after' + CRLF, view);
                 assert.ok(handle.text({ all: true }).indexOf('after') >= 0,
                     'the terminal stopped taking bytes, so it was rebuilt rather than cleared');
+            } finally {
+                view.unmount();
+            }
+        });
+
+        //THE ONE THAT MATTERS ABOUT HAVING TWO PALETTES.
+        //
+        //Recolouring must not rebuild. Putting `look` in the dependency list of
+        //the effect that CREATES the terminal would make this pass every visible
+        //check and quietly throw away the scrollback somebody was reading every
+        //time the page changed mode -- which is the same mistake the ref-instead
+        //-of-a-text-prop shape exists to avoid.
+        it('recolours a live terminal without throwing away what is in it', async function () {
+            var handle = null;
+            var view = await mount(React.createElement(Harness, {
+                take: function (h) { handle = h; },
+                look: xterm.look('dark')
+            }));
+
+            try {
+                var CRLF = String.fromCharCode(13, 10);
+                await wrote(handle, 'written while dark' + CRLF, view);
+                assert.ok(handle.text({ all: true }).indexOf('written while dark') >= 0, 'nothing was written');
+
+                view.render(React.createElement(Harness, {
+                    take: function (h) { handle = h; },
+                    look: xterm.look('light')
+                }));
+                for (var i = 0; i < 10; i++) await view.painted();
+
+                assert.ok(handle.text({ all: true }).indexOf('written while dark') >= 0,
+                    'changing the palette rebuilt the terminal and lost the scrollback');
             } finally {
                 view.unmount();
             }

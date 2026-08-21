@@ -453,7 +453,7 @@ command:
 
 ```sh
 for c in main server window cli; do
-  for f in $(find src/app -name "$c.js"); do
+  for f in $(find src/app -name "$c.js" -not -path "*/core/selftest/*"); do
     [ -f "$(dirname $f)/$c.test.js" ] || echo "$f has no tests"
   done
 done

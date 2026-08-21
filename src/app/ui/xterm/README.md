@@ -7,8 +7,9 @@ Bytes that arrived from somewhere else.
 | `window.js` | `xterm` | `react` |
 
 ```
-xterm.Term  <Term ref onData onResize look height />
-xterm.LOOK  the colours, so another surface can start from the same ones
+xterm.Term    <Term ref onData onResize look height />
+xterm.look(mode)   the palette for 'light' or 'dark'
+xterm.LOOKS        both of them, for a caller building on one
 ```
 
 The ref is the interface:
@@ -43,6 +44,43 @@ the output somebody is trying to read.
 The Terminal page puts the same bytes through both, side by side, so the argument
 is shown rather than asserted. Watch the progress bar redraw itself, and watch a
 `warn` line get corrected in place by a cursor that went back up.
+
+## light and dark, and the caller picks
+
+`look('light')` and `look('dark')`. Anything it does not recognise is **dark**,
+because that is what this app was before there was a choice and a page that
+forgets to say should not get a white rectangle.
+
+**The plugin still knows nothing about the theme.** It offers both and lets
+whoever knows which mode is showing say so — the same shape as
+[editor](../editor/) and [litegraph](../litegraph/), and for the same reason:
+every page consumes the theme, so a theme consumed back would be a cycle.
+
+The demo's Terminal page asks the theme for **`showing`, not `mode`**. `mode` is
+the setting; `showing` is what the swatch actually painted, and they differ
+whenever a dark-only swatch is asked for light. A white terminal in a page that
+stayed dark is a hole cut in the window.
+
+**The sixteen ANSI colours are part of the palette, not decoration.** xterm's
+defaults are picked for a black terminal, so on a light one the yellows and
+greens vanish and the *bright black* a program uses for de-emphasis disappears
+entirely. A light terminal that only flips the background is a light terminal
+nobody can read.
+
+Dark's `brightBlack` is `#8b949e` rather than the `#6e7681` a github-dark palette
+uses: that measures **3.6:1** on this background, under the floor, and it is the
+grey that carries prompts and file paths. `#8b949e` is 6.2:1.
+
+**Recolouring never rebuilds.** Flipping the page from dark to light must not
+throw away what somebody is reading, so the palette is applied to the live
+terminal through `options.theme`. Putting `look` in the dependency list of the
+effect that *creates* the terminal would pass every visible check and silently
+lose the scrollback on every mode change — which is the same mistake the
+ref-instead-of-a-text-prop shape exists to avoid. There is a test for exactly
+that, and it was checked by making the mistake.
+
+Both palettes are built once, so their identity is stable: a fresh object per
+call would recolour on every render of the page.
 
 ## it moves no bytes itself
 
@@ -107,6 +145,9 @@ watches and confirming it — and only it — went red.
 
 | test | what breaking it looks like |
 |---|---|
+| is a component and two palettes | `look()` stops defaulting to dark, or its result stops being stable |
+| carries a full ansi palette on both sides | a palette is added that only flips the background |
+| recolours a live terminal without throwing away what is in it | `look` gets into the create effect's dependencies |
 | has its stylesheet in the document | `xterm.css` stops being injected |
 | measures a cell and a box, and so has a size | the terminal is mounted where nothing has a box |
 | writes bytes, and reads escape sequences rather than printing them | a `<pre>` would show the `[32m` |

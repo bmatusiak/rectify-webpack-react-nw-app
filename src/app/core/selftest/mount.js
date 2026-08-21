@@ -63,6 +63,11 @@ module.exports = async function mount(element, options) {
             }
             throw new Error(why || 'it never happened');
         },
+        //RE-RENDER INTO THE SAME ROOT, which is what a page does when a prop
+        //changes. Mounting a second time instead would build a second component
+        //and prove nothing about the first surviving.
+        render: function (next) { root.render(next); },
+
         find: function (selector) { return host.querySelector(selector); },
         all: function (selector) { return Array.prototype.slice.call(host.querySelectorAll(selector)); },
         painted: painted,

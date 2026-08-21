@@ -136,3 +136,35 @@ test('a test plugin is not mistaken for a plugin', () => {
         assert.ok(!pattern.test('./core/io/' + context + '.test.js'), entry + ' should NOT match a test');
     });
 });
+
+// EVERY PLUGIN CARRIES ITS OWN TESTS, and the audit is here rather than in a
+// shell snippet somebody has to remember to run. Adding a context without a
+// test beside it is a plugin that is only exercised by whatever happens to use
+// it, which in a scaffold is often nothing.
+//
+// core/selftest is the exception and the only one: it IS the runner, so testing
+// it with itself proves nothing that its passing does not already prove. It is
+// named here rather than skipped quietly, so a second exception has to be
+// argued for in this file.
+const RUNNER = path.join('core', 'selftest');
+
+test('every plugin context has a test beside it, except the runner', () => {
+    const missing = [];
+
+    // everything() answers in require.context keys -- './core/io/main.js' --
+    // so a key has to be turned back into a path before anything on disk can be
+    // asked about it
+    for (const context of ['main', 'server', 'window', 'cli']) {
+        for (const key of everything(PLUGINS)) {
+            if (path.basename(key) !== context + '.js') continue;
+
+            const file = path.join(PLUGINS, key.replace('./', ''));
+            if (path.dirname(file).indexOf(RUNNER) >= 0) continue;
+
+            const beside = path.join(path.dirname(file), context + '.test.js');
+            if (!fs.existsSync(beside)) missing.push(key);
+        }
+    }
+
+    assert.deepEqual(missing, [], 'these have no test beside them: ' + missing.join(', '));
+});

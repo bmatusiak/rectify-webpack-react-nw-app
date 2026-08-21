@@ -75,6 +75,17 @@ module.exports = function TerminalPage(props) {
     var [bytes, setBytes] = useState('');
     var [log, setLog] = useState(null);
 
+    //THE PAGE PICKS THE PALETTE, NOT THE PLUGIN. ui/xterm knows nothing about
+    //the theme -- every page consumes the theme, so a theme consumed back would
+    //be a cycle -- so the thing that knows which mode is showing is the thing
+    //that chooses. `theme.showing` and not `theme.mode`: a dark-only swatch
+    //asked for light stays dark, and a white terminal in it would be a hole cut
+    //in the window.
+    var [mode, setMode] = useState(theme.showing);
+    useEffect(function () { return theme.onModeChange(function () { setMode(theme.showing); }); }, []);
+
+    var look = xterm.look(mode);
+
     //WRITTEN THROUGH A REF, NOT PASSED AS A PROP, which is the shape the xterm
     //plugin asks for: output is appended, and a `text` prop would re-render the
     //terminal on every chunk and throw away the scrollback being read.
@@ -120,15 +131,20 @@ module.exports = function TerminalPage(props) {
                 <Columns of={2}>
                     <Panel title="xterm" lead="the escapes are instructions"
                         aside={<Badge variant="success">interpreted</Badge>}>
-                        <Term ref={term} height={300} />
+                        <Term ref={term} look={look} height={300} />
                     </Panel>
 
                     <Panel title="&lt;pre&gt;" lead="the escapes are characters"
                         aside={<Badge variant="danger">literal</Badge>}>
+                        {/* THE SAME PALETTE, because the panel beside it is the
+                            whole point: two renderings of one set of bytes. If
+                            one followed the theme and the other did not, the
+                            difference on screen would be the colours rather than
+                            the escape handling. */}
                         <pre className="term-plain mb-0" style={{
                             height: 300, overflow: 'auto', margin: 0, padding: '8px 10px',
-                            background: '#0a0d12', color: '#c9d1d9', fontSize: 13,
-                            fontFamily: 'Consolas, "Cascadia Mono", monospace'
+                            background: look.theme.background, color: look.theme.foreground,
+                            fontSize: look.fontSize, fontFamily: look.fontFamily
                         }}>{bytes}</pre>
                     </Panel>
                 </Columns>
@@ -145,7 +161,7 @@ module.exports = function TerminalPage(props) {
                     lead={log
                         ? (log.missing ? 'not there' : log.total + ' lines, showing the last ' + log.lines.length)
                         : 'reading…'}>
-                    <Term ref={logTerm} height={280} />
+                    <Term ref={logTerm} look={look} height={280} />
                 </Panel>
 
                 <p className="text-body-secondary small mt-3 mb-0">

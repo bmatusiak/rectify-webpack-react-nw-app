@@ -9,7 +9,8 @@ An example kit, not the scaffold's opinion.
 ```
 theme.ui             every component, from ./components
 theme.themeSwitcher  flips light/dark, remembered in the settings store
-theme.mode           which of the two is on
+theme.mode           which of the two was asked for
+theme.showing        which of the two the swatch actually painted
 theme.modeLocked     true when the swatch will not honour the mode
 theme.onModeChange   so a component can re-render when it flips
 theme.swatches       the stylesheets in ./swatch, by name
@@ -90,6 +91,13 @@ ask for what was wanted, then look at what the body actually became, and make
 `data-bs-theme` say *that*. The shell then always agrees with the page it frames,
 and `modeLocked` is how the toggle knows to disable itself and say why — a
 control that offers a choice it cannot honour is worse than one that says so.
+
+**`mode` is the setting; `showing` is the answer.** They differ whenever a
+dark-only swatch is asked for light, and **anything choosing a colour wants
+`showing`** — the demo's Terminal page picks its terminal palette from it, because
+a white terminal in a page that stayed dark is a hole cut in the window.
+`modeLocked` is the same fact stated as a boolean, for a control that has to
+disable itself.
 
 Order matters twice here:
 
