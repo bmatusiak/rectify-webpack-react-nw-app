@@ -7,6 +7,7 @@
   "main": "main.js",
   "scripts": {
     "start": "node tools/nw.js",
+    "drive": "node tools/drive.js",
     "cli": "node src/cli.js",
     "build": "node tools/build.js",
     "dist": "node tools/build.js && node tools/pack.js",

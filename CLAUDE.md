@@ -10,7 +10,12 @@ npm run cli      # a terminal talking to a running app
 npm run build    # webpack, production bundles
 npm run dist     # build, then package
 npm test         # node --test
+npm run drive    # start the app, drive it, check what only the real app can answer
 ```
+
+`npm run drive` takes the same `--build` / `--package` as `npm start`, plus `--shots` to
+keep a screenshot of every page and `--swatches` to check all twenty-eight rather than
+three. It leaves the app running if it already was, and shuts it down if it started it.
 
 ## The four contexts
 
@@ -119,7 +124,20 @@ subject:
   main-side require is read off disk by nw at boot -- so nothing else here catches it.
   Regrouping under `core/` broke four of them and left the suite green.
 
-The window half needs a DOM and is covered by running the app, not from here.
+The window half needs a DOM and is not booted from here. `npm run drive` covers it by
+starting the real app and driving it over its own control socket: every page opened, every
+heading and every piece of muted text measured for contrast, optionally in every swatch.
+
+That is the only check that can see the window, and it earns its place -- it found the
+active sidebar pill unreadable on thirteen of the twenty-eight swatches, which nothing in
+`test/` could have.
+
+**A number that moves is not a result.** Three separate things here need waiting for
+rather than a fixed delay: a captured frame (the compositor), a crash report (the log
+reaching disk), and a swatch (the stylesheet, then the mode following it). Measuring a
+swatch after 900ms read text coloured for one mode against a ground painted for the other
+and reported a perfectly readable sidebar at 1.5:1, twelve times in a row. Wait for the
+value to stop changing.
 
 ## Tests that live beside the plugin
 

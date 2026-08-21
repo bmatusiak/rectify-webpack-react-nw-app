@@ -237,10 +237,17 @@ function read(data) {
         catch (e) { many = []; }
 
         //asking about a class that matches nine things should say so rather
-        //than quietly answering about the first
+        //than quietly answering about the first. Each of them carries its own
+        //contrast, because "is every heading on this page readable" is one
+        //question and answering it one element at a time is not.
         if (many.length > 1) return {
             found: 'selector', count: many.length,
-            items: many.slice(0, 25).map(describe)
+            items: many.slice(0, 40).map(function (el) {
+                var seen = describe(el);
+                seen.visible = !!visible([el]);
+                seen.contrast = contrast(el);
+                return seen;
+            })
         };
     }
 
@@ -280,16 +287,48 @@ function contrast(el) {
     };
 }
 
-//the nearest ancestor that actually paints something, because a transparent
-//background is not the colour the text sits on
+//what the text is actually sitting on, which is every translucent layer
+//between it and the first opaque one, painted in order.
+//
+//taking the nearest ancestor with any alpha at all was wrong and quietly so.
+//A bootstrap card header is rgba(222,226,230,0.03) -- three percent of a pale
+//grey over a dark card -- and treating that as the background measured white
+//text at 1.3:1 against a colour that is barely there. Every panel heading in
+//the app looked unreadable and none of them were.
 function behind(el) {
+    var layers = [];
+
     for (var node = el; node; node = node.parentElement) {
         var colour = channels(getComputedStyle(node).backgroundColor);
-        if (colour && colour[3] > 0) { colour.source = getComputedStyle(node).backgroundColor; return colour; }
+        if (!colour || colour[3] <= 0) continue;//fully transparent, paints nothing
+
+        layers.push(colour);
+        if (colour[3] >= 1) break;//opaque: nothing below it can show through
     }
-    var body = channels(getComputedStyle(document.body).backgroundColor);
-    if (body) body.source = getComputedStyle(document.body).backgroundColor;
-    return body;
+
+    //whatever the page itself is, in case the walk never found anything solid
+    var page = channels(getComputedStyle(document.documentElement).backgroundColor);
+    if (!layers.length || layers[layers.length - 1][3] < 1) {
+        layers.push(page && page[3] >= 1 ? page : [255, 255, 255, 1]);
+    }
+
+    //bottom layer first, then each one above it painted over
+    var out = layers[layers.length - 1];
+    for (var i = layers.length - 2; i >= 0; i--) out = over(layers[i], out);
+
+    out.source = 'rgb(' + out.slice(0, 3).map(Math.round).join(', ') + ')';
+    return out;
+}
+
+//src-over: the standard way one translucent colour lands on another
+function over(top, bottom) {
+    var a = top[3];
+    return [
+        top[0] * a + bottom[0] * (1 - a),
+        top[1] * a + bottom[1] * (1 - a),
+        top[2] * a + bottom[2] * (1 - a),
+        1
+    ];
 }
 
 function channels(colour) {

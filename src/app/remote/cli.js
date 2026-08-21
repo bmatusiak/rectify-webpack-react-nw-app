@@ -16,7 +16,14 @@ async function plugin(imports, register) {
             if (what) console.log(what.element + (what.text ? '  "' + what.text + '"' : ''));
 
             if (out.count > 1) out.items.forEach(function (i) {
-                console.log('  ' + i.element + (i.text ? '  "' + i.text + '"' : ''));
+                //the ratio is the reason to ask about forty things at once
+                var c = i.contrast;
+                var how = c ? '  ' + c.ratio + ':1' + (c.readable ? '' : ' LOW') : '';
+
+                //when it fails, the two colours are the next thing anyone asks
+                if (c && !c.readable) how += '  ' + c.color + ' on ' + c.background;
+
+                console.log('  ' + i.element + (i.text ? '  "' + i.text + '"' : '') + how);
             });
             else if (verb == 'read') {
                 //everything the view said about it, minus the routing. listing
