@@ -2,6 +2,7 @@
 var Config = require("./config");
 var rectify = require('@bmatusiak/rectify');
 var showError = require('./overlay');
+var wanted = require('./target');
 
 //every src/app/<plugin>/window.js, one level down or two -- src/app/demo, or
 //src/app/ui/theme. the window half, and the only code that reaches the browser.
@@ -14,20 +15,29 @@ var plugins = found.keys().map(found);
 //it here is what makes it available; nothing is obliged to use it.
 plugins.push(rectify.PluginBase);
 
-//THE WINDOW'S OWN TESTS, when asked for.
+//THE WINDOW'S OWN TESTS, ALWAYS, IN DEVELOPMENT.
 //
 //A test that needs a document cannot be booted from a test file, so it is
-//loaded here instead and run in place -- see src/app/core/selftest. Asked for
-//with ?selftest on the url, which src/app/core/window/main.js puts there when
-//the app was started with --selftest.
+//loaded here and run in place -- see src/app/core/selftest.
 //
-//the context sits inside the `if` on purpose: webpack drops the whole thing
+//not behind a flag: loading them is what lets the window that is already open
+//be asked for any one of them, and webpack's reload carries an edited test
+//straight into it. Leave the app running, change something, run one test, look.
+//A flag would mean reopening the window to change target.
+//
+//the context sits inside the check on purpose: webpack drops the whole thing
 //from a production bundle, so a packaged build has no way to load its own tests
 //even if something asked it to.
-if (process.env.NODE_ENV !== 'production' && new URLSearchParams(location.search).has('selftest')) {
+if (process.env.NODE_ENV !== 'production') {
+  //a literal, because webpack resolves this at build time and a variable here
+  //would leave it with nothing to gather
   var tests = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.test\.js$/);
-  tests.keys().forEach(function (key) { plugins.push(tests(key)); });
-  console.log('selftest: loaded ' + tests.keys().length + ' window test plugins');
+
+  //tagged with the plugin each came from, so one of them can be aimed at when
+  //the run is asked for rather than when the window is opened
+  tests.keys().forEach(function (key) {
+    plugins.push(wanted.tag(tests(key), key.replace('./', '')));
+  });
 }
 
 plugins.config = Config();

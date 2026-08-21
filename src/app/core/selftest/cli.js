@@ -1,4 +1,4 @@
-var harness = require('@bmatusiak/rectify/harness.js');
+var suites = require('./suites');
 
 //and the terminal's. The cli context is not part of the running app -- it is a
 //separate short-lived process -- so nothing here answers over a socket. What
@@ -8,6 +8,6 @@ var harness = require('@bmatusiak/rectify/harness.js');
 plugin.consumes = [];
 plugin.provides = ['selftest'];
 async function plugin(imports, register) {
-    await register(null, { selftest: harness.create() });
+    await register(null, { selftest: suites() });
 }
 module.exports = plugin;

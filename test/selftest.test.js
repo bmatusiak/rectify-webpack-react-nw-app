@@ -15,43 +15,54 @@ const selftest = require('../tools/selftest');
 //here. That is what makes `npm test` mean the whole thing again rather than
 //only the part that was convenient.
 //
-//it leaves an app that was already running alone, in both directions: it does
-//not shut down something it did not start, and it does not restart one that was
-//started without --selftest just to get its suites -- it says so instead.
+//AN APP THAT IS ALREADY RUNNING IS THE POINT, NOT AN OBSTACLE.
+//
+//In development every context loads its test plugins as it starts, so a running
+//app can be asked for any of them at any time. That is the loop this is for:
+//leave the app open, change something, run one test, read what came back,
+//change it again. Webpack reloads both halves on save, so an edited test is in
+//the app a second later with nothing restarted.
+//
+//it shuts down only what it started.
 
 const TIMEOUT = 180000;
 
+//tools/test.js sets these when a single thing was asked for. Empty means all of
+//it, which is what `npm test` on its own does.
+const ONLY = process.env.TEST_ONLY || '';
+const CONTEXTS = (process.env.TEST_CONTEXTS || '').split(',').filter(Boolean);
+
+function asked(name) { return !CONTEXTS.length || CONTEXTS.indexOf(name) >= 0; }
+
 test('the plugins, tested inside the app', { timeout: TIMEOUT }, async (t) => {
-    const { app, ipc, selftest: cli } = await selftest.cliGraph({ withTests: true });
+    const { app, ipc, selftest: cli } = await selftest.cliGraph();
 
     //THE CLI CONTEXT runs here: it is a short-lived process talking to the app
     //rather than part of it, so whoever builds the graph runs its suites.
-    await report(t, 'cli', await cli.run({ log: function () {} }));
+    if (asked('cli')) await report(t, 'cli', await cli.run({ only: ONLY || null }));
+
+    //and if that was all that was asked for, there is no reason to start an app
+    if (CONTEXTS.length && !CONTEXTS.some((c) => c !== 'cli')) {
+        await app.destroy();
+        return;
+    }
 
     const wasRunning = await ipc.running();
 
     if (!wasRunning) {
-        assert.ok(selftest.start(['--selftest']), 'the app did not start');
+        assert.ok(selftest.start([]), 'the app did not start');
 
         const views = await selftest.waitForView(ipc);
         assert.ok(views.views.length > 0, 'the window never connected');
     }
 
-    const out = await ipc.call('selftest', {}, 120000).catch((e) => ({ error: e.message }));
+    const out = await ipc.call('selftest', {
+        contexts: CONTEXTS.length ? CONTEXTS.filter((c) => c !== 'cli') : null,
+        only: ONLY || null
+    }, 150000).catch((e) => ({ error: e.message }));
     assert.ok(!out.error, 'the app would not run its suites: ' + out.error);
 
-    for (const context of out.contexts) {
-        //an app that was already up may not have been started with --selftest,
-        //and killing somebody's running app to find out is not this test's
-        //business. Say which it is rather than failing or quietly passing.
-        if (!wasRunning || selftest.counted(context) > 0) {
-            await report(t, context.context, context);
-            continue;
-        }
-
-        await t.test(context.context + ' -- skipped', { skip: 'the app was already running, and without --selftest' },
-            () => {});
-    }
+    for (const context of out.contexts) await report(t, context.context, context);
 
     if (!wasRunning) await ipc.call('quit', {}).catch(() => {});
     await app.destroy();

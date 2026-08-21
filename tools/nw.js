@@ -10,6 +10,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
 const net = require('node:net')
+const viewer = require('./log')
 
 const NW_ROOT = path.resolve(__dirname, '..', 'node_modules', 'nw')
 const APP = path.resolve(__dirname, '..')
@@ -113,9 +114,6 @@ const FLAGS = ['--enable-logging=stderr']
 const controlSocket = require('../src/app/core/ipc/endpoint.js')(require('../package.json').name)
 
 const NEWLINE = String.fromCharCode(10)
-const BACKSLASH = String.fromCharCode(92)
-const STACK_BREAK = new RegExp(BACKSLASH + BACKSLASH + 'n(?=[ ])', 'g')
-const ESCAPED_QUOTE = BACKSLASH + String.fromCharCode(34)
 const INSTANCE_FILE = path.join(APP, '.nw-instance.json')
 const LOG_FILE = path.join(APP, 'nw.log')
 
@@ -340,42 +338,58 @@ function answering () {
 }
 
 // What this run put in the log, minus chromium talking about itself. The
-// console lines nw writes are quoted, so the message is unwrapped where it can
-// be -- a stack trace is worth more on its own lines than inside a string.
+// filtering and the unwrapping live in ./log.js, which `npm run log` is, so
+// there is one idea of what a line of this file means rather than two.
 function explain (from) {
   let fresh = ''
   try { fresh = fs.readFileSync(LOG_FILE, 'utf8').slice(from) } catch (err) { return }
 
-  const noise = /WARNING:|INFO:CONSOLE\(\d+\)|DevTools listening|Extension does not provide/
-  const worth = /error|cannot|failed|undefined|not a function|throw|at /i
+  const found = viewer.lines(fresh)
 
-  const lines = []
-  for (const raw of fresh.split(NEWLINE)) {
-    if (!raw.trim() || noise.test(raw)) continue
-    if (!worth.test(raw)) continue
-
-    //the message is between the first quote and the last. Written with
-    //indexOf rather than a regex because the pattern for "a quoted string with
-    //escapes in it" needs backslashes, and every layer between here and this
-    //file has an opinion about those.
-    var open = raw.indexOf('"')
-    var close = raw.lastIndexOf('"')
-
-    var text = (open >= 0 && close > open) ? raw.slice(open + 1, close) : raw
-    //only where a stack frame follows. A windows path is full of the same two
-    //characters, and splitting on every one of them turned
-    //`...nw-app\node_modules` into a line break and an orphaned ode_modules.
-    text = text.replace(STACK_BREAK, NEWLINE).split(ESCAPED_QUOTE).join('"')
-
-    for (const one of text.split(NEWLINE)) if (one.trim()) lines.push(one)
-  }
-
-  if (!lines.length) {
-    console.error(`nothing obvious in ${path.relative(APP, LOG_FILE)} -- read it, or start again with --attach`)
+  if (!found.length) {
+    console.error(`nothing obvious in ${path.relative(APP, LOG_FILE)} -- read it with npm run log -- --all, or start again with --attach`)
     return
   }
 
   console.error('')
-  for (const line of lines.slice(0, 12)) console.error('  ' + line)
-  console.error(`\n  ...${path.relative(APP, LOG_FILE)} has the rest`)
+  for (const line of found.slice(0, 12)) console.error('  ' + line)
+  console.error(`${NEWLINE}  ...npm run log has the rest`)
+}
+
+// Give the log a moment to finish arriving: poll until it stops growing, or
+// until waiting longer is worse than reporting whatever is there.
+function settle (from) {
+  const until = Date.now() + 2000
+  let last = -1
+
+  return new Promise(resolve => {
+    const tick = setInterval(() => {
+      let size = 0
+      try { size = fs.statSync(LOG_FILE).size } catch (err) { /* not written yet */ }
+
+      if ((size > from && size === last) || Date.now() > until) {
+        clearInterval(tick)
+        resolve()
+      }
+      last = size
+    }, 150)
+  })
+}
+
+function alreadyUp () {
+  if (runningInstance()) return Promise.resolve(true)
+  return answering()
+}
+
+// Connecting is the whole question -- it says something is holding the address.
+// The app wants a token before it will answer anything, and this does not have
+// one and does not need one.
+function answering () {
+  return new Promise(resolve => {
+    const probe = net.connect(controlSocket)
+    const done = yes => { probe.destroy(); resolve(yes) }
+
+    probe.on('connect', () => done(true))
+    probe.on('error', () => done(false))
+  })
 }

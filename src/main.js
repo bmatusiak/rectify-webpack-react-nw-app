@@ -21,6 +21,7 @@ var fs = require('fs');
 var path = require('path');
 
 var boot = require('./boot');
+var wanted = require('./target');
 var pkg = require('../package.json');
 var Config = require('./config');
 
@@ -67,15 +68,22 @@ var plugins = found(PLUGINS, DEPTH, []).map(function (file) { return require(fil
 //it here is what makes it available; nothing is obliged to use it.
 plugins.push(rectify.PluginBase);
 
-//and this context's own tests, when asked for. Same reasoning as the window:
-//nothing outside nw can boot a plugin that wants nw.Window or a tray icon, so
-//the running app runs them instead. src/main.prod.js has no equivalent, which
-//is what stops a packaged build from ever loading them.
-if (nw.App.argv.indexOf('--selftest') >= 0) {
-    var tests = found(PLUGINS, DEPTH, [], 'main.test.js').map(function (file) { return require(file); });
-    tests.forEach(function (t) { plugins.push(t); });
-    console.log('selftest: loaded ' + tests.length + ' main test plugins');
-}
+//THE TEST PLUGINS, ALWAYS, IN DEVELOPMENT.
+//
+//Nothing outside nw can boot a plugin that wants nw.Window or a tray icon, so
+//the running app runs them instead.
+//
+//Not behind a flag any more. Loading them is what lets the app that is already
+//open be asked for any one of them at any time -- which is the whole workflow:
+//leave it running, change something, run one test, look, change it again. A
+//flag would mean restarting to change target, and restarting is the thing this
+//avoids.
+//
+//they are inert until something asks. src/main.prod.js has no equivalent path,
+//so a packaged build has no way to load them at all.
+found(PLUGINS, DEPTH, [], 'main.test.js').forEach(function (file) {
+    plugins.push(wanted.tag(require(file), path.relative(PLUGINS, file)));
+});
 
 plugins.config = Config();
 

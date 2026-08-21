@@ -61,13 +61,8 @@ async function plugin(imports, register, config) {
         //is the side that has to say so. src/app/remote reads it back. A
         //packaged window needs no mark: there is no second view to confuse it
         //with, because there is nowhere for one to come from.
-        //--selftest is passed through to the page, which is how the window
-        //half knows to load its own tests. Development only: bridge.page is a
-        //file in the package and there are no tests in it to load.
-        var asked = !BUILD_PROD && nw.App.argv.indexOf('--selftest') >= 0;
+        var page = BUILD_PROD ? bridge.page : (http.url ? http.url + '?view=app' : null);
 
-        var page = BUILD_PROD ? bridge.page
-            : (http.url ? http.url + '?view=app' + (asked ? '&selftest' : '') : null);
         if (!page) return console.error('nothing is listening yet');
 
         nw.Window.open(page, {

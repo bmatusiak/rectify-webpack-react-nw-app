@@ -9,9 +9,20 @@ npm start        # nw, development: main off disk, server and window bundled and
 npm run cli      # a terminal talking to a running app
 npm run build    # webpack, production bundles
 npm run dist     # build, then package
-npm test         # node --test
+npm test         # everything: the checks that need no app, then the ones that do
+npm test -- window        # only the browser suites
+npm test -- core/ipc      # only that plugin, in every context it has one
+npm test -- --list        # what there is to aim at
+npm run log      # what the running app has been saying, minus chromium's noise
 npm run drive    # start the app, drive it, check what only the real app can answer
 ```
+
+**Leave the app running.** In development every context loads its test plugins as
+it starts, so a running app can be asked for any one of them at any time --
+`npm test -- ui/theme` against an open app takes about a second. Webpack reloads
+both halves on save, so an edited test is in the app before you can ask for it.
+That is the loop: change something, run one test, read what came back, change it
+again, without restarting anything.
 
 `npm run drive` takes the same `--build` / `--package` as `npm start`, plus `--shots` to
 keep a screenshot of every page and `--swatches` to check all twenty-eight rather than
@@ -184,8 +195,8 @@ app, which is not always node.
 
 ## All four contexts run inside the app
 
-`npm run drive -- --selftest` starts the app, tells it to load its own test plugins, runs them
-where they are, and reports each one. `npm test` does the same through `test/selftest.test.js`,
+`npm test` and `npm run drive -- --selftest` both ask the running app to run the suites that
+live beside each plugin, and report each one. `npm test` does the same through `test/selftest.test.js`,
 and both go through `tools/selftest.js` -- the walk, the cli graph, the launcher and the wait
 are written once, or the day one is fixed the other keeps the old behaviour.
 
@@ -194,7 +205,12 @@ are written once, or the day one is fixed the other keeps the old behaviour.
 | `main` | nw's node side | `src/main.js` sees `--selftest` |
 | `server` | the node half | `src/server.js` reads `host.selftest` |
 | `window` | the page | `src/window.js` sees `?selftest`, put there by `core/window/main.js` |
-| `cli` | the drive process | `tools/drive.js`, which builds a cli graph anyway |
+| `cli` | the runner's own process | `tools/test.js` and `tools/drive.js`, which build a cli graph anyway |
+
+Targeting happens **when the run is asked for**, not when the app starts: `src/target.js`
+tags each suite with the plugin that registered it, and `run({ only })` filters on that. A
+flag at load time would mean restarting the app to change target, and not restarting is the
+whole point.
 
 `src/app/core/selftest/main.js` is the collector: one ipc command that runs the main harness
 here, calls the node half's through `ipc.invoke`, asks the window over the socket, and hands

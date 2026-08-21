@@ -46,10 +46,9 @@ async function plugin(imports, register) {
             labels: function () { return tray.labels(); }
         },
 
-        //whether the app was asked to run its own suites. The server half is
-        //bundled and never sees argv, so this is how it finds out.
-        selftest: app.argv && app.argv.indexOf('--selftest') >= 0,
-
+        //whether the app was asked to run its own suites, and which of them.
+        //The server half is bundled and never sees argv, so this is how it
+        //finds out: false, true, or the plugin that was singled out.
         ipc: {
             get address() { return ipc.address; },
             handle: function (name, fn) { return ipc.handle(name, fn); },

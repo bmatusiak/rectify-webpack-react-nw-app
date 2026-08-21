@@ -1,4 +1,4 @@
-var harness = require('@bmatusiak/rectify/harness.js');
+var suites = require('./suites');
 
 //the node half's side of it. Its own harness instance, not the module's shared
 //one -- in development this context and `main` are the same process, and one
@@ -13,10 +13,10 @@ plugin.consumes = ['ipc'];
 plugin.provides = ['selftest'];
 async function plugin(imports, register) {
     var ipc = imports.ipc;
-    var mine = harness.create();
+    var mine = suites();
 
-    var answered = ipc.handle('selftest:server', async function () {
-        return Object.assign({ context: 'server' }, await mine.run({ log: function () {} }));
+    var answered = ipc.handle('selftest:server', async function (data) {
+        return Object.assign({ context: 'server' }, await mine.run(data));
     });
 
     await register(null, {

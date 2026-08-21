@@ -9,6 +9,7 @@ const fs = require('node:fs')
 const { spawnSync } = require('node:child_process')
 
 const rectify = require('@bmatusiak/rectify')
+const wanted = require('../src/target')
 
 const ROOT = path.join(__dirname, '..')
 const PLUGINS = path.join(ROOT, 'src', 'app')
@@ -31,9 +32,14 @@ function gather (name, dir = PLUGINS, depth = 2, out = []) {
 // The cli graph, built in this process. It is the client the terminal uses, and
 // with `withTests` it also carries the cli context's own suites -- that context
 // is not part of the running app, so whoever builds the graph runs them.
-async function cliGraph ({ withTests } = {}) {
+async function cliGraph ({ withTests, only } = {}) {
   const plugins = gather('cli.js').map(require)
-  if (withTests) gather('cli.test.js').map(require).forEach(t => plugins.push(t))
+
+  // always, like the three contexts inside the app: aiming happens when the run
+  // is asked for, not when the graph is built
+  if (withTests !== false) {
+    gather('cli.test.js').forEach(file => plugins.push(wanted.tag(require(file), named(file))))
+  }
 
   plugins.push(rectify.PluginBase)
   plugins.config = require(path.join(ROOT, 'src', 'config.js'))()
@@ -47,6 +53,13 @@ async function cliGraph ({ withTests } = {}) {
   }).start()
 
   return { app, ipc: app.services.ipc, selftest: app.services.selftest }
+}
+
+// What a plugin test is called: its folder under src/app and the context beside
+// it, with no extension. `core/ipc/cli` -- which `core/ipc` is a prefix of.
+function named (file) {
+  const relative = path.relative(PLUGINS, file).split(path.sep).join('/')
+  return relative.endsWith('.test.js') ? relative.slice(0, -'.test.js'.length) : relative
 }
 
 // Start it if it is not up, using the launcher, which already knows how to wait
@@ -78,4 +91,4 @@ function counted (context) {
   return (context.suites || []).reduce((n, suite) => n + suite.tests.length, 0)
 }
 
-module.exports = { ROOT, gather, cliGraph, start, waitForView, counted }
+module.exports = { ROOT, PLUGINS, gather, named, cliGraph, start, waitForView, counted }

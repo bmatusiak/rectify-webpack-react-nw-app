@@ -1,4 +1,4 @@
-var harness = require('@bmatusiak/rectify/harness.js');
+var suites = require('./suites');
 
 //RUNNING THE TESTS INSIDE THE APP.
 //
@@ -22,7 +22,7 @@ plugin.consumes = ['app', 'ipc', 'io'];
 plugin.provides = ['selftest'];
 async function plugin(imports, register) {
     var { ipc, io } = imports;
-    var mine = harness.create();
+    var mine = suites();
 
     //whichever page is connected. In development this is socket.io's own map;
     //in a packaged build it is the bridge wearing the same shape.
@@ -41,7 +41,7 @@ async function plugin(imports, register) {
         return { context: context, suites: [], passed: 0, failed: stuck ? 1 : 0, missing: why, stuck: !!stuck };
     }
 
-    function fromWindow(timeout) {
+    function fromWindow(timeout, only) {
         var socket = page();
         if (!socket) return Promise.resolve(absent('window', 'no window is connected'));
 
@@ -50,7 +50,7 @@ async function plugin(imports, register) {
                 resolve(absent('window', 'the window did not answer within ' + timeout + 'ms', true));
             }, timeout);
 
-            socket.emit('selftest:run', {}, function (results) {
+            socket.emit('selftest:run', { only: only }, function (results) {
                 clearTimeout(timer);
                 resolve(Object.assign({ context: 'window' }, results || {}));
             });
@@ -59,20 +59,35 @@ async function plugin(imports, register) {
 
     //the node half registers its own command as it loads, and this calls it
     //rather than opening a socket to ourselves to ask ourselves a question
-    function fromServer() {
+    function fromServer(only) {
         if (ipc.commands().indexOf('selftest:server') < 0) {
             return Promise.resolve(absent('server', 'the node half did not load its tests'));
         }
-        return ipc.invoke('selftest:server', {});
+        return ipc.invoke('selftest:server', { only: only });
     }
 
     var answered = ipc.handle('selftest', async function (data) {
-        var here = Object.assign({ context: 'main' }, await mine.run({ log: function () {} }));
+        //which contexts were asked for. Nothing said means all of them; naming
+        //one is how `npm test -- window` runs the browser suites and nothing
+        //else, rather than waiting on the two it did not ask about.
+        var only = (data && data.contexts) || null;
+        function asked(name) { return !only || only.indexOf(name) >= 0; }
 
-        var server = await fromServer();
+        function passedOver(name) {
+            return { context: name, suites: [], passed: 0, failed: 0, missing: 'not asked for' };
+        }
+
+        var here = asked('main')
+            ? Object.assign({ context: 'main' }, await mine.run(data))
+            : passedOver('main');
+
+        var server = asked('server') ? await fromServer(data && data.only) : passedOver('server');
+
         //generous on purpose: the window suite opens every page and waits for
         //each to settle, which is slower than everything else here put together
-        var window_ = await fromWindow((data && data.timeout) || 120000);
+        var window_ = asked('window')
+            ? await fromWindow((data && data.timeout) || 120000, data && data.only)
+            : passedOver('window');
 
         var all = [here, server, window_];
 

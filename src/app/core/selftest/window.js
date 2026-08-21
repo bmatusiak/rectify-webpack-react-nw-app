@@ -1,4 +1,4 @@
-var harness = require('@bmatusiak/rectify/harness.js');
+var suites = require('./suites');
 
 //the window's side of it. Everything a window test needs is already here and
 //cannot be anywhere else: a document, a stylesheet that has actually loaded,
@@ -8,12 +8,12 @@ plugin.consumes = ['io'];
 plugin.provides = ['selftest'];
 async function plugin(imports, register) {
     var io = imports.io;
-    var mine = harness.create();
+    var mine = suites();
 
     function run(data, ack) {
         if (typeof ack != 'function') return;
 
-        mine.run({ log: function () {} }).then(ack, function (err) {
+        mine.run(data).then(ack, function (err) {
             ack({ suites: [], passed: 0, failed: 1, error: (err && err.message) || String(err) });
         });
     }
