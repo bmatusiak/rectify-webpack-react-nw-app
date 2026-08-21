@@ -126,6 +126,33 @@ test('a test plugin is not mistaken for a plugin', () => {
     });
 });
 
+//One end of a socket, standing in for the page. It records what was sent to it
+//and lets a test answer, which is what the two halves actually do to each other.
+function fakeSocket (id = 'probe') {
+    const handlers = new Map()
+    const sent = []
+
+    return {
+        id,
+        sent,
+        on: (event, fn) => { handlers.set(event, fn) },
+        once: (event, fn) => { handlers.set(event, fn) },
+        off: (event) => handlers.delete(event),
+        removeAllListeners: (event) => { event ? handlers.delete(event) : handlers.clear() },
+        emit: (event, data, ack) => { sent.push({ event, data, ack }) },
+        disconnect: () => { const fn = handlers.get('disconnect'); if (fn) fn() },
+
+        //the page speaking: what it says, and what it answers when asked
+        say: (event, data, ack) => {
+            const fn = handlers.get(event)
+            if (!fn) return false
+            fn(data, ack)
+            return true
+        },
+        lastSent: (event) => sent.filter(m => m.event === event).pop()
+    }
+}
+
 //A HOST THE SERVER HALF CAN BE BOOTED AGAINST.
 //
 //In the app this is built by core/build/main.js out of things only nw has: a
@@ -159,12 +186,23 @@ function mockHost() {
         };
     }
 
+    const connected = new Map()
+
     const io = Object.assign(listen(ioListeners), {
-        emit: () => {},
-        disconnectSockets: () => {},
-        close: () => {},
-        sockets: { sockets: new Map() },
-        engine: { clientsCount: 0 }
+        emit: (event, data, ack) => connected.forEach(s => s.emit(event, data, ack)),
+        disconnectSockets: () => connected.forEach(s => s.disconnect()),
+        close: () => connected.clear(),
+        sockets: { sockets: connected },
+        get engine() { return { clientsCount: connected.size } },
+
+        //not part of socket.io: a way for a test to be the browser. The server
+        //half is written against "a socket connected", and this is the only
+        //way to say that without a browser to say it.
+        connect: (socket) => {
+            connected.set(socket.id, socket)
+            for (const fn of ioListeners.get('connection') || []) fn(socket)
+            return socket
+        }
     });
 
     const router = {};
@@ -216,6 +254,8 @@ function mockHost() {
             open() {}, show() {}, hide() {}, openInBrowser() {}, quit() {},
             capture: async () => ({ format: 'png', buffer: Buffer.from([1, 2, 3]), width: 8, height: 4 })
         },
+
+        fakeSocket,
 
         //what the boot asks about once everything has been torn down
         ledger: {
