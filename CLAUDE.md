@@ -114,5 +114,9 @@ subject:
   nw, so a broken `require.context` regex or an unresolvable server graph fails here.
 - `plugin-scan.test.js` keeps the five discovery sites in agreement, and checks that both
   one-level and two-level plugins are found and that `_`-prefixed folders are skipped.
+- `requires.test.js` resolves every relative require in `src/` and `tools/` that climbs
+  out of its own folder. Moving a plugin one level changes what `../../..` means, and a
+  main-side require is read off disk by nw at boot -- so nothing else here catches it.
+  Regrouping under `core/` broke four of them and left the suite green.
 
 The window half needs a DOM and is covered by running the app, not from here.
