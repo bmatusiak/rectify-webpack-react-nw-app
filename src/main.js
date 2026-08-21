@@ -43,14 +43,18 @@ function scanned(name) {
     return name[0] != '_' && name[0] != '.' && name != 'vendor';
 }
 
-function found(dir, left, out) {
+//`name` so the same walk can find this context's tests when they are asked
+//for. It defaults to the plugin filename, which is every other caller.
+function found(dir, left, out, name) {
+    name = name || 'main.js';
+
     fs.readdirSync(dir, { withFileTypes: true }).forEach(function (entry) {
         if (!entry.isDirectory() || !scanned(entry.name)) return;
         var here = path.join(dir, entry.name);
         //BOTH, NOT EITHER: a folder may be a plugin and a group at once.
-        if (fs.existsSync(path.join(here, 'main.js')))
-            out.push(path.join(here, 'main.js'));
-        if (left > 1) found(here, left - 1, out);
+        if (fs.existsSync(path.join(here, name)))
+            out.push(path.join(here, name));
+        if (left > 1) found(here, left - 1, out, name);
     });
     return out;
 }
@@ -62,6 +66,16 @@ var plugins = found(PLUGINS, DEPTH, []).map(function (file) { return require(fil
 //teardown collected where it is created can say `consumes: ['Plugin']`. Adding
 //it here is what makes it available; nothing is obliged to use it.
 plugins.push(rectify.PluginBase);
+
+//and this context's own tests, when asked for. Same reasoning as the window:
+//nothing outside nw can boot a plugin that wants nw.Window or a tray icon, so
+//the running app runs them instead. src/main.prod.js has no equivalent, which
+//is what stops a packaged build from ever loading them.
+if (nw.App.argv.indexOf('--selftest') >= 0) {
+    var tests = found(PLUGINS, DEPTH, [], 'main.test.js').map(function (file) { return require(file); });
+    tests.forEach(function (t) { plugins.push(t); });
+    console.log('selftest: loaded ' + tests.length + ' main test plugins');
+}
 
 plugins.config = Config();
 

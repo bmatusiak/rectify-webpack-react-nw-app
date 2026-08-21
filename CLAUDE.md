@@ -168,8 +168,30 @@ does **two contexts**:
   webpack -- `server-graph.test.js` is still what proves the *bundle* works, which is a
   different question.
 
-`main` needs nw around it and `window` needs a document, so neither is booted here. The
-pattern is the same for all four; what differs is what has to exist first.
+`main` needs nw around it and `window` needs a document, so neither is booted here -- they
+are run **inside the app instead**, which is not the same as not being tested.
+
+## The two contexts that test themselves
+
+`npm run drive -- --selftest` starts the app, tells it to load its own
+`main.test.js` and `window.test.js` plugins, runs them in place, and reports each one.
+
+- `src/main.js` takes `--selftest` and walks for `main.test.js`.
+- `src/app/core/window/main.js` passes it on to the page as `?selftest`, and `src/window.js`
+  adds a second `require.context` for `window.test.js` **inside the `if`** -- webpack drops
+  the whole thing from a production bundle, so a packaged build cannot load its own tests
+  even if asked. `src/main.prod.js` has no equivalent path at all.
+- `src/app/core/selftest` is the collector: one ipc command that runs the main harness here,
+  asks the window for its own over the socket, and hands back both.
+
+This is the only way to test what only exists at runtime. The window suite reads
+`getComputedStyle` against a stylesheet that actually loaded; the main suite opens a raw
+socket to the app's own control pipe and checks that an unauthenticated client is turned
+away. Neither is mockable, and mocking either would test the mock.
+
+**Measure what is read, not what contains it.** The sidebar test passed happily while every
+link in it was the colour of the ground, because it measured `.app-sidebar` rather than the
+links inside it. Sabotage the thing before trusting the test that watches it.
 
 The mock host keeps a **ledger** of everything registered on it, which is how the boot asks
 the one question no plugin can ask about itself: after `app.destroy()`, is anything left

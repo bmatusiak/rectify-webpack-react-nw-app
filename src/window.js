@@ -14,6 +14,22 @@ var plugins = found.keys().map(found);
 //it here is what makes it available; nothing is obliged to use it.
 plugins.push(rectify.PluginBase);
 
+//THE WINDOW'S OWN TESTS, when asked for.
+//
+//A test that needs a document cannot be booted from a test file, so it is
+//loaded here instead and run in place -- see src/app/core/selftest. Asked for
+//with ?selftest on the url, which src/app/core/window/main.js puts there when
+//the app was started with --selftest.
+//
+//the context sits inside the `if` on purpose: webpack drops the whole thing
+//from a production bundle, so a packaged build has no way to load its own tests
+//even if something asked it to.
+if (process.env.NODE_ENV !== 'production' && new URLSearchParams(location.search).has('selftest')) {
+  var tests = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.test\.js$/);
+  tests.keys().forEach(function (key) { plugins.push(tests(key)); });
+  console.log('selftest: loaded ' + tests.keys().length + ' window test plugins');
+}
+
 plugins.config = Config();
 
 (async function starter() {

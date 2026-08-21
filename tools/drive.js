@@ -24,10 +24,15 @@ const NEWLINE = String.fromCharCode(10)
 const ROOT = path.join(__dirname, '..')
 const SHOTS = path.join(ROOT, 'shots')
 
-const OPTIONS = ['--shots', '--swatches']
+const OPTIONS = ['--shots', '--swatches', '--selftest']
 const passthrough = process.argv.slice(2).filter(a => OPTIONS.indexOf(a) < 0)
 const wantShots = process.argv.includes('--shots')
 const everySwatch = process.argv.includes('--swatches')
+const wantSelftest = process.argv.includes('--selftest')
+
+//the app has to be started with it too: it decides at boot whether to load its
+//own test plugins, and the window is told by the url it is opened with
+if (wantSelftest) passthrough.push('--selftest')
 
 // WCAG's floor for body text. Large text is allowed 3, and nothing here checks
 // font size, so this is the strict reading on purpose.
@@ -145,7 +150,41 @@ async function main () {
   }
 
   await swatches(ipc)
+  await selftest(ipc)
   await finish(wasRunning, ipc)
+}
+
+// THE TWO CONTEXTS THAT CANNOT BE BOOTED FROM A TEST FILE.
+//
+// main needs nw around it and window needs a document, so neither can be built
+// in a test process -- which is not the same as them being untestable. The
+// running app is already in both. It loads its own main.test.js and
+// window.test.js when started with --selftest, runs them in place, and hands
+// the results back over the same socket everything else here uses.
+async function selftest (ipc) {
+  if (!wantSelftest) return
+
+  note(NEWLINE + 'asking the app to test itself')
+  const out = await ipc.call('selftest', {}, 60000).catch(e => ({ error: e.message }))
+
+  if (out.error) return void check('the app runs its own suites', false, out.error)
+
+  for (const context of out.contexts) {
+    if (context.missing) {
+      check(context.context + ': runs its own suites', false, context.missing)
+      continue
+    }
+
+    const ran = context.suites.reduce((n, suite) => n + suite.tests.length, 0)
+    check(context.context + ': runs its own suites', ran > 0, ran + ' in ' + context.suites.length + ' suites')
+
+    for (const suite of context.suites) {
+      for (const one of suite.tests) {
+        check(context.context + ' -- ' + suite.name + ' -- ' + one.name, one.ok,
+          one.error && String(one.error).split(NEWLINE)[0])
+      }
+    }
+  }
 }
 
 // THE SAME PAGE IN SOMEBODY ELSE'S COLOURS.
