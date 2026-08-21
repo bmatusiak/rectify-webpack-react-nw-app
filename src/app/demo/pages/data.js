@@ -124,7 +124,7 @@ module.exports = function Data(props) {
                     <div className="col-md-6">
                         <Card title="Bordered">
                             <Table bordered head={['Store', 'Backed by']}>
-                                <tr><td>config</td><td>localStorage</td></tr>
+                                <tr><td>settings</td><td>localStorage</td></tr>
                                 <tr><td>session</td><td>sessionStorage</td></tr>
                             </Table>
                         </Card>

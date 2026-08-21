@@ -10,10 +10,10 @@ var pages = require('./pages');
 //the stores remember, the socket answers, the tray and the window are the
 //app's own.
 
-plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'config', 'session'];
+plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'settings', 'session'];
 plugin.provides = [];
 async function plugin(imports, register) {
-    var { react, theme, appPackage, io, config, session } = imports;
+    var { react, theme, appPackage, io, settings, session } = imports;
     var { Page, Sidebar, Navbar, Footer, Button, Icon, Toasts } = theme.ui;
 
     //which page you were on survives a reload, because it is in the store
@@ -113,7 +113,7 @@ async function plugin(imports, register) {
                             right={<span>{appPackage.name} {appPackage.version}</span>} />
                     }>
                     <Body theme={theme} io={io} appPackage={appPackage}
-                        config={config} session={session} toast={toast} open={open}
+                        settings={settings} session={session} toast={toast} open={open}
                         services={imports.app.services} />
                 </Page>
 

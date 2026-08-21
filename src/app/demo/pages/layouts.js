@@ -5,10 +5,10 @@ var { useState } = React;
 //their choices wired to the store, so the page remembers what you picked.
 
 module.exports = function Layouts(props) {
-    var { theme, config, toast, open } = props;
+    var { theme, settings, toast, open } = props;
     var { Section, Hero, Features, Pricing, Album, Stats, Card, Button, Modal, Badge, Icon } = theme.ui;
 
-    var picked = config('demo.plan', { name: '' });
+    var picked = settings('demo.plan', { name: '' });
     var [plan, setPlan] = useState(picked.name);
     var [item, setItem] = useState(null);
 

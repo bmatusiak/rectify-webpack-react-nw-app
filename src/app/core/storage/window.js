@@ -1,6 +1,6 @@
 /**
 
-var typeStore = app.services.config('test', {
+var typeStore = app.services.settings('test', {
     testing: 'ok-default'
 })
 
@@ -9,14 +9,18 @@ console.log(typeStore.testing);//'ok-default', and assigning to it saves
  */
 
 //two stores over the browser's own storage, differing only in which one they
-//sit on: `config` survives the window closing, `session` does not.
+//sit on: `settings` survives the window closing, `session` does not.
+//
+//named settings rather than config because a plugin's third setup argument is
+//already called config -- that one is what src/config.js put there, this one is
+//what the user changed.
 //
 //a store is described by its defaults. every key you pass becomes a property
 //that reads through to storage and writes back on assignment, so there is no
 //get/set to remember and nothing to serialise by hand.
 
 plugin.consumes = [];
-plugin.provides = ['session', 'config'];
+plugin.provides = ['session', 'settings'];
 async function plugin(_imports, register) {
 
     function typeStorage(storageObject) {
@@ -67,7 +71,7 @@ async function plugin(_imports, register) {
 
     await register(null, {
         session: typeStorage(sessionStorage),
-        config: typeStorage(localStorage),
+        settings: typeStorage(localStorage),
     });
 }
 module.exports = plugin;

@@ -4,7 +4,7 @@ var serve = require('./serve');
 //otherwise each reload would leave another copy listening.
 
 plugin.consumes = ['app', 'Plugin'];
-plugin.provides = ['io', 'appPackage'];
+plugin.provides = ['io'];
 async function plugin(imports, register) {
     var host = imports.app.host;
     var self = new imports.Plugin('io');
@@ -22,7 +22,6 @@ async function plugin(imports, register) {
 
     await register(null, {
         io: host.io,
-        appPackage: host.appPackage,
         onDestroy: self.unload
     });
 }

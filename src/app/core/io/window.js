@@ -8,7 +8,7 @@ var showError = require('../../overlay');
 //this socket.
 
 plugin.consumes = [];
-plugin.provides = ['io', 'appPackage'];
+plugin.provides = ['io'];
 async function plugin(imports, register) {
 
     //?mock runs ./serve.js in the page instead of talking to a socket — the
@@ -18,8 +18,8 @@ async function plugin(imports, register) {
     if (new URLSearchParams(location.search).has('mock')) {
         var mock = mockPair();
         serve(mock.io, { title: 'mock', name: 'mock', version: '0.0.0' });
-        var mocked = await new Promise(function (resolve) { mock.socket.once('app', resolve); });
-        return register(null, { io: mock.socket, appPackage: mocked });
+        mock.socket.appPackage = await new Promise(function (resolve) { mock.socket.once('app', resolve); });
+        return register(null, { io: mock.socket });
     }
 
     //a packaged build has no server to connect to: the window was opened out
@@ -28,8 +28,8 @@ async function plugin(imports, register) {
     //of this ran, which is what ./bridge/window looks for.
     var bridged = bridge();
     if (bridged) {
-        var carried = await new Promise(function (resolve) { bridged.once('app', resolve); });
-        return register(null, { io: bridged, appPackage: carried });
+        bridged.appPackage = await new Promise(function (resolve) { bridged.once('app', resolve); });
+        return register(null, { io: bridged });
     }
 
     var socket = connect({ timeout: 4000 });
@@ -53,7 +53,10 @@ async function plugin(imports, register) {
         showError('the server half failed to reload', e && e.message);
     });
 
-    var appPackage = await new Promise(function (resolve, reject) {
+    //the handshake payload rides the connection, so it is kept on the
+    //connection. ../appPackage/window.js is what hands it out as a service, so
+    //that wanting the app's name does not mean consuming a socket.
+    socket.appPackage = await new Promise(function (resolve, reject) {
         socket.once('app', resolve);
         socket.once('connect_error', function (err) {
             reject(new Error('no server answered on ' + location.origin +
@@ -61,6 +64,6 @@ async function plugin(imports, register) {
         });
     });
 
-    await register(null, { io: socket, appPackage });
+    await register(null, { io: socket });
 }
 module.exports = plugin;

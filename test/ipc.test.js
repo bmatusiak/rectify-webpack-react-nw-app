@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 
-const endpoint = require('../src/app/ipc/endpoint');
+const endpoint = require('../src/app/core/ipc/endpoint');
 
 //the control socket is the one channel with a wire format of its own, so the
 //shape of it is worth pinning: one json object per line, both directions.

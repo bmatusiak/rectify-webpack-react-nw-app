@@ -2,9 +2,14 @@
 var Config = require("./config");
 var rectify = require('@bmatusiak/rectify');
 
-//every src/app/<plugin>/server.js. webpack turns this into a context, so the
-//node bundle carries the server halves and nothing else.
-var found = require.context('./app', true, /^\.\/[^_.][^/]*\/server\.jsx?$/);
+//every src/app/<plugin>/server.js, one level down or two -- src/app/demo, or
+//src/app/core/io. webpack turns this into a context, so the node bundle carries
+//the server halves and nothing else.
+//
+//THIS HAS TO ACCEPT EXACTLY WHAT src/main.js AND src/cli.js WALK. A plugin one
+//takes and the other misses runs in one build and not the other, and neither
+//says a word: an unfound plugin is not an error, it is an absence.
+var found = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/server\.js$/);
 var plugins = found.keys().map(found);
 
 //and the base class rectify ships as a plugin rather than as part of the

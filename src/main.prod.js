@@ -29,7 +29,7 @@ var pkg = require('../package.json');
 var Config = require('./config');
 
 //the same folder scan src/main.js does off disk, done by webpack at build time
-var found = require.context('./app', true, /^\.\/[^_.][^/]*\/main\.js$/);
+var found = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/main\.js$/);
 var plugins = found.keys().map(found);
 
 //and the base class rectify ships as a plugin rather than as part of the

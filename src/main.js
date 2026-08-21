@@ -26,11 +26,36 @@ var Config = require('./config');
 
 var PLUGINS = path.join(__dirname, 'app');
 
-var plugins = fs.readdirSync(PLUGINS)
-    .filter(function (name) { return name[0] != '_' && name[0] != '.'; })
-    .map(function (name) { return path.join(PLUGINS, name, 'main.js'); })
-    .filter(function (file) { return fs.existsSync(file); })
-    .map(function (file) { return require(file); });
+//A PLUGIN IS A FOLDER WITH A main.js IN IT, one level down or two:
+//src/app/remote, or src/app/core/http. The second level is the grouping, and it
+//stops there -- ../ui/theme/swatch is somebody else's css, and the only thing
+//between it and being started as a plugin is that nothing three levels down is
+//ever looked at. A folder starting with _ or . is skipped, so a plugin can be
+//parked without deleting it.
+//
+//THIS HAS TO ACCEPT EXACTLY WHAT THE require.context CALLS ACCEPT -- see
+//src/window.js, src/server.js, src/main.prod.js. A plugin they take and this one
+//misses runs in the packaged build and not in development, and neither says a
+//word: an unfound plugin is not an error, it is an absence.
+var DEPTH = 2;
+
+function scanned(name) {
+    return name[0] != '_' && name[0] != '.' && name != 'vendor';
+}
+
+function found(dir, left, out) {
+    fs.readdirSync(dir, { withFileTypes: true }).forEach(function (entry) {
+        if (!entry.isDirectory() || !scanned(entry.name)) return;
+        var here = path.join(dir, entry.name);
+        //BOTH, NOT EITHER: a folder may be a plugin and a group at once.
+        if (fs.existsSync(path.join(here, 'main.js')))
+            out.push(path.join(here, 'main.js'));
+        if (left > 1) found(here, left - 1, out);
+    });
+    return out;
+}
+
+var plugins = found(PLUGINS, DEPTH, []).map(function (file) { return require(file); });
 
 //and the base class rectify ships as a plugin rather than as part of the
 //container, so a plugin that wants an emitter, a "ready" it can act on, or

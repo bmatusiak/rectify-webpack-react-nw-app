@@ -13,11 +13,11 @@ var CATALOGUE = [
 ];
 
 module.exports = function Checkout(props) {
-    var { theme, config, toast } = props;
+    var { theme, settings, toast } = props;
     var { Section, Cart, ValidatedForm, Input, Select, Check, Button, Alert, Icon } = theme.ui;
 
     //the form survives a reload, because it is in the store
-    var saved = config('demo.checkout', {
+    var saved = settings('demo.checkout', {
         first: '', last: '', email: '', address: '', country: '', state: '', zip: '',
         same: false, save: false
     });

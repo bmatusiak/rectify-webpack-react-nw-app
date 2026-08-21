@@ -3,9 +3,9 @@ var Config = require("./config");
 var rectify = require('@bmatusiak/rectify');
 var showError = require('./overlay');
 
-//every src/app/<plugin>/window.js. the window half, and the only code that
-//reaches the browser.
-var found = require.context('./app', true, /^\.\/[^_.][^/]*\/window\.jsx?$/);
+//every src/app/<plugin>/window.js, one level down or two -- src/app/demo, or
+//src/app/ui/theme. the window half, and the only code that reaches the browser.
+var found = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.(js|jsx)$/);
 var plugins = found.keys().map(found);
 
 //and the base class rectify ships as a plugin rather than as part of the

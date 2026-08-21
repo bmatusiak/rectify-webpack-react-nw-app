@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
-const wire = require('../src/app/bridge/wire');
+const wire = require('../src/app/core/bridge/wire');
 
 //the packaged build has no socket. What carries messages between main and the
 //window is this, so its behaviour is worth pinning: acks that come back, acks
