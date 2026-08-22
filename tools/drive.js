@@ -47,6 +47,16 @@ const READABLE = 4.5
 
 let passed = 0
 const failures = []
+const skipped = []
+
+// A SKIP IS NEITHER A PASS NOR A FAILURE, and reporting it as one of them is
+// how a run lies. `--shots` against a minimized window used to fail the page it
+// could not photograph, which reads as a broken page rather than as a window
+// that is not on screen.
+function skip (what, why) {
+  skipped.push(what + (why ? '  -- ' + why : ''))
+  console.log('  - ' + what + (why ? '  ' + why : ''))
+}
 
 function check (what, ok, detail) {
   if (ok) { passed++; return true }
@@ -147,7 +157,10 @@ async function main () {
     if (wantShots) {
       const file = path.join(SHOTS, page.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.png')
       const shot = await ipc.call('capture', { path: file }, 20000).catch(e => ({ error: e.message }))
-      check(page + ': photographs', !shot.error, shot.error || (Math.round(shot.bytes / 1024) + ' kb'))
+
+      //the app says whether there was a frame to take; only an error is a failure
+      if (shot.skipped) skip(page + ': photographs', shot.why)
+      else check(page + ': photographs', !shot.error, shot.error || (Math.round(shot.bytes / 1024) + ' kb'))
     }
   }
 
@@ -279,13 +292,18 @@ async function finish (wasRunning, ipc) {
   }
 
   console.log('')
+  const alsoSkipped = skipped.length ? ', ' + skipped.length + ' skipped' : ''
+
   if (failures.length) {
-    console.log(failures.length + ' failed, ' + passed + ' passed')
+    console.log(failures.length + ' failed, ' + passed + ' passed' + alsoSkipped)
     failures.forEach(f => console.log('  x ' + f))
     process.exit(1)
   }
 
-  console.log(passed + ' checks passed')
+  console.log(passed + ' checks passed' + alsoSkipped)
+  //SAID AGAIN AT THE END, because a skip scrolls past in the middle of a run
+  //and "119 checks passed" would otherwise be read as "everything was checked"
+  skipped.forEach(one => console.log('  - ' + one))
   process.exit(0)
 }
 

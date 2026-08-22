@@ -9,9 +9,9 @@ The nw.js window. It is a view onto a server that outlives it.
 | `cli.js` | — | `cli`, `ipc` |
 
 ```
-window.url  .isOpen  .current
+window.url  .isOpen  .isMinimized  .current
 window.open()  .show()  .hide()  .openInBrowser()  .quit(reason)
-window.capture({ format })
+window.capture({ format })   -> a picture, or { skipped, why }
 window.views       .openView()  .closeView(session)
 ```
 
@@ -118,11 +118,20 @@ Three things had to be measured:
   does not wait — it hands back whatever the compositor last had, which is the
   previous window's contents or nothing at all. Hence the 250ms.
 
-**A hidden window has no frame.** The callback is never called at all — not an
-error, just silence. Every path that hides or shows goes through this plugin, so
-it knows, and says so instead of costing you fifteen seconds to be told the
-same. A minimized window looks identical from here and is not tracked; that one
-falls to the timeout.
+**A hidden or minimized window has no frame.** The callback is never called at
+all — not an error, just silence. Every path that hides or shows goes through
+this plugin, and nw announces `minimize` and `restore`, so both are known here
+and both are answered at once rather than costing fifteen seconds to be told.
+
+**And neither is a failure.** They are facts about where the window is, not
+faults in the app, so `capture` resolves `{ skipped: true, why }` instead of
+rejecting: nothing is written, the cli says *nothing was captured* and why, and
+`npm run drive --shots` counts a skip. It used to fail the page it could not
+photograph, which reads as a broken page rather than as a window that is not on
+screen — a red run for something that was never wrong.
+
+The 15s timeout is still there, and is now only for what nothing announced: a
+window on another desktop, or a compositor that stopped drawing this one.
 
 The buffer stops at the file. It never goes down the socket — the wire is one
 json line, and a megabyte of base64 on it would serve nobody when the thing

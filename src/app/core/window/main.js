@@ -14,6 +14,11 @@ async function plugin(imports, register, config) {
     //is tracked here — every path that hides or shows goes through this plugin
     var hidden = false;
 
+    //WHERE THE WINDOW IS, KEPT THE SAME WAY `hidden` IS. A minimized window
+    //has no frame to give, and asking anyway costs fifteen seconds to be told
+    //something nw announces the moment it happens.
+    var minimized = false;
+
     //'quit' until something says otherwise. the tray switches it to 'hide' if
     //it manages to create an icon, since without one there would be no way back
     //to a hidden window.
@@ -92,6 +97,11 @@ async function plugin(imports, register, config) {
                 console.log('window hidden, still running. reopen it from the tray.');
             }
 
+            //A WINDOW THAT IS RESTORED BY BEING SHOWN says `restore` too, so
+            //these two do not have to know about hide() as well.
+            function onMinimize() { minimized = true; }
+            function onRestore() { minimized = false; }
+
             function onWindowClosed() {
                 win = null;
                 if (onClose != 'hide') lifecycle.shutdown('the window was closed');
@@ -113,10 +123,14 @@ async function plugin(imports, register, config) {
                 try {
                     win.removeListener('close', onWindowClose);
                     win.removeListener('closed', onWindowClosed);
+                    win.removeListener('minimize', onMinimize);
+                    win.removeListener('restore', onRestore);
                 } catch (e) { /* nothing attached yet */ }
 
                 win.on('close', onWindowClose);
                 win.on('closed', onWindowClosed);
+                win.on('minimize', onMinimize);
+                win.on('restore', onRestore);
             }
 
             attach();
@@ -187,6 +201,12 @@ async function plugin(imports, register, config) {
             get isOpen() { return !!win; },
             get current() { return win; },
 
+            //WHERE THE WINDOW IS, ASKED RATHER THAN INFERRED. nw has no
+            //`isMinimized`, so this is the flag its own `minimize` and
+            //`restore` events keep -- and it is what makes "is there a frame to
+            //photograph" answerable at once instead of after fifteen seconds.
+            get isMinimized() { return minimized; },
+
             open: open,
 
             //the browser views this app opened, by the name it gave them
@@ -221,9 +241,27 @@ async function plugin(imports, register, config) {
                 return new Promise(function (resolve, reject) {
                     if (!win) return reject(new Error('the window is not open'));
 
-                    //asking anyway costs fifteen seconds to be told the same
-                    if (hidden) return reject(new Error(
-                        'the window is hidden, so there is no frame to photograph. open it first'));
+                    //NOT A FRAME, AND NOT A FAILURE EITHER.
+                    //
+                    //A minimized window has nothing to photograph, and that is a
+                    //fact about where the window is rather than a bug in the app
+                    //-- so `npm run drive --shots` going red for it reported a
+                    //problem that did not exist, on the one check that can see
+                    //the window at all.
+                    //
+                    //AND IT IS ANSWERED RATHER THAN WAITED FOR. This used to be
+                    //the fifteen-second backstop below: ask, wait, and be told
+                    //"is it minimized?" as a guess. The window says so itself --
+                    //nw fires `minimize` and `restore`, and hide() already set a
+                    //flag the same way.
+                    if (hidden || minimized) return resolve({
+                        skipped: true,
+                        why: hidden
+                            ? 'the window is hidden, so there is no frame to photograph'
+                            : 'the window is minimized, so there is no frame to photograph',
+                        format: format
+                    });
+
 
                     var settled = false;
                     var restore = onTop();
@@ -232,9 +270,12 @@ async function plugin(imports, register, config) {
                         if (settled) return;
                         settled = true;
                         restore();
-                        //still the backstop: minimized, or off on another
-                        //desktop, looks no different from here
-                        reject(new Error('the window did not produce a frame within 15s. is it minimized?'));
+                        //STILL THE BACKSTOP, and now only for the cases
+                        //nothing announced: a window on another desktop, or a
+                        //compositor that stopped drawing this one. Minimized
+                        //and hidden are answered above, so this no longer has
+                        //to guess at them.
+                        reject(new Error('the window did not produce a frame within 15s'));
                     }, 15000);
 
                     function fail(e) {

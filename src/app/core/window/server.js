@@ -50,6 +50,13 @@ async function plugin(imports, register) {
     //both ends when the file wants to be a file anyway
     answer('capture', async function (data) {
         var shot = await control.capture(data);
+
+        //A SKIP IS NOT A SHOT, AND NOTHING IS WRITTEN FOR ONE. A minimized or
+        //hidden window has no frame to give; saying so and leaving the file
+        //alone is more use than either a fifteen-second wait or a stale
+        //picture from the last time it was on screen.
+        if (shot.skipped) return { skipped: true, why: shot.why };
+
         var file = path.resolve(data.path || ('capture.' + (shot.format == 'jpeg' ? 'jpg' : 'png')));
 
         await fs.promises.writeFile(file, shot.buffer);

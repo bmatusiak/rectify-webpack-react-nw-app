@@ -22,6 +22,11 @@ async function plugin(imports, register) {
             //longer than the default: a frame has to be drawn and a file written
             var shot = await ipc.call('capture', { path: file, format: format }, 20000);
 
+            //NOTHING WAS WRITTEN, AND THE LINE SAYS WHICH FILE IT WOULD HAVE
+            //BEEN. A skip printed as though it were a capture is how somebody
+            //ends up looking at last week's picture.
+            if (shot.skipped) return console.log('nothing was captured: ' + shot.why);
+
             //the size comes out of the file's own header, so it is what was
             //captured rather than what the window was asked to be
             var size = shot.width ? shot.width + 'x' + shot.height + ', ' : '';

@@ -165,6 +165,12 @@ unreadable on thirteen of the twenty-eight swatches, which nothing in `test/`
 could have. What a swatch is allowed to change, and the three things they get
 wrong, is in [theme](../src/app/ui/theme/).
 
+**A skip is neither a pass nor a failure.** `--shots` against a minimized window
+used to fail the page it could not photograph. The app says whether there was a
+frame to take, so those are counted and listed separately, and the summary says
+how many -- `119 checks passed, 2 skipped` rather than either a red run or a
+green one that quietly photographed nothing.
+
 **A number that moves is not a result.** Three things here need waiting for
 rather than a fixed delay — a captured frame (the compositor), a crash report
 (the log reaching disk), and a swatch (the stylesheet, then the mode following
