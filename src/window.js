@@ -3,21 +3,22 @@ var Config = require("./config");
 var rectify = require('@bmatusiak/rectify');
 var showError = require('./overlay');
 var wanted = require('./target');
+var gather = require('./gather');
 
-//every src/app/<plugin>/window.js, one level down or two -- src/app/demo, or
+//every src/<tree>/<plugin>/window.js, one level down or two -- src/app/demo, or
 //src/app/ui/theme. the window half, and the only code that reaches the browser.
-//TWO TREES, AND WEBPACK CANNOT BE TOLD THAT IN A LOOP -- require.context takes
-//a literal, so the second root in src/roots.js is a second call with the SAME
-//regex. test/plugin-scan.test.js reads both back and fails if they diverge.
-var found = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.(js|jsx)$/);
-var alsoFound = require.context('./app_plugins', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.(js|jsx)$/);
+//
+//ONE CONTEXT OVER src/, AND THE TREES ARE A FILTER. require.context takes a
+//literal directory, so package.json's list of them cannot be iterated into it
+//-- ./gather.js carries why that is a filter rather than a call per tree, and
+//why the list arrives as BUILD_ROOTS. test/plugin-scan.test.js reads this regex
+//back out of the source and holds all five discovery sites to it.
+var found = require.context('./', true, /^\.\/[^_./][^/]*\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.(js|jsx)$/);
+
 //NAMED BY WHERE THEY LIVE, on the way in -- see src/target.js. Without this
 //every plugin in app.plugins is called `plugin`, which is what the setup
 //functions are all called.
-var plugins = [].concat(
-  found.keys().map(function (key) { return wanted.stamp(found(key), key); }),
-  alsoFound.keys().map(function (key) { return wanted.stamp(alsoFound(key), key); })
-);
+var plugins = gather(found, BUILD_ROOTS);
 
 //and the base class rectify ships as a plugin rather than as part of the
 //container, so a plugin that wants an emitter, a "ready" it can act on, or
@@ -41,16 +42,11 @@ plugins.push(rectify.PluginBase);
 if (process.env.NODE_ENV !== 'production') {
   //a literal, because webpack resolves this at build time and a variable here
   //would leave it with nothing to gather
-  var tests = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.test\.js$/);
-  var alsoTests = require.context('./app_plugins', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.test\.js$/);
+  var tests = require.context('./', true, /^\.\/[^_./][^/]*\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.test\.js$/);
 
   //tagged with the plugin each came from, so one of them can be aimed at when
   //the run is asked for rather than when the window is opened
-  [tests, alsoTests].forEach(function (context) {
-    context.keys().forEach(function (key) {
-      plugins.push(wanted.tag(context(key), key.replace('./', '')));
-    });
-  });
+  plugins = plugins.concat(gather(tests, BUILD_ROOTS, wanted.tag));
 }
 
 plugins.config = Config();

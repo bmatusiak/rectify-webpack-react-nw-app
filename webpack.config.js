@@ -12,6 +12,32 @@ const manifest = require('./package.json');
 //runtime switch still decides whether it is doing so, and still starts off.
 const canServe = !(manifest.app && manifest.app.canServe === false);
 
+//and which trees under src/ hold plugins -- package.json's "app": { "srcDirs" },
+//validated into folder names by src/roots.js.
+const roots = require('./src/roots');
+
+//THE BUILD-TIME FACTS, THE SAME THREE IN ALL THREE BUNDLES.
+//
+//This used to be on the packaged main alone. The server config had no
+//DefinePlugin at all, which was invisible until a server-side plugin asked
+//whether the build may serve: `BUILD_SERVABLE is not defined`, thrown while
+//resolving the graph, so the whole node half failed to load rather than the one
+//plugin that asked. The window config had none either, and was one plugin away
+//from the same afternoon.
+//
+//It matters beyond the crash. src/app_plugins/mcp gates its http transport on
+//BUILD_SERVABLE, and a constant webpack does not replace is a branch webpack
+//cannot fold -- so `"canServe": false` would still have carried the endpoint and
+//express's json parser into the bundle.
+//
+//BUILD_ROOTS is here rather than read at runtime because which trees a bundle
+//CONTAINS was decided when webpack ran; see src/gather.js.
+const constants = (isProduction) => new webpack.DefinePlugin({
+    BUILD_PROD: JSON.stringify(isProduction),
+    BUILD_SERVABLE: JSON.stringify(canServe),
+    BUILD_ROOTS: JSON.stringify(roots)
+});
+
 module.exports = (env, argv = {}) => {
 
     const isProduction = ((argv.mode || process.env.NODE_ENV) == 'production');
@@ -141,6 +167,7 @@ module.exports = (env, argv = {}) => {
             ]
         },
         plugins: [
+            constants(isProduction),
             new HtmlWebpackPlugin({ template: path.join(__dirname, 'src', 'index.html') }),
             ...(isProduction ? [] : [new webpack.HotModuleReplacementPlugin()])
         ]
@@ -179,22 +206,7 @@ module.exports = (env, argv = {}) => {
                 { test: /\.(eot|ttf|woff|woff2|png|jpg|gif)$/i, type: 'asset/source' }
             ]
         },
-        //THE SAME BUILD-TIME FACTS AS THE OTHER TWO BUNDLES. This half had no
-        //DefinePlugin at all, which was invisible until a server-side plugin
-        //asked whether the build may serve: `BUILD_SERVABLE is not defined`,
-        //thrown while resolving the graph, so the whole node half failed to
-        //load rather than the one plugin that asked.
-        //
-        //It matters beyond the crash. src/app_plugins/mcp gates its http
-        //transport on this, and a constant webpack does not replace is a branch
-        //webpack cannot fold -- so `"canServe": false` would still have carried
-        //the endpoint and express's json parser into the bundle.
-        plugins: [
-            new webpack.DefinePlugin({
-                BUILD_PROD: JSON.stringify(isProduction),
-                BUILD_SERVABLE: JSON.stringify(canServe)
-            })
-        ]
+        plugins: [constants(isProduction)]
     };
 
     //the packaged main. only built by tools/build.js, never in development.
@@ -226,10 +238,7 @@ module.exports = (env, argv = {}) => {
             //server. A runtime flag can be flipped by whoever runs the app; this
             //cannot be flipped by anybody, because there is nothing left to
             //flip. Absent from the manifest means true.
-            new webpack.DefinePlugin({
-                BUILD_PROD: JSON.stringify(true),
-                BUILD_SERVABLE: JSON.stringify(canServe)
-            }),
+            constants(true),
             //express reaches for a view engine by name at runtime; nothing here
             //renders server side templates, so the miss is expected
             new webpack.ContextReplacementPlugin(/express.lib/, /$^/)

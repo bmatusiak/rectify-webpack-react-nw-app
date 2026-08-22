@@ -21,7 +21,8 @@ var pkg = require('../package.json');
 var Config = require('./config');
 var wanted = require('./target');
 
-//EVERY TREE, NOT ONE -- see ./roots.js. A root that is not on disk is skipped
+//EVERY TREE, NOT ONE -- package.json says which, and ./roots.js reads it. A
+//root that is not on disk is skipped
 //rather than refused: the second tree is separable, so an app that deleted it
 //should boot rather than explain itself.
 var ROOTS = require('./roots').map(function (name) { return path.join(__dirname, name); })

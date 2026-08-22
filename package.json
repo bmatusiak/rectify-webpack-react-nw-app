@@ -7,7 +7,11 @@
   "main": "main.js",
   "app": {
     "serve": false,
-    "canServe": true
+    "canServe": true,
+    "srcDirs": [
+      "src/app",
+      "src/app_plugins"
+    ]
   },
   "scripts": {
     "start": "node tools/nw.js",

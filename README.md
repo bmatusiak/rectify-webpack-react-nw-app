@@ -27,7 +27,8 @@ src/
   overlay.js    the message drawn over a page whose boot threw
   serve.js      whether a browser may be a client, and where
   target.js     which suites a targeted run takes, and what a plugin is called
-  roots.js      which folders plugins are found in
+  roots.js      which folders plugins are found in, off package.json
+  gather.js     one require.context, turned into the plugins of every tree
   app/          the plugins, below
   app_plugins/  a second tree of them, separable from the app
 ```
@@ -68,7 +69,11 @@ source so they cannot quietly stop being true.
 
 And a **second tree**, which exists to prove the folder claim goes all the way
 up. Adding a plugin is adding a folder; adding a whole tree of them is adding a
-folder too, and one line in [`src/roots.js`](src/roots.js).
+folder too, and one line in the manifest:
+
+```json
+"app": { "srcDirs": ["src/app", "src/app_plugins"] }
+```
 
 | plugin | contexts | what it is |
 |---|---|---|
@@ -78,7 +83,10 @@ folder too, and one line in [`src/roots.js`](src/roots.js).
 `src/app_plugins` can be a checkout, a submodule, somebody else's package, or
 deleted: nothing in `src/app` consumes anything in it. A feature the scaffold
 **offers** should be removable without touching the scaffold; one it **depends
-on** belongs in `core`.
+on** belongs in `core`. Which is also how a feature arrives from somewhere else:
+`src/pr121/core/thing` loads exactly as `src/app/core/thing` does, so a branch
+can be dropped in beside the app, listed, driven against the real graph, and
+unlisted again without a line of the app changing.
 
 Four of those five wrap a vendored library in its own `vendor/` folder, and each
 is a slot: swap one and the pages that use it are the only thing that changes.
@@ -105,15 +113,22 @@ is itself a plugin, run inside the running app. See [testing](#testing).
 Each boot gathers its own half and nothing else:
 
 ```js
-//src/window.js
-var found = require.context('./app', true,
-    /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.(js|jsx)$/);
-var plugins = found.keys().map(found);
+//src/window.js -- one context over src/, and the trees are a filter
+var found = require.context('./', true,
+    /^\.\/[^_./][^/]*\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/window\.(js|jsx)$/);
+var plugins = gather(found, BUILD_ROOTS);
 ```
 
 So **the folder is the registry**. Adding a plugin is creating a folder; there
 is no list to update, and no way to add one in a place that forgets it. Rename
 a folder with a leading `_` and it stops loading.
+
+`require.context` takes a literal directory, so the trees cannot be iterated
+into it — there is one context over `src/` and `BUILD_ROOTS` decides what
+survives it, which webpack folds in from the manifest at build time. The cost is
+worth saying out loud: a folder in `src/` that is *not* a listed tree is still
+compiled into the bundle, and simply never registered. `_` in front of it is
+what keeps it out of the build.
 
 **The filename is the branch.** There is no `isServer` or `isBrowser` test
 anywhere in a plugin, because a file that only exists in one bundle cannot run

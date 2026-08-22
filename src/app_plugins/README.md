@@ -5,10 +5,20 @@ be deleted.
 
 The rest of this scaffold claims that adding a plugin is adding a folder and
 that nothing lists them. If that is true then adding a whole *tree* of plugins
-should be adding a folder too — and it is, apart from one line in
-[`src/roots.js`](../roots.js). Everything else finds it: both disk walks, all
-three `require.context` calls, the test that holds them to one answer, the
-README audit, and the run that drives the app.
+should be adding a folder too — and it is, apart from one line in the manifest:
+
+```json
+"app": { "srcDirs": ["src/app", "src/app_plugins"] }
+```
+
+[`src/roots.js`](../roots.js) reads that and validates it, and everything else
+asks it: both disk walks, all three `require.context` calls, the test that holds
+them to one answer, the README audit, and the run that drives the app.
+
+**This is how a feature arrives from somewhere else.** `src/pr121/core/thing`
+loads exactly as `src/app/core/thing` does, so a branch, a checkout or somebody
+else's package can be dropped in beside the app, listed, tested against the real
+graph, and unlisted again — without a line of the app changing.
 
 | what | where |
 |---|---|
@@ -26,11 +36,12 @@ That is the test of whether the plugin idea holds. A feature the scaffold
 *depends on* belongs in `core`.
 
 **Delete this folder and nothing breaks.** The MCP tools stop being offered, the
-bridge says the app is not answering, and every other test still passes. The one
-thing that would break is `require.context`, which fails a build when pointed at
-a directory that is not there — so if you remove it, remove the second context
-in `src/server.js`, `src/window.js` and `src/main.prod.js`, or leave this README
-behind as the folder.
+bridge says the app is not answering, and every other test still passes. Take
+the line out of `srcDirs` as well, or leave it — a listed tree that is not on
+disk is skipped by the disk walks and never matched by the one `require.context`
+over `src/`. That used to fail the build outright, when there was a context
+pointed at this folder by name, which is why this README was here before there
+was anything to say.
 
 ## the rules are the same rules
 

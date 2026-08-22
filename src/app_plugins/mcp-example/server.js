@@ -217,7 +217,11 @@ async function plugin(imports, register) {
             if (!/^[a-z0-9][a-z0-9/_-]*$/i.test(asked) || asked.indexOf('..') >= 0)
                 throw new Error('not a plugin folder: ' + asked);
 
-            var roots = require('../../roots').map(function (name) { return path.join(ROOT, 'src', name); });
+            //BUILD_ROOTS RATHER THAN src/roots.js, because this file is bundled
+            //-- roots.js reads package.json, and requiring package.json from
+            //the server bundle would ship the whole manifest with it. Same
+            //reason core/appPackage/server.js takes its six fields off the host.
+            var roots = BUILD_ROOTS.map(function (name) { return path.join(ROOT, 'src', name); });
 
             var found = roots.map(function (root) { return path.join(root, asked, 'README.md'); })
                 .filter(function (file) {
@@ -288,7 +292,7 @@ async function plugin(imports, register) {
 
     function readmeFor(name) {
         try {
-            var roots = require('../../roots').map(function (root) { return path.join(ROOT, 'src', root); });
+            var roots = BUILD_ROOTS.map(function (root) { return path.join(ROOT, 'src', root); });
             var file = roots.map(function (root) { return path.join(root, name, 'README.md'); })
                 .filter(fs.existsSync)[0];
             return file ? fs.readFileSync(file, 'utf8') : 'There is no README for ' + name + '.';

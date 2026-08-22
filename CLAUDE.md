@@ -55,6 +55,14 @@ both halves on save, so an edited test is in the app before you can ask for it.
 That is the loop: change something, run one test, read what came back, change it
 again, without restarting anything.
 
+**Three files are outside that loop**, because they are read once when the app
+starts: `src/main.js`, `webpack.config.js` and `package.json`. Editing the
+config and carrying on gives the WRONG error -- `core/build` rebuilds with the
+config it loaded at boot, so a constant added to DefinePlugin in the same commit
+that first uses it comes back as `BUILD_ROOTS is not defined`, thrown while the
+server half loads, which reads as a broken bundle rather than a stale config.
+Restart after touching any of the three.
+
 `npm run drive` takes the same `--build` / `--package` as `npm start`, plus `--shots` to
 keep a screenshot of every page and `--swatches` to check all twenty-eight rather than
 three. It leaves the app running if it already was, and shuts it down if it started it.
@@ -208,12 +216,27 @@ src/app_plugins/   a SECOND TREE, and deleting it is a decision about nothing el
   mcp-example/     one of every MCP surface, registered against the real app
 ```
 
-**Two trees, named in `src/roots.js`, and that file is the only line that knows.**
-Both disk walks, all three `require.context` calls, the readme audit, the
-targeting in `npm test -- mcp` and `tools/docs.js` take the list from there.
-`test/plugin-scan.test.js` holds every context to the same rule across every
-root -- a second tree scanned with a slightly different regex would load in
-development and vanish from a package, which is the failure that test exists for.
+**The trees are named in package.json, and nowhere else:**
+
+```json
+"app": { "srcDirs": ["src/app", "src/app_plugins"] }
+```
+
+`src/roots.js` reads that list and validates it; both disk walks, all three
+`require.context` calls, the readme audit, the targeting in `npm test -- mcp`
+and `tools/docs.js` ask it. **Adding a tree is adding a folder and one line in
+the manifest** -- `src/pr121/core/thing/server.js` loads exactly as
+`src/app/core/thing/server.js` does. Measured: a third tree, listed and nothing
+else, answered its own ipc command on the next start.
+
+It was a literal array in `src/roots.js`, which was also one line -- but a line
+of the app's SOURCE, so an app adding its own tree had a merge conflict waiting
+in it every time the scaffold moved. package.json is the file an app already
+owns, and already edits for `name`, `title`, `serve` and `canServe`.
+
+A srcDir that the discovery rules could never match is **refused, naming the
+key**: it has to be one folder inside `src/` (webpack's `require.context` is
+rooted there and reaches down, never up), and it cannot start with `_`.
 
 A plugin is named after **its own root**: `core/io/server.js` and
 `mcp/server.js`, never `app_plugins/mcp/server.js`.
@@ -225,9 +248,17 @@ gone -- nothing in `src/app` consumes anything in it. That is the test of
 whether the plugin idea holds: a feature the scaffold OFFERS should be removable
 without touching the scaffold, and a feature it DEPENDS on belongs in `core`.
 
-The disk walks skip a root that is not there; webpack cannot, because
-`require.context` fails a build when pointed at a missing directory. So the
-folder is committed with a README even when it holds nothing else.
+**Unlisting a tree turns it off; underscoring it makes it not a tree.**
+`require.context` takes a literal directory, so a list cannot be iterated into
+it -- there is ONE context over `src/` and the trees are a filter
+(`src/gather.js`). A folder in `src/` that is not listed is therefore still
+compiled into the bundle and simply never registered; `_pr121` is not compiled
+at all. Both measured, both ways.
+
+A listed tree that is not on disk is fine now, in every context -- the disk
+walks skip it and the one context over `src/` never matches it. It used to fail
+the build outright, which is why `src/app_plugins` was committed with a README
+in it even when it held nothing else.
 
 **A `vendor/` folder inside a plugin is that plugin's own library.** `ui/editor`,
 `ui/markdown`, `ui/xterm` and `ui/litegraph` each carry one -- `ui/editor` two,
