@@ -58,7 +58,7 @@ source so they cannot quietly stop being true.
 | plugin | contexts | what it is |
 |---|---|---|
 | [ui/theme](src/app/ui/theme/) | `window` | the theme kit: components, swatches, light/dark |
-| [ui/editor](src/app/ui/editor/) | `window` | ace: code that is read rather than scrolled past |
+| [ui/editor](src/app/ui/editor/) | `window` | ace and ace-diff: code that is read, and a change that is judged |
 | [ui/markdown](src/app/ui/markdown/) | `window` | marked, rendered where it cannot do anything |
 | [ui/xterm](src/app/ui/xterm/) | `window` | a terminal: bytes that arrived from somewhere else |
 | [ui/litegraph](src/app/ui/litegraph/) | `window` | a graph: things, and what connects them |

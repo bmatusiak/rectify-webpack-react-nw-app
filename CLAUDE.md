@@ -98,7 +98,8 @@ src/app/
 ```
 
 **A `vendor/` folder inside a plugin is that plugin's own library.** `ui/editor`,
-`ui/markdown`, `ui/xterm` and `ui/litegraph` each carry one. Two rules follow:
+`ui/markdown`, `ui/xterm` and `ui/litegraph` each carry one -- `ui/editor` two,
+ace and ace-diff, both built rather than fetched. Two rules follow:
 the plugin discovery regexes skip a `vendor` level, so nothing in there is ever
 loaded as a plugin; and `webpack.config.js` excludes every `vendor/` path from
 babel, because these are shipped builds and several are UMD, where babel
