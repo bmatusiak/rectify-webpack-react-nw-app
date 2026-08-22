@@ -43,7 +43,23 @@ behind. The menu is **rebuilt whole rather than patched**: plugins come and go o
 every reload, and removing by index is how menus end up with the wrong item on
 them. Items added before the tray exists are applied when it does.
 
-The stock items are **Open window**, **Open in browser**, and **Quit**.
+The stock items are **Open window**, **Serve to a browser**, **Open in
+browser** and **Quit**.
+
+## the browser viewer, switchable from here
+
+`Serve to a browser` is a checkbox rather than two items, because it is one fact
+with two states. Nw redraws the whole menu on every rebuild, so the tick comes
+from [`http.serving`](../http/) at draw time rather than from anything kept here
+— there is no second copy of the answer to fall out of step.
+
+**Open in browser** appears only while there is something to open. Nw's own item
+flips its tick before the change is attempted, which would be a lie if the change
+failed, so the menu is drawn again from what actually happened.
+
+The tray is not the only way in — a manifest field and `--serve` decide it at
+boot — so it subscribes to `onServing` and redraws whoever changed it. A menu
+showing a tick that stopped being true is worse than one with no tick at all.
 
 ## the icon path is relative, and that matters
 
@@ -65,7 +81,9 @@ quits, which is the honest behaviour when there is no way back.
 
 ## in a package
 
-**Open in browser** is absent: nothing is served, so there is no page to open.
+**Open in browser** is absent unless the viewer is on, and by default it is not:
+a packaged build serves nothing, so there is no page to open. The toggle is
+still there, and switching it on in a package starts the server.
 [devtools](../devtools/) drops its two items in the same build, for the stronger
 reason that compiling the node half into `main.bin` is pointless if a menu item
 opens a console onto it.

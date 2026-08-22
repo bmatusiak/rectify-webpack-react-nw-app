@@ -22,11 +22,24 @@ async function plugin(imports, register) {
         return register(null, { io: mock.socket });
     }
 
-    //a packaged build has no server to connect to: the window was opened out
-    //of the package rather than over http, and main is on the other end of a
-    //message channel instead. it says so by injecting window.__host before any
-    //of this ran, which is what ./bridge/window looks for.
-    var bridged = bridge();
+    //THE NW WINDOW IS ON THE BRIDGE IN EVERY BUILD, and main says so by putting
+    //`window.__host` there. A browser looking at the same url cannot produce
+    //one, so finding it is proof of which kind of view this is.
+    //
+    //WAITED FOR, NOT GLANCED AT. nw fires document-start once per document and
+    //NOT on a reload, so after webpack full-reloads the page main has to put the
+    //way home back on `loaded` -- which arrives after this code has already run.
+    //Deciding on the first look meant an ordinary save left the window on an
+    //error overlay, having fallen through to a socket.io server that is off.
+    //
+    //Half a second, in animation frames, because this is a race with main and
+    //not with a network. A browser has no main to wait for and simply spends it.
+    var bridged = null;
+    for (var tries = 0; tries < 30 && !bridged; tries++) {
+        bridged = bridge();
+        if (!bridged) await new Promise(function (r) { requestAnimationFrame(r); });
+    }
+
     if (bridged) {
         bridged.appPackage = await new Promise(function (resolve) { bridged.once('app', resolve); });
         return register(null, { io: bridged });

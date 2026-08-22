@@ -5,8 +5,10 @@ bundled by webpack, rendered with React, running live inside an nw.js window.
 
 `webpack-rectify-react` (plugin architecture + theme kit) merged with
 `react-nw-app` (nw.js shell). In development nw.js runs the code in `src/`;
-`npm run build` compiles it into a package that opens no port and keeps no
-javascript on disk — see [building a package](#building-a-package).
+The nw window talks to main over a direct channel in every build, so the app's
+own traffic never goes over a port; http is there for webpack in development and
+for an optional browser viewer. `npm run build` compiles it into a package that
+keeps no javascript on disk — see [building a package](#building-a-package).
 
 ## four contexts, one folder of plugins
 
@@ -23,6 +25,7 @@ src/
   config.js     settings, sliced per plugin
   index.html
   overlay.js    the message drawn over a page whose boot threw
+  serve.js      whether a browser may be a client, and where
   target.js     which suites a targeted test run should take
   app/          the plugins, below
 ```
@@ -37,8 +40,8 @@ source so they cannot quietly stop being true.
 |---|---|---|
 | [lifecycle](src/app/core/lifecycle/) | `main` | shutdown, crashes, the instance file |
 | [http](src/app/core/http/) | `main` | express and the swappable router. Nothing, in a package |
-| [io](src/app/core/io/) | `main` `server` `window` | socket.io, all three sides |
-| [bridge](src/app/core/bridge/) | `main` | what replaces socket.io when there is no server |
+| [io](src/app/core/io/) | `main` `server` `window` | one `io` fanned out over every transport there is |
+| [bridge](src/app/core/bridge/) | `main` | the direct channel between main and the window |
 | [ipc](src/app/core/ipc/) | `main` `server` `cli` | the control socket, and its token |
 | [appPackage](src/app/core/appPackage/) | `server` `window` | the app's own name and version |
 | [cli](src/app/core/cli/) | `cli` | the command table |
@@ -109,9 +112,10 @@ that spans runtimes joins itself:
   graph. `window/server.js` provides `window` on the app graph, wrapping a
   controller handed over from main. Same name, same meaning, different process.
 - `tray/` does the same for the tray.
-- `io/main.js` creates the socket.io server, `io/server.js` registers the
-  handlers, `io/window.js` connects — and both of the latter share `serve.js`,
-  which is the one function `?mock` runs in the page.
+- `io/main.js` fans one `io` out over every transport there is -- the bridge for
+  the nw window, socket.io for a browser -- `io/server.js` registers the handlers
+  once, and `io/window.js` picks the transport this view is on. The latter two
+  share `serve.js`, which is the one function `?mock` runs in the page.
 - `ipc/` is what the fourth graph joins through: `ipc/main.js` listens on the
   control socket, `ipc/cli.js` provides the same `ipc` name in a terminal
   process that dials it. `window/cli.js` and `remote/cli.js` are then written
@@ -162,13 +166,16 @@ npm start -- --build   build/app: the compiled main.bin, run by the sdk runtime
 npm start -- --package build/out: the executable, exactly what a user runs
 ```
 
-What comes out has **no javascript on disk and opens no port**: a manifest, two
-html files with nothing executable in them, `main.bin` compiled by `nwjc`, the
-stylesheets, and an icon. The window half rides inside the binary as a string
-and is evaluated into the page; what used to be socket.io is
-[bridge](src/app/core/bridge/). The tray loses its two Inspect items and **Open
-in browser** — see [devtools](src/app/core/devtools/) and
-[tray](src/app/core/tray/).
+What comes out has **no javascript on disk**: a manifest, two html files with
+nothing executable in them, `main.bin` compiled by `nwjc`, the stylesheets, and
+an icon. The window half rides inside the binary as a string and is evaluated
+into the page, and it talks to main over [bridge](src/app/core/bridge/).
+
+**By default it opens no port either.** The browser viewer is off unless
+`package.json` says `"app": { "serve": true }` or the app is started with
+`--serve`, and the tray can switch it while the app is running — see
+[http](src/app/core/http/). The tray loses its two Inspect items in a package —
+see [devtools](src/app/core/devtools/).
 
 **It is not encryption.** It means the app runs what it shipped with: there is
 no `.js` to edit and no `node_modules` to shim. The window half is still

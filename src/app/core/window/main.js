@@ -54,14 +54,14 @@ async function plugin(imports, register, config) {
         //nothing is served, and the window half arrives by way of the bridge --
         //which is also the only thing that can reach this app at all.
         //
-        //?view=app marks this as the app's own window rather than a browser
-        //looking at the same url. nothing in the page can tell the difference
-        //on its own -- nw 0.114 sends an ordinary chrome user agent, and the
-        //window deliberately has no node in it -- so the side that opened it
-        //is the side that has to say so. src/app/remote reads it back. A
-        //packaged window needs no mark: there is no second view to confuse it
-        //with, because there is nowhere for one to come from.
-        var page = BUILD_PROD ? bridge.page : (http.url ? http.url + '?view=app' : null);
+        //THE MARKER IS GONE, AND THE BRIDGE REPLACED IT. This used to append
+        //?view=app so the page could tell it was the app's own window rather
+        //than a browser looking at the same url -- nw 0.114 sends an ordinary
+        //chrome user agent, so the side that opened it had to say so. Now main
+        //injects `__host` into this window in EVERY build, and a browser cannot
+        //produce that: presence of the bridge is the proof, and a better one
+        //than a query string anybody could type.
+        var page = BUILD_PROD ? bridge.page : http.url;
 
         if (!page) return console.error('nothing is listening yet');
 
@@ -74,27 +74,49 @@ async function plugin(imports, register, config) {
             win = w;
             hidden = false;
 
-            //injects the way home before the page's own script runs, and the
-            //window half itself once there is a document to put it in
-            if (BUILD_PROD) bridge.attach(w);
+            //INJECTS THE WAY HOME BEFORE THE PAGE'S OWN SCRIPT RUNS, in every
+            //build. In a package it carries the window half in with it; in
+            //development the page still fetches its own bundle over http so
+            //webpack can hot reload it, and the bridge carries only the app's
+            //own traffic. Either way this window never speaks socket.io over a
+            //port, which is what makes development behave the way a package
+            //does when the browser viewer is off.
+            bridge.attach(w);
 
             //listening to `close` at all suppresses nw's default close, which is
             //why the other two paths have to close(true) by hand
+            function onWindowClose() {
+                if (lifecycle.isShuttingDown || onClose != 'hide') return this.close(true);
+                this.hide();
+                hidden = true;
+                console.log('window hidden, still running. reopen it from the tray.');
+            }
+
+            function onWindowClosed() {
+                win = null;
+                if (onClose != 'hide') lifecycle.shutdown('the window was closed');
+            }
+
+            //OURS, REMOVED BY NAME. This used to call removeAllListeners, which
+            //was harmless while this plugin was the only one listening to the
+            //window -- and stopped being harmless the moment ../bridge started
+            //attaching in development too: the first page reload took the
+            //bridge's own `closed` handler with it. A window several plugins
+            //share is not this one's to clear.
             function attach() {
-                try { win.removeAllListeners('close'); win.removeAllListeners('closed'); }
-                catch (e) { /* nothing attached yet */ }
+                //`loaded` can arrive after the window has gone, and then there
+                //is nothing to attach to. Reported as "Cannot read properties of
+                //null (reading 'on')" from inside nw's own dispatch, which is a
+                //long way from the line that caused it.
+                if (!win) return;
 
-                win.on('close', function () {
-                    if (lifecycle.isShuttingDown || onClose != 'hide') return this.close(true);
-                    this.hide();
-                    hidden = true;
-                    console.log('window hidden, still running. reopen it from the tray.');
-                });
+                try {
+                    win.removeListener('close', onWindowClose);
+                    win.removeListener('closed', onWindowClosed);
+                } catch (e) { /* nothing attached yet */ }
 
-                win.on('closed', function () {
-                    win = null;
-                    if (onClose != 'hide') lifecycle.shutdown('the window was closed');
-                });
+                win.on('close', onWindowClose);
+                win.on('closed', onWindowClosed);
             }
 
             attach();

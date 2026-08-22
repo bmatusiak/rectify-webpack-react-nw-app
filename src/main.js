@@ -24,6 +24,7 @@ var boot = require('./boot');
 var wanted = require('./target');
 var pkg = require('../package.json');
 var Config = require('./config');
+var serve = require('./serve');
 
 var PLUGINS = path.join(__dirname, 'app');
 
@@ -91,6 +92,10 @@ boot(plugins, {
     isPackaged: false,
     root: path.dirname(__dirname),
     argv: nw.App.argv,
+    //whether a browser may be a client of this app: package.json's
+    //"app": { "serve": true }, or --serve / --no-serve on the command
+    //line, which wins. The tray can flip it while the app is running.
+    serve: serve(pkg, nw.App.argv),
     appPackage: {
         title: pkg.title || pkg.name,
         name: pkg.name,

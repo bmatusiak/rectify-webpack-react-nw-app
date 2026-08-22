@@ -29,14 +29,24 @@ function plugin(imports, register) {
             assert.equal(bridge.page, 'view.html');
         });
 
-        it('is the transport when packaged, and idle when not', function () {
-            if (app.isPackaged) {
-                assert.equal(io, bridge.io, 'a packaged build is not using the bridge');
-                assert.equal(bridge.connected, true, 'the window is not on it');
-            } else {
-                assert.notEqual(io, bridge.io, 'development is using the bridge instead of socket.io');
-                assert.equal(bridge.connected, false, 'the bridge attached to something it should not have');
-            }
+        //IT CARRIES THE WINDOW IN EVERY BUILD NOW.
+        //
+        //This used to assert that development did NOT use the bridge, which was
+        //true and was the problem: the transport every packaged app depends on
+        //was the one no day of development ever ran. The window is on it either
+        //way, and what changes with the build is only whether socket.io is also
+        //there for a browser to join.
+        it('carries the window, in every build', function () {
+            assert.equal(bridge.connected, true, 'the window is not on the bridge');
+            assert.ok(bridge.io.sockets.sockets.size > 0, 'no socket on the bridge');
+        });
+
+        //AND `io` IS NEITHER TRANSPORT -- it is the fan-out over both, so that
+        //serve.js registers its handlers once rather than once per transport.
+        it('is one of the transports behind io, not io itself', function () {
+            assert.notEqual(io, bridge.io, 'io is the bare bridge, so a browser could never join');
+            assert.ok(io.transports >= 1, 'io is not a fan-out');
+            assert.ok(io.engine.clientsCount >= 1, 'the fan-out cannot see the window');
         });
     });
 

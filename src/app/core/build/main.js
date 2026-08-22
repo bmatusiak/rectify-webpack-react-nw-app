@@ -27,6 +27,19 @@ async function plugin(imports, register) {
         express: http.express,
         router: http.router,
         httpServer: http.server,
+
+        //THE BROWSER VIEWER, FORWARDED RATHER THAN HANDED OVER. The node half
+        //may want to know whether anything outside this window can reach it, and
+        //may want to change that -- the demo's System page offers it, and
+        //io/server.test.js switches it on to open a real client and off again
+        //afterwards. The server itself stays in main, like the window and the
+        //tray, because it outlives this bundle.
+        http: {
+            get url() { return http.url; },
+            get listening() { return http.listening; },
+            get serving() { return http.serving; },
+            setServing: function (on) { return http.setServing(on); }
+        },
         io: io,
         appPackage: app.appPackage,
 

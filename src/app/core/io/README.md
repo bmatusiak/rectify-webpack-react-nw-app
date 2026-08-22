@@ -9,11 +9,47 @@ shape.
 | `server.js` | `io` | `app`, `Plugin` |
 | `window.js` | `io` | — |
 
-Plus two files with no `provides`, required by the halves beside them:
+Plus three files with no `provides`, required by the halves beside them:
 
 - **`serve.js`** — the server side of the conversation, in one function so both
   halves can run it
+- **`fanout.js`** — one `io` over however many transports there are
 - **`mock.js`** — a socket.io-shaped pair of endpoints, in memory
+
+## two kinds of client, one set of handlers
+
+The nw window is on [bridge](../bridge/), a direct channel between main and the
+page. A browser looking at the same app is on socket.io over http. `serve.js`
+should not know that, so `main.js` hands the rest of the app a single `io` and
+`fanout.js` spreads what it is told across whatever is actually there.
+
+**The window is on the bridge in every build**, not only when packaged. That is
+what makes development behave the way a package does: turn the browser viewer
+off and the app is running exactly the code path it will ship with. It used to be
+`BUILD_PROD ? bridge : socket.io`, so the transport nobody ships was the one
+every day of development exercised.
+
+Socket.io is attached even when nothing may connect, because the tray can switch
+the viewer on while the app is running and there would otherwise be nothing to
+switch on. A gate refuses connections while [`http.serving`](../http/) is false —
+with an error rather than a silent hang, so a browser pointed at an app with the
+viewer off is told why — and turning it off drops whoever is already there.
+Refusing new connections while leaving old ones live would make the tray item a
+lie.
+
+### a handler registered late is told what is already here
+
+The node half is torn down and rebuilt on every save, so `serve.js` registers
+again on each reload — and by then the window has long since connected. Over
+socket.io that was invisible: the reload drops every client and the client
+reconnects, which fires `connection` again. **The bridge has no reconnect,
+because its peer never left** — the window simply stopped being mentioned to
+anyone, and the new build sat there with no clients at all.
+
+So `fanout.on('connection', …)` hands a new handler every socket that is still
+connected. Only what is still connected, so it cannot double-deliver: a
+socket.io client dropped by the reload is already out of the map by then and
+comes back the ordinary way.
 
 ## the three sides
 
@@ -75,9 +111,13 @@ plugin are in the client bundle anyway, so this costs nothing to have.
 It is **opt-in on purpose.** Falling back to it on a failed connection silently
 served made-up data whenever the server was merely slow.
 
-## in a package
+## the window waits for the bridge
 
-There is no http server for socket.io to live on. What there is instead is a
-message channel to the window wearing the same api — see [bridge](../bridge/).
-`main.js` picks it from `BUILD_PROD`; `window.js` picks it by finding what main
-injected. **Nothing downstream can tell the difference.**
+`window.js` prefers the bridge whenever main has injected a way home, and
+**waits about half a second for it** rather than deciding on its first look. Nw
+does not re-fire `document-start` on a reload, so after webpack full-reloads the
+page main has to put `__host` back on `loaded` — which arrives after this code
+has already run. Deciding immediately meant an ordinary save left the window on
+an error overlay, having fallen through to a socket.io server that is off.
+
+A browser has no main to wait for and simply spends the half second.

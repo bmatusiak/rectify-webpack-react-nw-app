@@ -15,7 +15,22 @@ npm test -- core/ipc      # only that plugin, in every context it has one
 npm test -- --list        # what there is to aim at
 npm run log      # what the running app has been saying, minus chromium's noise
 npm run drive    # start the app, drive it, check what only the real app can answer
+
+npm start -- --serve             # and let a browser be a client, on a free port
+npm start -- --serve=8080        # ... at that port
+npm start -- --serve=0.0.0.0:80  # ... at that address
+npm start -- --no-serve          # off, whatever the manifest says
 ```
+
+**The nw window never uses http for its own traffic.** It talks to main over
+`core/bridge` in every build. In development http is still there -- webpack
+serves the window half over it and hot reloads it -- but the app's own messages
+do not go over a port. Turn the browser viewer off and you are running the code
+path a package ships with.
+
+`"app": { "serve": true }` in package.json is the other way to say it, and the
+flag wins. `src/serve.js` answers `false` or `{host, port}`. The tray has a
+**Serve to a browser** checkbox that switches it while the app is running.
 
 Call the cli as `node src/cli.js <cmd>` when driving the app yourself, not
 `npm run cli --`: npm adds ~530ms per call and buries the real exit code and
@@ -148,6 +163,29 @@ exist only to add to other plugins. They still declare `provides: []` and still 
 **A plugin that consumes a lot is not automatically wrong.** `core/build` takes seven
 services because coordinating the dev loop is what it is for. Judge it by whether the
 plugin has one job, not by the length of the list.
+
+## The window transport, and what it cost to get right
+
+Four things about `core/bridge` are load-bearing and none of them are obvious.
+All four were found by the app misbehaving, not by reading:
+
+- **`document-start` and `document-end` fire for every frame**, iframes
+  included, and the object handed over is that frame's Window either way. The
+  demo's Markdown page renders into a `srcdoc` iframe, and main repointed at it.
+  A frame answers this about itself: a top-level document is its own `parent`.
+  Comparing against `win.window` is wrong -- during document-start for a new
+  document it still refers to the old one.
+- **`document-start` does not fire again on a reload.** Webpack full-reloads
+  whenever it cannot hot swap, so main puts `__host` back on `loaded` too, and
+  `io/window.js` waits about half a second for the bridge rather than deciding
+  on its first look.
+- **A reloaded page is a new client.** The old socket has to be closed or
+  `connection` never fires again, `serve.js` never sends the handshake, and the
+  page sits on a white screen with no error anywhere.
+- **Delivery is a microtask.** A direct call is synchronous and postMessage was
+  not; main answers `hello` by firing `connection`, so a synchronous delivery
+  arrives before `io/window.js` is listening. A socket never delivers in the tick
+  it was sent, and neither does this.
 
 ## Rectify, as used here
 

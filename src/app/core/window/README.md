@@ -25,6 +25,12 @@ and yours is not.
 Closing the window hides it; the node half keeps running behind the tray icon.
 Reopen from the tray, or by running `npm start` again.
 
+**Its listeners are removed by name, not with `removeAllListeners`.** That was
+harmless while this plugin was the only thing listening to the window, and
+stopped being harmless the moment [bridge](../bridge/) started attaching in
+development too: the first page reload took the bridge's own `closed` handler
+with it. A window several plugins share is not this one's to clear.
+
 **Two mechanisms hold that up, because one of them is not reliable:**
 
 1. `close` is intercepted and the window hidden instead, so reopening is instant
@@ -48,14 +54,20 @@ an icon, because without one there would be no way back to a hidden window.
 
 | build | page | why |
 |---|---|---|
-| development | `http.url + '?view=app'` | a remote page, so it has no node |
+| development | `http.url` | a remote page, so it has no node |
 | packaged | `bridge.page` (`view.html`) | there is no url; see [bridge](../bridge/) |
 
-`?view=app` marks it as the app's own window rather than a browser looking at
-the same address. Nothing in the page can tell on its own — nw 0.114 sends an
-**ordinary chrome user agent** with no mention of nw in it — so the side that
-opened it is the side that says so. [remote](../../remote/) reads it back. A
-packaged window needs no mark: there is nowhere for a second view to come from.
+**The marker is gone, and the bridge replaced it.** This used to append
+`?view=app` so the page could tell it was the app's own window rather than a
+browser looking at the same url — nw 0.114 sends an ordinary chrome user agent,
+so the side that opened it had to say so. Main now injects `__host` into this
+window in **every** build, and a browser cannot produce that: the bridge is the
+proof, and a better one than a query string anybody could type.
+
+`bridge.attach(w)` therefore runs in both builds. In a package it carries the
+window half in with it; in development the page still fetches its own bundle over
+http so webpack can hot reload it, and the bridge carries only the app's own
+traffic.
 
 ## capture
 

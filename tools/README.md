@@ -65,10 +65,13 @@ either. Nothing is external, because there is no `node_modules` beside it.
 it has node; being a window means `evalNWBin` exists at all.
 
 The visible window changes with the build. In development it is a **remote**
-page — an http url with no `node-remote` against it, so it has no node, and
-`?view=app` is what marks it as the app's own rather than a browser looking at
-the same address. In a package it is `view.html` out of the package itself, and
-there is no second view for it to be confused with, so nothing is appended.
+page — an http url with no `node-remote` against it, so it has no node. In a
+package it is `view.html` out of the package itself.
+
+**What does not change is how it talks to main.** The window is on
+[bridge](../src/app/core/bridge/) either way, so its own traffic never goes over
+a port. Http in development is there for webpack and hot reload, and for a
+browser viewer if one was asked for.
 
 That is the whole reason for the second boot: `src/main.js` reads plugins off
 disk for development, `src/main.prod.js` gets the same list from the bundle

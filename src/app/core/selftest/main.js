@@ -26,11 +26,28 @@ async function plugin(imports, register) {
     var { ipc, io } = imports;
     var mine = suites();
 
-    //whichever page is connected. In development this is socket.io's own map;
-    //in a packaged build it is the bridge wearing the same shape.
+    //THE NW WINDOW, AND NOT MERELY THE FIRST THING CONNECTED.
+    //
+    //This took whatever socket came first, which was right while the window was
+    //the only client there could be. It stopped being right the moment a browser
+    //could join: ../io/server.test.js switches the browser viewer on and opens a
+    //real socket.io client, and `selftest:run` went to THAT -- a throwaway client
+    //with no test runner in it, which never answered. The window suite then sat
+    //there for its full 120 seconds and reported itself stuck, which is a long
+    //quiet way to be told the message went to the wrong place.
+    //
+    //The window is on ../bridge in every build and the bridge calls its one
+    //socket `window`, so there is a name to ask for. The fallback is kept for
+    //the case where there is no bridge at all -- nothing does that today, and a
+    //nastier failure than "no window is connected" is not worth the saving.
     function page() {
+        var all = io.sockets.sockets;
+
+        var window_ = all.get && all.get('window');
+        if (window_) return window_;
+
         var found = null;
-        io.sockets.sockets.forEach(function (socket) { if (!found) found = socket; });
+        all.forEach(function (socket) { if (!found) found = socket; });
         return found;
     }
 
@@ -61,11 +78,40 @@ async function plugin(imports, register) {
 
     //the node half registers its own command as it loads, and this calls it
     //rather than opening a socket to ourselves to ask ourselves a question
-    function fromServer(only) {
+    //THE NODE HALF GETS A DEADLINE, FOR THE SAME REASON THE WINDOW DOES.
+    //
+    //This used to await ipc.invoke with nothing behind it, so a server-side test
+    //that never settled did not fail -- it hung, and took the whole run with it,
+    //including the two contexts that had nothing wrong with them. A `stuck`
+    //result is a failure and says which context; an unresolved promise is a
+    //terminal that has to be interrupted and tells you nothing.
+    //
+    //Generous, because the node half's suites open real sockets, but finite.
+    function fromServer(timeout, only) {
         if (ipc.commands().indexOf('selftest:server') < 0) {
             return Promise.resolve(absent('server', 'the node half did not load its tests'));
         }
-        return ipc.invoke('selftest:server', { only: only });
+
+        return new Promise(function (resolve) {
+            var settled = false;
+            var timer = setTimeout(function () {
+                if (settled) return;
+                settled = true;
+                resolve(absent('server', 'the node half did not answer within ' + timeout + 'ms', true));
+            }, timeout);
+
+            ipc.invoke('selftest:server', { only: only }).then(function (out) {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(out);
+            }, function (e) {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(absent('server', 'the node half threw: ' + (e && e.message), true));
+            });
+        });
     }
 
     var answered = ipc.handle('selftest', async function (data) {
@@ -83,7 +129,9 @@ async function plugin(imports, register) {
             ? Object.assign({ context: 'main' }, await mine.run(data))
             : passedOver('main');
 
-        var server = asked('server') ? await fromServer(data && data.only) : passedOver('server');
+        var server = asked('server')
+            ? await fromServer((data && data.timeout) || 120000, data && data.only)
+            : passedOver('server');
 
         //generous on purpose: the window suite opens every page and waits for
         //each to settle, which is slower than everything else here put together

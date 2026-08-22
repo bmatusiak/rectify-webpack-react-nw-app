@@ -22,9 +22,36 @@ async function plugin(imports, register, config) {
         if (items.length) menu.append(new nw.MenuItem({ type: 'separator' }));
 
         menu.append(new nw.MenuItem({ label: 'Open window', click: function () { win.show(); } }));
-        //a packaged build serves nothing, so there is no page for a browser to
-        //open and no menu item offering one
-        if (!app.isPackaged) menu.append(new nw.MenuItem({
+
+        //THE BROWSER VIEWER, SWITCHABLE FROM HERE.
+        //
+        //A checkbox rather than two items, because it is one fact with two
+        //states. nw redraws the whole menu on every rebuild, so the tick comes
+        //from `http.serving` at draw time rather than from anything kept here --
+        //there is no second copy of the answer to fall out of step.
+        menu.append(new nw.MenuItem({
+            type: 'checkbox',
+            label: 'Serve to a browser',
+            checked: http.serving,
+            click: function () {
+                //`this` is nw's own item and has already flipped its tick, which
+                //would be a lie if the change failed. rebuild() below draws it
+                //again from what actually happened.
+                http.setServing(!http.serving).then(function (on) {
+                    console.log(on
+                        ? 'serving at ' + http.url
+                        : 'the browser viewer is off' + (http.url ? '' : ', and the port with it'));
+                }, function (e) {
+                    console.error('could not change the browser viewer: ' + (e && e.message));
+                    //setServing already flipped its own state back or not; draw
+                    //whatever it really is rather than what was asked for
+                    rebuild();
+                });
+            }
+        }));
+
+        //and the way to actually open one, while there is something to open
+        if (http.serving && http.url) menu.append(new nw.MenuItem({
             label: 'Open in browser',
             click: function () { nw.Shell.openExternal(http.url); }
         }));
@@ -37,6 +64,12 @@ async function plugin(imports, register, config) {
         tray.menu = menu;
         console.log('tray menu: ' + menu.items.map(function (i) { return i.label || '--'; }).join(' | '));
     }
+
+    //REDRAWN WHENEVER THE ANSWER CHANGES, whoever changed it. The tray's own
+    //item is not the only way in -- a flag decides it at boot and a plugin could
+    //decide it later -- and a menu showing a tick that stopped being true is
+    //worse than one with no tick at all.
+    var watching = http.onServing(function () { rebuild(); });
 
     await register(null, {
         tray: {
@@ -70,7 +103,7 @@ async function plugin(imports, register, config) {
                         //is not an error — you get an invisible tray entry.
                         icon: (config.tray && config.tray.icon) || 'icon.png'
                     });
-                    tray.tooltip = app.appPackage.title + ' — ' + http.url;//see nw.js issue 1903
+                    tray.tooltip = app.appPackage.title + (http.url ? ' — ' + http.url : '');//see nw.js issue 1903
 
                     //left click opens the window on windows and linux; on mac the
                     //menu is the only interaction, so the same actions live in it
@@ -84,6 +117,7 @@ async function plugin(imports, register, config) {
             }
         },
         onDestroy: function () {
+            watching();
             try { if (tray) tray.remove(); } catch (e) { /* already gone */ }
             tray = null;
         }

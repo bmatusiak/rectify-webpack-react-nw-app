@@ -73,13 +73,24 @@ client of the same server. The app's own window wins; a browser view only gets
 the click if it is the only thing there, and the answer says which one it went
 to.
 
-Nothing in the page can tell them apart on its own: nw 0.114 sends an ordinary
-chrome user agent, and the window deliberately has no node in it to ask. So the
-page says which it is, two ways —
+**The transport settles it when it can.** [bridge](../core/bridge/) calls its one
+socket `window`, and only the nw window is ever on it — so arriving that way *is*
+the proof. It cannot go stale and a browser cannot claim it.
 
-- development: `?view=app`, put there by [window](../core/window/) when it opened it
-- packaged: `window.__host`, injected by [bridge](../core/bridge/) before any of
-  the page's own script ran, which a browser could not produce
+Anything else is a socket.io client, where the page's own word is all there is;
+a browser says no because it has no bridge to find.
+
+That fallback is also what keeps this testable: `test/server-graph.test.js` boots
+the real server half against real socket.io with **no bridge anywhere**, so a
+harness there has no way to arrive as the window — and a rule that only the
+bridge may answer would leave the one test that exercises this code outside nw
+unable to say what it means.
+
+**The page used to answer this alone**, first from a `?view=app` on its url and
+later from whether `__host` had been injected into it. Both are the page
+describing itself, and it got the answer wrong after a reload: the window came
+back reporting *browser*, and a click then went to whichever view was left rather
+than to the app.
 
 ## contrast
 

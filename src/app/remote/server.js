@@ -28,7 +28,30 @@ async function plugin(imports, register) {
         socket.on('remote:hello', function (d) {
             var view = find(socket);
             if (!view) { view = { socket: socket }; views.push(view); }
-            view.app = !!(d && d.app);
+
+            //THE TRANSPORT SETTLES IT WHEN IT CAN, AND THE PAGE ANSWERS WHEN IT
+            //CANNOT.
+            //
+            //The page used to answer this alone, first from a ?view=app on its
+            //url and later from whether main had injected `__host` into it.
+            //Both are the page describing itself, and it got the answer wrong
+            //after a reload: the window came back reporting `browser`, and a
+            //`click` then went to whichever view was left rather than to the app.
+            //
+            //../core/bridge calls its one socket `window`, and only the nw window
+            //is ever on it -- so arriving that way IS the proof, and it cannot go
+            //stale or be claimed by a browser. Anything else is a socket.io
+            //client, where the page's own word is all there is; a browser says
+            //false because it has no bridge to find.
+            //
+            //THE FALLBACK IS ALSO WHAT MAKES THIS TESTABLE. test/server-graph
+            //boots the real server half against real socket.io with no bridge
+            //anywhere, so a harness there has no way to arrive as the window --
+            //and a rule that only the bridge can answer would make the one test
+            //that exercises this code outside nw unable to say what it means.
+            view.app = socket.id === 'window' || !!(d && d.app);
+
+            //the page is still the only one who knows these
             view.title = (d && d.title) || null;
             view.href = (d && d.href) || null;
         });

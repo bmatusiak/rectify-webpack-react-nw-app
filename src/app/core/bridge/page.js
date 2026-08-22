@@ -4,22 +4,19 @@ var wire = require('./wire');
 //window.js is the filename that says "this is the window half of a plugin", and
 //the loader tried to boot this as one the moment it was called that.
 //
-//src/app/io/window.js decides which transport this window is on and calls here
-//when there is no server to talk to. main injected `window.__host` before any
-//of this ran, so finding it is how the page knows which build it is in.
-
-var PREFIX = 'rectify:';
+//src/app/core/io/window.js decides which transport this window is on and calls
+//here. main injected `window.__host` before any of this ran, so finding it is
+//how the page knows main is on the other end -- and a browser looking at the
+//same url cannot produce one, which is what makes it proof rather than a hint.
+//
+//NOTHING HERE LISTENS FOR `message`. Main was handed this page's receiver when
+//it said hello, and calls straight into it.
 
 module.exports = function bridge() {
     var host = window.__host;
     if (!host) return null;
 
     var channel = wire(function (line) { host.post(line); });
-
-    window.addEventListener('message', function (e) {
-        if (typeof e.data != 'string' || e.data.indexOf(PREFIX) !== 0) return;
-        channel.receive(e.data.slice(PREFIX.length));
-    });
 
     //shaped like a socket.io client socket, because every plugin's window half
     //is written against one and none of them should have to care
@@ -40,7 +37,17 @@ module.exports = function bridge() {
         io: { on: function () {}, off: function () {} }
     };
 
-    //and now that the page can hear, tell main it is there
-    host.hello();
+    //AND NOW THAT THE PAGE CAN HEAR, HAND MAIN THE EAR.
+    //
+    //This used to be a bare hello, with main talking back over postMessage and
+    //this file listening for `message`. Two things were wrong with that: a
+    //postMessage can be refused (chromium did, quietly, once a page in this app
+    //rendered an iframe) and a `message` listener takes events from anything
+    //that can reach this window without a word about who sent them. A function
+    //only main was ever given cannot be reached by anything else at all.
+    host.hello({
+        post: function (line) { channel.receive(String(line)); }
+    });
+
     return socket;
 };

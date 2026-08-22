@@ -1,6 +1,6 @@
 # bridge
 
-What replaces socket.io when there is no server.
+How the nw window and main talk to each other, in **every** build.
 
 | file | provides | consumes |
 |---|---|---|
@@ -14,30 +14,42 @@ Plus two files with no `provides`:
   filename means *the window half of a plugin*, and the loader tried to boot it
   as one the moment it was called that.
 
-## why
-
-A packaged build **opens no port at all** — no http, no socket.io, no webpack.
-The window is opened straight out of the package, so there is nothing to connect
-to and nothing that could serve it.
-
-What there is instead is a message channel:
-
 ```
-main  →  page    postMessage
-page  →  main    a function injected before any of the page's own script runs
-```
-
-And what it hands the rest of the app is **shaped like socket.io**, because every
-plugin's server half is already written against that and none of them should
-have to know which build they are in. It is a small shim over `wire.js`, not an
-implementation of socket.io: what is here is what this app actually calls.
-
-```
-bridge.io          the socket.io-Server-shaped end. io/main.js registers it as `io`
+bridge.io          the socket.io-Server-shaped end. io/main.js fans out over it
 bridge.attach(win) wire up a window
-bridge.page        'view.html' — the visible page, which has no script in it
+bridge.page        'view.html' — the visible page in a package
 bridge.connected
 ```
+
+## why the window is on it even in development
+
+It used to be the packaged-only transport: development served the window over
+http and used socket.io, and the bridge was exercised for the first time when
+somebody built a package. **The transport every shipped app depends on was the
+one no day of development ever ran.**
+
+Now the window is on the bridge always. In development the page is still
+*fetched* over http — that is how webpack hot reloads it — but the app's own
+traffic never touches a port. Turn the browser viewer off and you are running
+the code path a package will ship with. See [http](../http/) for the two
+separate facts that makes possible.
+
+## both directions are direct calls
+
+```
+main → page    page.post(line)          a function the page handed over
+page → main    window.__host.post(line) a function main planted
+```
+
+Nw gives main the page's **actual `Window` object** — `frame === win.window`,
+measured — so there is no need for the message bus in either direction.
+
+It used to `postMessage` one way, which cost two things. **Chromium can refuse a
+postMessage and does it with a console warning rather than a throw**, so
+messages went missing silently. And a `message` listener takes events from
+anything that can reach the window, with no word about who sent them — a door
+that did not need to exist. There is no listener now, so there is nothing to
+impersonate.
 
 ## the protocol
 
@@ -52,25 +64,59 @@ enough to trust.
 {"event":"app","data":{...}}          a message that does not
 ```
 
-## the two moments
+## four things about timing, each of which broke it
 
-**`document-start`** — `frame.__host` is planted before any of the page's own
-script runs, so the page can never find itself without a way home. `page.js`
-looking for it is how the window knows which build it is in.
+**Only the top document.** `document-start` and `document-end` fire for *every*
+frame in the window, iframes included, and in nw 0.114 the object handed over is
+that frame's `Window` either way — so nothing about the object says which one it
+is. The demo's Markdown page renders into a `srcdoc` iframe; that iframe fired
+`document-end`, main repointed at it, and everything main said afterwards went
+to the iframe and was refused with `Cross-Origin-Opener-Policy policy would
+block the window.postMessage call`. Visiting one page broke the whole window,
+and it still looked perfectly fine on screen.
 
-**`document-end`** — now there is a document to render into, so the window half
-is `eval`'d in. It was built before packaging and rides along inside `main.bin`
-**as a string**, which is what keeps javascript off disk when there is no server
-to serve it from.
+A frame answers this about itself: a top-level document is its own `parent`. The
+first version compared against `win.window`, which is right until the page
+reloads — during `document-start` for the *new* document `win.window` still
+refers to the old one, so the guard rejected the very page it exists to protect.
 
-**Anything said before the page can hear is queued, not dropped.** Chromium
-refuses a `postMessage` to a window it has not finished setting up — quietly,
-with a console warning — and the message lost there would be the handshake
-itself.
+**`document-start` does not fire again on a reload.** Measured. Webpack
+full-reloads the page whenever it cannot hot swap a module, and `__host` was
+injected on the first load and never afterwards: the page came back, could not
+find the bridge, fell through to socket.io and was refused by a viewer that is
+off. So main puts the way home back on `loaded` too — which arrives *after* the
+page's own scripts have run, which is why [io](../io/)'s window half waits a
+moment for the bridge rather than deciding on its first look.
+
+**A reloaded page is a new client.** The old socket was still in the map, so
+`open()` took its early return, `connection` never fired again, `serve.js` never
+sent the handshake — and the page sat on a **white screen with no error
+anywhere**, waiting for a message main had decided it did not need to send.
+Closing first is what a socket does when the far end goes away, which is exactly
+what a reload is.
+
+**Delivery is a microtask, not a synchronous call.** A direct call is
+synchronous and postMessage was not, and that difference was load-bearing: the
+page says hello from inside `page.js`, and only *after* that does `io/window.js`
+register the listener waiting for the handshake. Main answers `hello` by firing
+`connection`, which makes `serve.js` emit `app` immediately — so a synchronous
+delivery arrived before anything was listening and the wire dropped it for want
+of a handler. It is also what a socket does: nothing that talks over one expects
+a message to arrive in the same tick it was sent.
+
+Anything said before the page can hear is **queued, not dropped**. Main is ready
+before the page is, and the message lost in that gap would be the handshake.
+
+## in a package
+
+The window is opened straight out of the package as `view.html`, and the window
+half rides along inside `main.bin` **as a string**, evaluated in at
+`document-end` — which is what keeps javascript off disk when there is no server
+to serve it from. A packaged build with the viewer off opens **no port at all**.
 
 ## what it is not
 
-It is not a security boundary; it is the absence of one. There is no port, so
-nothing on the machine can reach the app by opening a socket to it — that is the
-whole claim. The window half is still delivered to a browser context to run, and
-is readable there by anyone who opens devtools, as any client code is.
+It is not a security boundary. The window half is still delivered to a browser
+context to run and is readable there by anyone who opens devtools, as any client
+code is. What the direct calls buy is that nothing else can reach the channel,
+and that a refused message is not a possibility.

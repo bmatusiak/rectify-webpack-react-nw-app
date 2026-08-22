@@ -190,7 +190,14 @@ function fire(el, type, x, y) {
         detail: type == 'click' ? 1 : 0
     };
     if (pointer) { init.pointerId = 1; init.pointerType = 'mouse'; init.isPrimary = true; }
-    el.dispatchEvent(new (pointer ? PointerEvent : MouseEvent)(type, init));
+
+    //THE CONSTRUCTOR IS CHOSEN FIRST, THEN CALLED. This was
+    //`new (pointer ? PointerEvent : MouseEvent)(type, init)`, which reads well
+    //and fails badly: whatever babel makes of a `new` on a conditional in this
+    //build throws "(intermediate value) is not a constructor", and the throw
+    //surfaces as a click that did nothing with a message naming no names.
+    var Event_ = pointer ? PointerEvent : MouseEvent;
+    el.dispatchEvent(new Event_(type, init));
 }
 
 function click(data) {

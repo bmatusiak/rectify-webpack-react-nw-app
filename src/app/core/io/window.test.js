@@ -25,14 +25,24 @@ function plugin(imports, register) {
             assert.ok(pong.pid, 'no pid, so nothing on the other side is a process');
         });
 
-        it('took the transport that matches how this window was opened', function () {
-            var bridged = !!window.__host;
-            var served = location.protocol.indexOf('http') === 0;
+        //THE WINDOW IS ON THE BRIDGE, WHATEVER IT WAS OPENED FROM.
+        //
+        //This used to assert the opposite for development -- http page, so
+        //socket.io -- which meant the transport the app ships with was the one
+        //nobody exercised until it was packaged. Now main injects `__host` into
+        //this window in every build, and the page prefers it. In development the
+        //page is still FETCHED over http, because that is how webpack hot
+        //reloads it; what does not go over http is the app's own traffic.
+        it('is on the bridge, however this window was opened', function () {
+            assert.ok(window.__host, 'main never injected a way home');
+            assert.equal(typeof window.__host.post, 'function');
 
-            //a page served over http has a server to talk to; one opened out of
-            //the package has main on the other end of a message channel
-            assert.equal(bridged, !served,
-                'opened from ' + location.protocol + ' but ' + (bridged ? 'bridged' : 'on socket.io'));
+            //the socket handed out is the bridge's, not socket.io's: socket.io's
+            //client carries a manager with a real `on`, and the shim's is a stub
+            //because there is no connection to have opinions about
+            assert.equal(io.connected, true, 'the bridge is not connected');
+            assert.equal(typeof io.io.on, 'function');
+            assert.equal(io.id, undefined, 'that looks like a socket.io client');
         });
     });
 

@@ -15,9 +15,19 @@ function plugin(imports, register) {
     var { app, io, appPackage } = imports;
     var host = app.host;
 
-    //a second client of this app's own server, which is what the window is
-    function visit(fn, timeout) {
-        var url = host.window.url;
+    //A SECOND CLIENT OF THIS APP'S OWN SERVER, WHICH IS WHAT A BROWSER IS.
+    //
+    //It is no longer what the WINDOW is: the nw window talks to main over
+    //../bridge in every build now, and socket.io is only how a browser joins.
+    //So this has to switch the browser viewer on to have anything to connect
+    //to, and switch it back afterwards -- which makes these tests the ones that
+    //exercise the switch as well as the handshake.
+    async function serving(on) {
+        return host.http.setServing(on);
+    }
+
+    function open(fn, timeout) {
+        var url = host.http.url;
         var socket = connect(url, { transports: ['websocket'], timeout: 4000 });
 
         return new Promise(function (resolve, reject) {
@@ -40,6 +50,16 @@ function plugin(imports, register) {
                 reject(new Error('could not connect: ' + e.message));
             });
         });
+    }
+
+    //ON FOR THE DURATION, AND BACK TO WHATEVER IT WAS. A test that left the
+    //viewer on would hand every test after it a different app from the one the
+    //user is running.
+    async function visit(fn, timeout) {
+        var was = host.http.serving;
+        if (!was) await serving(true);
+        try { return await open(fn, timeout); }
+        finally { if (!was) await serving(false); }
     }
 
     describe('io, server side', function () {

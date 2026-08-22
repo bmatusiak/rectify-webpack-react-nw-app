@@ -7,11 +7,21 @@ var React = require('react');
 //cannot be checked by reading the string: the policy has to be parsed and the
 //markup has to be refused. So these mount the frame and then look inside it.
 
-plugin.consumes = ['selftest', 'markdown'];
+plugin.consumes = ['selftest', 'markdown', 'io'];
 plugin.provides = [];
 function plugin(imports, register) {
     var { describe, it, assert, mount } = imports.selftest;
     var markdown = imports.markdown;
+    var io = imports.io;
+
+    //a round trip to the node half, which only completes if this page can still
+    //reach main and be answered
+    function reachesTheApp(ms) {
+        return new Promise(function (resolve) {
+            var timer = setTimeout(function () { resolve(null); }, ms || 4000);
+            io.emit('ping', {}, function (pong) { clearTimeout(timer); resolve(pong); });
+        });
+    }
 
     var LT = String.fromCharCode(60);
 
@@ -118,6 +128,42 @@ function plugin(imports, register) {
                 assert.equal(one.textContent, 'the script did not run');
                 assert.ok(two, 'the second exhibit did not render');
                 assert.equal(two.textContent, 'the handler did not run');
+            } finally {
+                view.unmount();
+            }
+        });
+
+        //RENDERING THE FRAME MUST NOT COST THE APP ITS CONNECTION.
+        //
+        //THE BUG THIS EXISTS FOR. nw fires document-start and document-end for
+        //every frame in the window, iframes included, and the object handed over
+        //is that frame's Window either way -- so main, which listens for those
+        //to find the page, quietly repointed itself at this iframe the moment
+        //the Markdown page rendered. Everything main said after that went to the
+        //iframe and was refused by chromium with a console warning, and the app
+        //stopped answering while looking perfectly fine on screen.
+        //
+        //It cost an afternoon because the failure was so far from the cause:
+        //`click` and `read` timed out, the window suite hung for its full two
+        //minutes, and one page in the demo was to blame for all of it.
+        //
+        //A round trip is the whole assertion. If main is talking to the wrong
+        //document, no answer comes back.
+        it('renders the frame without costing the app its connection', async function () {
+            var before = await reachesTheApp();
+            assert.ok(before && before.pong, 'the app was already unreachable before this test');
+
+            var view = await mount(React.createElement(markdown.Frame, {
+                text: '# a document in an iframe', height: 200
+            }));
+
+            try {
+                await inside(view);
+
+                var after = await reachesTheApp();
+                assert.ok(after && after.pong,
+                    'rendering the frame took the connection with it: main is talking to the iframe');
+                assert.equal(after.pid, before.pid, 'a different process answered');
             } finally {
                 view.unmount();
             }
