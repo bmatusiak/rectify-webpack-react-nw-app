@@ -436,10 +436,15 @@ empty contexts as failures.
 ### driving the real app
 
 `npm run drive` is the only check that can see the window: it starts the app,
-opens every page over the control socket, and measures every heading and every
-piece of muted text against WCAG's 4.5, optionally in every swatch. It earns its
-place — it found the active sidebar pill unreadable on thirteen of the
-twenty-eight swatches, which nothing in `test/` could have. See [tools](tools/).
+opens every page over the control socket, and measures every heading, every piece
+of muted text, every inline `code` and every alert against WCAG's 4.5, optionally
+in every swatch. It earns its place — it found the active sidebar pill unreadable
+on thirteen of the twenty-eight swatches, and later found inline code at 1.49:1
+inside an alert on four pages, which nothing in `test/` could have.
+
+**What it measures is what stays fixed.** Both of those lived for as long as they
+did because this only ever looked at headings and muted text. See
+[tools](tools/).
 
 ## adding a plugin
 
