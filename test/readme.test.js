@@ -9,14 +9,18 @@ const path = require('path');
 //stale in silence: the plugin keeps working, the reader is told something that
 //stopped being true two refactors ago. so it is read back off the source.
 
-const APP = path.join(__dirname, '..', 'src', 'app');
+//EVERY TREE, from the one place that names them. src/app_plugins is a second
+//root and its plugins carry READMEs under the same rule -- checking only the
+//first would leave a whole tree undocumented while this stayed green, which is
+//the failure this file exists to prevent.
+const ROOTS = require('../src/roots').map((name) => path.join(__dirname, '..', 'src', name));
 const CONTEXTS = ['main', 'server', 'window', 'cli'];
 
 //the same two levels the boots walk
 function plugins() {
     const found = [];
-    for (const name of fs.readdirSync(APP)) {
-        const dir = path.join(APP, name);
+    for (const root of ROOTS) for (const name of fs.readdirSync(root)) {
+        const dir = path.join(root, name);
         if (!fs.statSync(dir).isDirectory()) continue;
         if (name.charAt(0) == '_' || name.charAt(0) == '.' || name == 'vendor') continue;
 
@@ -71,7 +75,11 @@ test('there are plugins to check', () => {
 });
 
 for (const dir of all) {
-    const name = path.relative(APP, dir).split(path.sep).join('/');
+    //named from its own root, so a plugin in the second tree is `mcp` -- the
+    //same name src/target.js stamps on it and `npm test -- mcp` matches
+    const root = ROOTS.filter((one) => dir.indexOf(one) === 0)
+        .sort((a, b) => b.length - a.length)[0];
+    const name = path.relative(root, dir).split(path.sep).join('/');
 
     test(name + ' has a README', () => {
         assert.ok(fs.existsSync(path.join(dir, 'README.md')),

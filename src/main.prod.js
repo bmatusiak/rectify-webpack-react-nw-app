@@ -31,11 +31,18 @@ var wanted = require('./target');
 var serve = require('./serve');
 
 //the same folder scan src/main.js does off disk, done by webpack at build time
+//TWO TREES, AND WEBPACK CANNOT BE TOLD THAT IN A LOOP -- require.context takes
+//a literal, so the second root in src/roots.js is a second call with the SAME
+//regex. test/plugin-scan.test.js reads both back and fails if they diverge.
 var found = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/main\.js$/);
+var alsoFound = require.context('./app_plugins', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/main\.js$/);
 //NAMED BY WHERE THEY LIVE, exactly as src/main.js does off disk -- see
 //./target.js. A packaged build is where an unnamed plugin is hardest to
 //identify, because there are no files beside it to read.
-var plugins = found.keys().map(function (key) { return wanted.stamp(found(key), key); });
+var plugins = [].concat(
+    found.keys().map(function (key) { return wanted.stamp(found(key), key); }),
+    alsoFound.keys().map(function (key) { return wanted.stamp(alsoFound(key), key); })
+);
 
 //and the base class rectify ships as a plugin rather than as part of the
 //container, so a plugin that wants an emitter, a "ready" it can act on, or

@@ -14,7 +14,8 @@ const fs = require('node:fs');
 //step.
 
 const SRC = path.join(__dirname, '..', 'src');
-const PLUGINS = path.join(SRC, 'app');
+const ROOTS = require('../src/roots');
+const PLUGINS = path.join(SRC, ROOTS[0]);
 const DEPTH = 2;
 
 function scanned(name) {
@@ -37,20 +38,45 @@ function asKeys(files) {
 }
 
 //every path require.context would offer, which is every file under src/app
-function everything(dir, out = []) {
+function everything(dir, out = [], base) {
+    base = base || PLUGINS;
     fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
         const here = path.join(dir, entry.name);
-        if (entry.isDirectory()) return everything(here, out);
-        out.push('./' + path.relative(PLUGINS, here).split(path.sep).join('/'));
+        if (entry.isDirectory()) return everything(here, out, base);
+        out.push('./' + path.relative(base, here).split(path.sep).join('/'));
     });
     return out;
 }
 
-function regexIn(file) {
+//EVERY CONTEXT IN THE FILE, KEYED BY THE ROOT IT SCANS. webpack cannot take a
+//list, so a second plugin tree is a second require.context with the same regex
+//written again -- and "written again" is exactly the thing that drifts, which
+//is why they are read back and compared rather than trusted.
+function regexesIn(file) {
     const src = fs.readFileSync(path.join(SRC, file), 'utf8');
-    const match = src.match(/require\.context\('\.\/app',\s*true,\s*(\/.*\/)\)/);
-    assert.ok(match, `no require.context regex found in src/${file}`);
-    return eval(match[1]);   // eslint-disable-line no-eval -- the source's own literal
+    const found = {};
+
+    for (const root of ROOTS) {
+        //built rather than written as a literal, because the root name is the
+        //variable part -- and every backslash here is doubled on purpose: this
+        //is a string that becomes a regex, so `\\.` is what a literal `\.` costs
+        const pattern = new RegExp(
+            "require\\.context\\('\\./" + root + "',\\s*true,\\s*(/.*/)\\)", 'g');
+        let hit;
+        while ((hit = pattern.exec(src))) {
+            //a file has two: the plugins and, in development, their tests
+            (found[root] = found[root] || []).push(eval(hit[1])); // eslint-disable-line no-eval
+        }
+    }
+
+    return found;
+}
+
+//the one that finds the plugins, which is the first in each file
+function regexIn(file, root) {
+    const all = regexesIn(file);
+    assert.ok(all[root || ROOTS[0]], `no require.context for ./${root || ROOTS[0]} in src/${file}`);
+    return all[root || ROOTS[0]][0];
 }
 
 const offered = everything(PLUGINS);
@@ -67,6 +93,49 @@ test('the folder walk and require.context pick the same plugins', () => {
         assert.deepStrictEqual(byRegex, byWalk,
             `src/${file} and the folder walk disagree about ${context} plugins`);
         assert.ok(byWalk.length > 0, `no ${context} plugins found at all`);
+    });
+});
+
+//A SECOND TREE IS A SECOND FOLDER AND NOTHING ELSE -- that is the claim
+//src/app_plugins exists to make, and this is what holds it up. Each webpack
+//file must scan every root, with the SAME regex: one that quietly drifted would
+//mean a plugin loads in development and vanishes from the package, which is the
+//failure this whole file was written for.
+test('every require.context scans every root, with the same rule', () => {
+    ['main.prod.js', 'server.js', 'window.js'].forEach((file) => {
+        const found = regexesIn(file);
+
+        ROOTS.forEach((root) => {
+            assert.ok(found[root], `src/${file} never scans ./${root}`);
+        });
+
+        //compare each root's Nth context against the first root's Nth
+        ROOTS.slice(1).forEach((root) => {
+            assert.equal(found[root].length, found[ROOTS[0]].length,
+                `src/${file} scans ./${root} a different number of times`);
+
+            found[root].forEach((rx, at) => {
+                assert.equal(String(rx), String(found[ROOTS[0]][at]),
+                    `src/${file} uses a different rule for ./${root}`);
+            });
+        });
+    });
+});
+
+//and the disk walkers take the same folders from the second tree as the regex
+test('the second tree is walked exactly like the first', () => {
+    ROOTS.slice(1).forEach((root) => {
+        const dir = path.join(SRC, root);
+        if (!fs.existsSync(dir)) return;
+
+        const byWalk = walked(dir, DEPTH, 'server')
+            .map((f) => './' + path.relative(dir, f).split(path.sep).join('/')).sort();
+
+        const offeredThere = everything(dir, [], dir);
+        const byRegex = offeredThere.filter((key) => regexIn('server.js', root).test(key)).sort();
+
+        assert.deepStrictEqual(byRegex, byWalk, `the walk and the regex disagree about ./${root}`);
+        assert.ok(byWalk.length > 0, `nothing at all in ./${root}, so this proves nothing`);
     });
 });
 

@@ -23,7 +23,11 @@ const path = require('node:path')
 const cp = require('node:child_process')
 
 const ROOT = path.join(__dirname, '..')
-const APP = path.join(ROOT, 'src', 'app')
+// every tree -- see src/roots.js. Auditing only the first would leave a whole
+// tree of plugin READMEs unchecked while this printed "nothing to say", which
+// is the most misleading thing a checker can do.
+const ROOTS = require('../src/roots').map((name) => path.join(ROOT, 'src', name))
+const APP = ROOTS[0]
 const CONTEXTS = ['main', 'server', 'window', 'cli']
 
 const findings = []
@@ -41,7 +45,12 @@ function readmes (dir, out) {
 }
 
 function read (file) { return fs.readFileSync(file, 'utf8') }
-function relative (dir) { return path.relative(APP, dir).split(path.sep).join('/') }
+//named from its own root, so a plugin in the second tree reads `mcp` rather
+//than `../app_plugins/mcp`
+function relative (dir) {
+  const root = ROOTS.filter((one) => dir.indexOf(one) === 0).sort((a, b) => b.length - a.length)[0] || APP
+  return path.relative(root, dir).split(path.sep).join('/')
+}
 
 function contextFiles (dir) {
   return fs.readdirSync(dir)
@@ -158,6 +167,12 @@ function namesThatAreGone (dir, everything, tracked) {
 
     const base = name.split('/').pop()
     if (tracked.includes(base) || everything.includes(name) || everything.includes(base)) return
+
+    //AND THE DISK, NOT ONLY GIT. `git ls-files` is how this avoids walking
+    //node_modules, and it also means a file that exists but has never been
+    //committed reads as missing -- which is precisely the state a README is in
+    //while the work it documents is being written.
+    if (fs.existsSync(path.join(ROOT, name))) return
     if (!gone.includes(name)) gone.push(name)
   })
 
@@ -248,7 +263,7 @@ function counted () {
 }
 
 function main () {
-  const folders = readmes(APP, [])
+  const folders = ROOTS.filter(fs.existsSync).reduce((out, root) => readmes(root, out), [])
 
   const tracked = cp.execSync('git ls-files', { cwd: ROOT }).toString()
     .split('\n').map(f => f.split('/').pop())

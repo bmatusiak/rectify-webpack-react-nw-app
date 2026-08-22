@@ -12,10 +12,20 @@ const rectify = require('@bmatusiak/rectify')
 const wanted = require('../src/target')
 
 const ROOT = path.join(__dirname, '..')
-const PLUGINS = path.join(ROOT, 'src', 'app')
+// every tree -- see src/roots.js. Without the second one, `npm test -- mcp`
+// finds nothing and says so as "no such target", which reads like the plugin
+// is broken rather than unlooked-for.
+const ROOTS = require('../src/roots').map((name) => path.join(ROOT, 'src', name))
+const PLUGINS = ROOTS[0]
 
-// the same walk src/main.js and src/cli.js do: two levels, exact filename
-function gather (name, dir = PLUGINS, depth = 2, out = []) {
+// the same walk src/main.js and src/cli.js do: two levels, exact filename,
+// across every tree in src/roots.js
+function gather (name, dir, depth = 2, out = []) {
+  if (dir === undefined) {
+    ROOTS.forEach((root) => gather(name, root, depth, out))
+    return out
+  }
+
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
     if (entry.name[0] === '_' || entry.name[0] === '.' || entry.name === 'vendor') continue
@@ -58,7 +68,11 @@ async function cliGraph ({ withTests, only } = {}) {
 // What a plugin test is called: its folder under src/app and the context beside
 // it, with no extension. `core/ipc/cli` -- which `core/ipc` is a prefix of.
 function named (file) {
-  const relative = path.relative(PLUGINS, file).split(path.sep).join('/')
+  //relative to ITS OWN root, so a plugin in the second tree is `mcp/server`
+  //rather than `../app_plugins/mcp/server` -- the same name src/target.js
+  //stamps on it, which is what `npm test -- mcp` is matched against.
+  const root = ROOTS.filter((one) => file.indexOf(one) === 0).sort((a, b) => b.length - a.length)[0] || PLUGINS
+  const relative = path.relative(root, file).split(path.sep).join('/')
   return relative.endsWith('.test.js') ? relative.slice(0, -'.test.js'.length) : relative
 }
 

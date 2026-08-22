@@ -28,7 +28,16 @@ async function plugin(imports, register) {
                 };
             },
 
-            commands: function () { return control.commands(); }
+            commands: function () { return control.commands(); },
+
+            //CALLING A COMMAND WITHOUT A SOCKET. main.js has had this since the
+            //selftest collector needed it; this half never passed it through,
+            //so anything here that wanted an answer from another plugin's
+            //command had to open a connection to the app it is already inside.
+            //
+            //It is the same handler table the cli reaches over the wire, which
+            //is what makes `capture` one implementation rather than two.
+            invoke: function (name, data) { return control.invoke(name, data); }
         },
         onDestroy: function () { while (added.length) added.pop().remove(); }
     });

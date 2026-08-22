@@ -21,7 +21,11 @@ var pkg = require('../package.json');
 var Config = require('./config');
 var wanted = require('./target');
 
-var PLUGINS = path.join(__dirname, 'app');
+//EVERY TREE, NOT ONE -- see ./roots.js. A root that is not on disk is skipped
+//rather than refused: the second tree is separable, so an app that deleted it
+//should boot rather than explain itself.
+var ROOTS = require('./roots').map(function (name) { return path.join(__dirname, name); })
+    .filter(function (dir) { return fs.existsSync(dir); });
 
 //A PLUGIN IS A FOLDER WITH A cli.js IN IT, one level down or two:
 //src/app/remote, or src/app/core/http. The second level is the grouping, and it
@@ -54,8 +58,11 @@ function found(dir, left, out) {
 
 //NAMED BY WHERE THEY LIVE -- see ./target.js. Every setup function in this app
 //is called `plugin`, so without this they all are, everywhere one is named.
-var plugins = found(PLUGINS, DEPTH, []).map(function (file) {
-    return wanted.stamp(require(file), path.relative(PLUGINS, file));
+var plugins = [];
+ROOTS.forEach(function (root) {
+    found(root, DEPTH, []).forEach(function (file) {
+        plugins.push(wanted.stamp(require(file), path.relative(root, file)));
+    });
 });
 
 //and the base class rectify ships as a plugin rather than as part of the

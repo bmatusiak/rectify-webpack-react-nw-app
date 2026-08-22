@@ -27,7 +27,9 @@ src/
   overlay.js    the message drawn over a page whose boot threw
   serve.js      whether a browser may be a client, and where
   target.js     which suites a targeted run takes, and what a plugin is called
+  roots.js      which folders plugins are found in
   app/          the plugins, below
+  app_plugins/  a second tree of them, separable from the app
 ```
 
 **Every plugin carries its own README.** This one is about the app; those are
@@ -63,6 +65,20 @@ source so they cannot quietly stop being true.
 | [ui/xterm](src/app/ui/xterm/) | `window` | a terminal: bytes that arrived from somewhere else |
 | [ui/litegraph](src/app/ui/litegraph/) | `window` | a graph: things, and what connects them |
 | [ui/banner](src/app/ui/banner/) | `window` | something true about the app, said across the top of it |
+
+And a **second tree**, which exists to prove the folder claim goes all the way
+up. Adding a plugin is adding a folder; adding a whole tree of them is adding a
+folder too, and one line in [`src/roots.js`](src/roots.js).
+
+| plugin | contexts | what it is |
+|---|---|---|
+| [mcp](src/app_plugins/mcp/) | `server` | an MCP server, over the control socket the app already listens on |
+| [mcp-example](src/app_plugins/mcp-example/) | `server` | one of every MCP surface — tools, resources, a template, prompts |
+
+`src/app_plugins` can be a checkout, a submodule, somebody else's package, or
+deleted: nothing in `src/app` consumes anything in it. A feature the scaffold
+**offers** should be removable without touching the scaffold; one it **depends
+on** belongs in `core`.
 
 Four of those five wrap a vendored library in its own `vendor/` folder, and each
 is a slot: swap one and the pages that use it are the only thing that changes.

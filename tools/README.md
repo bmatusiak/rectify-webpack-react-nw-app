@@ -189,6 +189,55 @@ while every link in it was the colour of the ground, because it measured
 `.app-sidebar` rather than the links inside. Sabotage the thing before trusting
 the test that watches it.
 
+## an MCP server for this app
+
+```
+claude mcp add rectify-nw -- node /path/to/tools/mcp.js
+```
+
+`tools/mcp.js` is launched by an MCP client, speaks JSON-RPC on stdin and
+stdout, and forwards what it is asked to the app that is **already running**,
+over the control socket [ipc](../src/app/core/ipc/) already listens on. What the
+app offers is [`src/app_plugins/mcp`](../src/app_plugins/mcp/) — this file is an
+envelope and a socket.
+
+| it speaks | |
+|---|---|
+| `initialize` | version negotiated: a version it knows is echoed back, one it does not gets the newest it has |
+| `tools/list` `tools/call` | including `structuredContent` for a tool that declared an `outputSchema` |
+| `resources/list` `resources/templates/list` `resources/read` | |
+| `prompts/list` `prompts/get` | |
+| `ping` | which answers without the app, because it is how a client checks this process is alive |
+
+**Why a bridge rather than a server inside the app.** The app can serve http and
+goes to some trouble not to: the port is off unless asked for, the tray stops it,
+and `"canServe": false` removes the routes and socket.io from the binary at build
+time. An MCP server listening inside the app would undo that for everyone who
+never uses it. This opens nothing.
+
+**And it is not a security boundary.** Anything that can run this can already run
+`node src/cli.js quit`. What it is, is a described, schema'd, deliberately small
+subset of the app aimed at a model instead of at a person — `quit` is not among
+the tools, and `src/app_plugins/mcp/server.test.js` fails if it ever becomes one.
+
+**The socket is not the permission.** The app writes a token beside it and
+refuses commands from a connection that cannot repeat it, so this authenticates
+exactly as the cli does. Without that step every call comes back *not
+authenticated*, which is a confusing way to learn about a step you skipped.
+
+**Nothing goes to stdout that is not a message.** A stray `console.log` lands in
+the middle of the protocol and the client reports a parse error rather than
+whatever was being said, so anything this file has to say goes to stderr — which
+a client shows as server logs.
+
+**With the app down it says so**, rather than hanging: `the app is not running --
+start it with npm start`. A client that launched the bridge and got silence
+would report an MCP problem to somebody who has an app problem.
+
+[`test/mcp.test.js`](../test/mcp.test.js) speaks the protocol to it over a pipe
+— every list, a call, a read, a prompt, and the four ways of being wrong,
+including a `resources/read` that tries to climb out of the tree.
+
 ## watching a command, one line per event
 
 ```

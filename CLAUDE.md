@@ -201,7 +201,32 @@ src/app/
   ui/<name>/       what is on screen
   demo/            the example app, deletable in one go
   remote/          a feature, beside the groups rather than inside them
+
+src/app_plugins/   a SECOND TREE, and deleting it is a decision about nothing else
+  mcp/             an MCP server over the control socket the app already has
+  mcp-example/     one of every MCP surface, registered against the real app
 ```
+
+**Two trees, named in `src/roots.js`, and that file is the only line that knows.**
+Both disk walks, all three `require.context` calls, the readme audit, the
+targeting in `npm test -- mcp` and `tools/docs.js` take the list from there.
+`test/plugin-scan.test.js` holds every context to the same rule across every
+root -- a second tree scanned with a slightly different regex would load in
+development and vanish from a package, which is the failure that test exists for.
+
+A plugin is named after **its own root**: `core/io/server.js` and
+`mcp/server.js`, never `app_plugins/mcp/server.js`.
+
+**A group is inside the app; a tree is separable.** `core`, `ui` and `demo` are
+folders in this app and deleting one is a decision about this app.
+`src/app_plugins` can be a checkout, a submodule, somebody else's package, or
+gone -- nothing in `src/app` consumes anything in it. That is the test of
+whether the plugin idea holds: a feature the scaffold OFFERS should be removable
+without touching the scaffold, and a feature it DEPENDS on belongs in `core`.
+
+The disk walks skip a root that is not there; webpack cannot, because
+`require.context` fails a build when pointed at a missing directory. So the
+folder is committed with a README even when it holds nothing else.
 
 **A `vendor/` folder inside a plugin is that plugin's own library.** `ui/editor`,
 `ui/markdown`, `ui/xterm` and `ui/litegraph` each carry one -- `ui/editor` two,
