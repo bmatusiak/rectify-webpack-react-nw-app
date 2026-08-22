@@ -19,6 +19,7 @@ var rectify = require('@bmatusiak/rectify');
 
 var pkg = require('../package.json');
 var Config = require('./config');
+var wanted = require('./target');
 
 var PLUGINS = path.join(__dirname, 'app');
 
@@ -51,7 +52,11 @@ function found(dir, left, out) {
     return out;
 }
 
-var plugins = found(PLUGINS, DEPTH, []).map(function (file) { return require(file); });
+//NAMED BY WHERE THEY LIVE -- see ./target.js. Every setup function in this app
+//is called `plugin`, so without this they all are, everywhere one is named.
+var plugins = found(PLUGINS, DEPTH, []).map(function (file) {
+    return wanted.stamp(require(file), path.relative(PLUGINS, file));
+});
 
 //and the base class rectify ships as a plugin rather than as part of the
 //container, so a plugin that wants an emitter, a "ready" it can act on, or

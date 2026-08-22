@@ -15,10 +15,11 @@
 //each page is waited for twice: until it is the one on screen, and then until
 //it stops changing. Asserting in between measures a page that is half built.
 
-plugin.consumes = ['selftest'];
+plugin.consumes = ['selftest', 'app'];
 plugin.provides = [];
 function plugin(imports, register) {
     var { describe, it, assert } = imports.selftest;
+    var app = imports.app;
 
     function links() {
         return [].slice.call(document.querySelectorAll('.app-sidebar .nav-pills .nav-link'));
@@ -88,6 +89,35 @@ function plugin(imports, register) {
     }
 
     describe('every page opens', function () {
+
+        //EVERY PLUGIN IS NAMED AFTER WHERE IT LIVES, and this is the only place
+        //that can say so: src/target.js can be asked whether `stamp` works, and
+        //only the running app can be asked whether the boot called it.
+        //
+        //It matters beyond the picture on the Graph page. `app.plugins` is what
+        //rectify names in a resolution failure, and twenty-six records all
+        //called `plugin` is a message that tells you nothing about which one.
+        it('knows every plugin by where it lives, not as "plugin"', function () {
+            var records = app.plugins;
+            assert.ok(records && records.length > 5, 'no plugin records to look at');
+
+            //A NAME HERE IS A PATH UNDER src/app, put on by the boot -- see
+            //src/target.js. The first version of this test asked whether any
+            //record was called `plugin`, and passed with the stamping removed:
+            //rectify never leaves the literal name there, it substitutes "the
+            //plugin providing [...]" instead. Asking for the shape that IS
+            //wanted is the question that fails when the boot stops stamping.
+            var unnamed = records.filter(function (p) {
+                return String(p.name || '').indexOf('/') < 0;
+            });
+
+            //rectify's own PluginBase is pushed in by the boot and is not a
+            //file under src/app, so one is expected
+            assert.ok(unnamed.length <= 1,
+                unnamed.length + ' of ' + records.length + ' are not named after a file: '
+                + unnamed.map(function (p) { return p.name; }).join(' | '));
+        });
+
 
         it('has a sidebar with pages on it', function () {
             assert.ok(links().length > 0, 'no pages in the sidebar');

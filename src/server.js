@@ -11,7 +11,10 @@ var wanted = require('./target');
 //takes and the other misses runs in one build and not the other, and neither
 //says a word: an unfound plugin is not an error, it is an absence.
 var found = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/server\.js$/);
-var plugins = found.keys().map(found);
+//NAMED BY WHERE THEY LIVE, on the way in -- see src/target.js. Without this
+//every plugin in app.plugins is called `plugin`, which is what the setup
+//functions are all called.
+var plugins = found.keys().map(function (key) { return wanted.stamp(found(key), key); });
 
 //and the base class rectify ships as a plugin rather than as part of the
 //container, so a plugin that wants an emitter, a "ready" it can act on, or

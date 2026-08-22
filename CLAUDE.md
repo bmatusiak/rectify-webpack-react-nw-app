@@ -292,6 +292,15 @@ asked for any one of them without being restarted. There is no `--selftest` or
 `?selftest` gate on loading -- only the production check, which webpack uses to
 drop the whole `require.context`.
 
+**A plugin is named after where it lives.** Every setup function in this app is
+called `plugin`, so rectify -- which names a plugin after its setup function --
+fell back to "the plugin providing [io]" and "the plugin at config index 7
+consuming [...]" for all of them, in `app.plugins`, on the Graph page and in the
+message naming a plugin that could not be resolved. All five boots now stamp the
+folder path through `src/target.js`, so a plugin is called `core/io/server.js`
+everywhere. `test/server-graph.test.js` and `src/app/demo/window.test.js` fail if
+a boot stops doing it.
+
 Targeting happens **when the run is asked for**, not when the app starts: `src/target.js`
 tags each suite with the plugin that registered it, and `run({ only })` filters on that. A
 flag at load time would mean restarting the app to change target, and not restarting is the

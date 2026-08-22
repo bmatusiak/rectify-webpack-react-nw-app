@@ -41,21 +41,25 @@ var TEST_COLOURS = {
 //in a column of their own. A different colour says which is which without a
 //legend.
 
-//WHAT TO CALL A NODE, WHICH IS NOT ITS name.
+//WHAT TO CALL A NODE, WHICH IS NOT ALWAYS ITS name.
 //
-//rectify names a plugin after its setup function, and every setup function in
-//this app is called `plugin` — so a plugin that provides something is called
-//"the plugin providing [io]", which is accurate and too long to draw. What
-//identifies it on a graph is what it provides.
+//A plugin that provides something is identified on a graph by what it provides:
+//`io` is the node everything reaching for `io` points at, and drawing it as
+//`core/io/window` would make a reader match up two names to answer one
+//question.
 //
-//A plugin providing NOTHING has only its name, and rectify has two fallbacks for
-//an anonymous one — "the plugin providing [...]" and "the plugin at config index
-//N consuming [...]". Both are accurate and neither fits in a box: the second is
-//eleven service names long for the demo's own window half.
+//A PLUGIN THAT PROVIDES NOTHING HAS ONLY ITS NAME, and every setup function in
+//this app is called `plugin` -- so all of them drew as one repeated box saying
+//"adds to others", which is a picture of a category rather than of the app. The
+//five boots stamp the folder path on the way in now (src/target.js), so
+//`demo/window.js` is called that here, in `app.plugins`, and in a resolution
+//failure.
 //
-//src/target.js gives the test plugins their folder path, which is why those read
-//properly. The rest genuinely have no name to show, so the node says what it is
-//for and the panel below shows what rectify calls it.
+//The fallback stays for anything that arrives unstamped -- rectify's own
+//`PluginBase`, and anything pushed into the config by hand. Its two names for an
+//anonymous plugin are accurate and unusable in a box: "the plugin at config
+//index N consuming [...]" is eleven service names long for the demo's own
+//window half.
 var ANONYMOUS = ['the plugin providing', 'the plugin at config index'];
 
 function label(entry) {
@@ -67,7 +71,13 @@ function label(entry) {
     });
 
     if (anonymous) return 'adds to others';
-    return name.replace(/\.test\.js$/, '').replace(/\.js$/, '');
+
+    //`ui/banner/window.js` is `ui/banner` here: the context is the same for
+    //every node on this graph, so repeating it in twenty boxes says nothing.
+    return name
+        .replace(/\.test\.js$/, ' (test)')
+        .replace(/\.js$/, '')
+        .replace(/\/(main|server|window|cli)(?= \(test\)|$)/, '');
 }
 
 function build(plugins, mode) {

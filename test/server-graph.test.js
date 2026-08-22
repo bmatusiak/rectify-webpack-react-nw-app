@@ -78,6 +78,31 @@ test('the plugin graph resolves on the server side', () => {
         assert.ok(name in services, 'missing service: ' + name);
 });
 
+//AND EVERY ONE OF THEM IS NAMED AFTER WHERE IT LIVES.
+//
+//src/target.js can be asked whether `stamp` works; only a booted graph can be
+//asked whether the boot called it. This is the fast half of that -- the window
+//boot has the same check inside the app, in src/app/demo/window.test.js.
+//
+//It matters beyond the Graph page: `app.plugins` is what rectify names when a
+//plugin cannot be resolved, and every setup function in this app is called
+//`plugin`, so without the stamping that message names none of them.
+test('every plugin is named after the file it came from', () => {
+    const records = loaded.app.plugins;
+    assert.ok(records.length > 5, 'no plugin records to look at');
+
+    //rectify's own PluginBase is pushed in by the boot and is not a file under
+    //src/app, so one that is not a path is expected
+    const unnamed = records.filter(p => String(p.name || '').indexOf('/') < 0);
+
+    assert.ok(unnamed.length <= 1,
+        unnamed.length + ' of ' + records.length + ' are not named after a file: '
+        + unnamed.map(p => p.name).join(' | '));
+
+    const server = records.filter(p => /\/server\.js$/.test(String(p.name || '')));
+    assert.ok(server.length > 5, 'only ' + server.length + ' are named after a server.js');
+});
+
 test('the window half is not in this bundle at all', () => {
     const services = loaded.app.services;
     //react, theme and storage are window.js files, so they are not here to stub

@@ -27,11 +27,15 @@ if (typeof setImmediate === 'undefined') {
 var boot = require('./boot');
 var pkg = require('../package.json');
 var Config = require('./config');
+var wanted = require('./target');
 var serve = require('./serve');
 
 //the same folder scan src/main.js does off disk, done by webpack at build time
 var found = require.context('./app', true, /^\.\/[^_./][^/]*(?:\/(?!vendor\/)[^_./][^/]*)?\/main\.js$/);
-var plugins = found.keys().map(found);
+//NAMED BY WHERE THEY LIVE, exactly as src/main.js does off disk -- see
+//./target.js. A packaged build is where an unnamed plugin is hardest to
+//identify, because there are no files beside it to read.
+var plugins = found.keys().map(function (key) { return wanted.stamp(found(key), key); });
 
 //and the base class rectify ships as a plugin rather than as part of the
 //container, so a plugin that wants an emitter, a "ready" it can act on, or
