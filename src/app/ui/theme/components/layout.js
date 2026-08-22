@@ -7,7 +7,7 @@ var { cx, Button, Card, Icon } = require('./ui');
 //with the words taken out.
 
 function Page(props) {
-    var { sidebar, header, footer, className, children } = props;
+    var { sidebar, header, banner, footer, className, children } = props;
     var [sections, setSections] = useState([]);
 
     //what the page turned out to contain, read back off the dom rather than
@@ -32,6 +32,13 @@ function Page(props) {
     return (
         <div className={cx('d-flex flex-column vh-100', className)}>
             {header}
+
+            {/* UNDER THE TITLE BAR AND ABOVE THE SPLIT, so a banner spans the
+                sidebar as well as the content. Page only renders what it is
+                given here -- ../banner is a separate plugin and this knows
+                nothing about it, which is what keeps the kit replaceable. */}
+            {banner}
+
             <div className="d-flex flex-grow-1 overflow-hidden">
                 {typeof sidebar == 'function' ? sidebar(sections) : sidebar}
                 <main className="flex-grow-1 overflow-auto p-4">{children}</main>

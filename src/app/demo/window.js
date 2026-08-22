@@ -16,10 +16,10 @@ var pages = require('./pages');
 //theme -- which the README calls a slot you are expected to replace -- fail to
 //load if you deleted one of them.
 plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'settings', 'session',
-    'editor', 'markdown', 'xterm', 'litegraph', 'ext'];
+    'editor', 'markdown', 'xterm', 'litegraph', 'ext', 'banner'];
 plugin.provides = [];
 async function plugin(imports, register) {
-    var { react, theme, appPackage, io, settings, session } = imports;
+    var { react, theme, appPackage, io, settings, session, banner } = imports;
     var { Page, Sidebar, Navbar, Footer, Button, Icon, Toasts } = theme.ui;
 
     //which page you were on survives a reload, because it is in the store
@@ -33,6 +33,35 @@ async function plugin(imports, register) {
         var [connected, setConnected] = useState(io.connected !== false);
 
         useEffect(function () { return theme.onModeChange(setMode); }, []);
+
+        //TWO BANNERS THIS APP CAN HONESTLY RAISE, both about state it already
+        //had and was saying quietly or not at all.
+        //
+        //A swatch that refuses the mode was a disabled toggle with a tooltip --
+        //true, and only findable by hovering the control that is not working.
+        //A dropped socket was a coloured dot in the footer, which is the thing
+        //this app already learned the hard way: a page whose socket is dead
+        //looks exactly like a working one until you click something.
+        useEffect(function () {
+            if (theme.modeLocked) banner.raise({
+                id: 'mode-locked',
+                variant: 'warning',
+                icon: 'circle-half',
+                text: theme.swatch + ' is a ' + theme.showing + ' design, so ' + theme.mode +
+                    ' mode cannot be honoured. Pick another swatch to change it.'
+            });
+            else banner.lower('mode-locked');
+        }, [mode, swatch]);
+
+        useEffect(function () {
+            if (connected) banner.lower('offline');
+            else banner.raise({
+                id: 'offline',
+                variant: 'danger',
+                icon: 'plug',
+                text: 'not connected to the node half. nothing on this page can reach the app.'
+            });
+        }, [connected]);
 
         useEffect(function () {
             var up = function () { setConnected(true); };
@@ -73,6 +102,7 @@ async function plugin(imports, register) {
         return (
             <>
                 <Page
+                    banner={<banner.Banners />}
                     header={
                         <Navbar brand={<span><Icon name="box-seam" className="me-2" />{appPackage.title}</span>}
                             right={

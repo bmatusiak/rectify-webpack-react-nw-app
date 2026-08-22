@@ -62,10 +62,12 @@ source so they cannot quietly stop being true.
 | [ui/markdown](src/app/ui/markdown/) | `window` | marked, rendered where it cannot do anything |
 | [ui/xterm](src/app/ui/xterm/) | `window` | a terminal: bytes that arrived from somewhere else |
 | [ui/litegraph](src/app/ui/litegraph/) | `window` | a graph: things, and what connects them |
+| [ui/banner](src/app/ui/banner/) | `window` | something true about the app, said across the top of it |
 
-Each of the last four wraps a vendored library in its own `vendor/` folder, and
-each is a slot: swap one and the pages that use it are the only thing that
-changes. `webpack.config.js` keeps every `vendor/` folder away from babel —
+Four of those five wrap a vendored library in its own `vendor/` folder, and each
+is a slot: swap one and the pages that use it are the only thing that changes.
+[banner](src/app/ui/banner/) is the odd one — it wraps nothing and consumes the
+theme, because it is a composition *of* the kit rather than a surface beside it. `webpack.config.js` keeps every `vendor/` folder away from babel —
 these are shipped builds, and babel rewriting a top-level `this` breaks a UMD
 file on its first line.
 

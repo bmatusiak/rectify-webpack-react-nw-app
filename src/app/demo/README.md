@@ -4,7 +4,7 @@ The example app. **Delete this folder and the app is the scaffold again.**
 
 | file | provides | consumes |
 |---|---|---|
-| `window.js` | — | `app`, `react`, `theme`, `appPackage`, `io`, `settings`, `session`, `editor`, `markdown`, `xterm`, `litegraph`, `ext` |
+| `window.js` | — | `app`, `react`, `theme`, `appPackage`, `io`, `settings`, `session`, `editor`, `markdown`, `xterm`, `litegraph`, `ext`, `banner` |
 | `server.js` | — | `app`, `appPackage`, `tray`, `ipc`, `window` |
 | `cli.js` | — | `cli`, `ipc` |
 
@@ -84,6 +84,14 @@ the graph rather than the registry, so it answers for plugins that never touched
 already knows. The node half is a different container and this one cannot ask it,
 so that side is answered from the records it sent, and the panel says which of
 the two answered.
+
+## what it says across the top
+
+Two states the demo already knew and was saying quietly or not at all, now raised
+as [banners](../ui/banner/): a swatch that refuses the mode somebody asked for
+(it was a disabled toggle with a tooltip), and a dropped socket (it was a
+coloured dot in the footer). The second is the one that matters — a page whose
+socket is dead looks exactly like a working one until you click something.
 
 ## the other two halves
 
