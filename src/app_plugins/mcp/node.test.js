@@ -5,19 +5,25 @@ const path = require('node:path');
 
 //THE PROTOCOL, SPOKEN THE WAY A CLIENT SPEAKS IT.
 //
-//src/app_plugins/mcp/server.test.js checks what a plugin can register and what
-//the four ipc commands answer with. This checks the part that is not ours: the
-//JSON-RPC envelope, the method names, the error codes, and the shapes an MCP
-//client will actually read. It launches tools/mcp.js the way Claude Code would
-//-- a child process, stdin and stdout, nothing else -- and asks it questions.
+//./server.test.js runs INSIDE the app and checks what a plugin can register and
+//what the four ipc commands answer with. This one runs OUTSIDE it, in the test
+//runner's own process, and checks the part that is not ours: the JSON-RPC
+//envelope, the method names, the error codes, and the shapes an MCP client will
+//actually read. It launches ../../../tools/mcp.js the way Claude Code would --
+//a child process, stdin and stdout, nothing else -- and asks it questions.
 //
-//IT NEEDS THE APP RUNNING, and says so rather than starting one: this is the
-//only test here that talks to a live app, and a suite that silently started a
+//WHY IT IS `node.test.js` RATHER THAN A CONTEXT. The four context files run as
+//plugins inside a graph; this cannot, because the whole point of it is to be a
+//stranger at the door. It is still this plugin's, so it lives here rather than
+//in test/ -- `npm test -- mcp` is meant to mean everything about mcp.
+//
+//IT NEEDS THE APP RUNNING, and says so rather than starting one: it is the only
+//suite of this kind that talks to a live app, and one that silently started a
 //second copy of a desktop app would be a surprising thing to run on a laptop.
 //With nothing running it checks the one behaviour that still holds -- that the
 //bridge says the app is not running instead of hanging.
 
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', '..', '..');
 const BRIDGE = path.join(ROOT, 'tools', 'mcp.js');
 const NEWLINE = String.fromCharCode(10);
 

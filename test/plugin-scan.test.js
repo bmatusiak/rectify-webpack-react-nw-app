@@ -241,6 +241,50 @@ test('a test plugin is not mistaken for a plugin', () => {
 
         assert.ok(pattern.test(`./${ROOTS[0]}/core/io/${context}.js`), file + ' should match a plugin');
         assert.ok(!pattern.test(`./${ROOTS[0]}/core/io/${context}.test.js`), file + ' should NOT match a test');
+
+        //AND NEITHER IS node.test.js, which is the fifth kind of suite: a
+        //plugin's own tests, run by the node test runner rather than inside the
+        //app. It sits in a plugin folder and must be invisible to every boot --
+        //loaded as a plugin it would register nothing and provide nothing,
+        //which rectify reports as a plugin that never called register().
+        assert.ok(!pattern.test(`./${ROOTS[0]}/core/io/node.test.js`), file + ' should NOT match a node suite');
+        assert.ok(!pattern.test(`./${ROOTS[0]}/core/io/node.js`), file + ' should NOT match node.js either');
+    });
+});
+
+//THE FIFTH KIND OF SUITE, AND THE RUNNER HAS TO FIND ALL OF THEM.
+//
+//`<plugin>/node.test.js` is a plugin's own test that needs no app -- it was six
+//files in test/, named after what they were about (`fanout`, `mock`, `capture`)
+//rather than whose they were. Now `npm test -- core/io` means everything about
+//core/io, which is what it always read as.
+//
+//This checks tools/test.js can still see them, because the walk is shared with
+//tools/selftest.js and a change there would silently stop `npm test` running a
+//whole class of suite -- passing, with fewer assertions and nothing to say so.
+test('every node.test.js belongs to a plugin, and the runner lists it', () => {
+    const found = ROOTS.filter((root) => fs.existsSync(path.join(SRC, root)))
+        .flatMap((root) => walkedFor('node.test.js', path.join(SRC, root)));
+
+    assert.ok(found.length >= 5, 'only ' + found.length + ' node suites, so this proves little');
+
+    found.forEach((file) => {
+        const beside = ['main', 'server', 'window', 'cli']
+            .some((context) => fs.existsSync(path.join(path.dirname(file), context + '.js')));
+
+        assert.ok(beside, key(file) + ' is not beside a plugin');
+    });
+
+    //and none left behind in test/, where they used to be
+    assert.ok(!fs.existsSync(path.join(__dirname, 'node.test.js')), 'test/node.test.js is not a thing');
+
+    const listed = require('node:child_process')
+        .execFileSync(process.execPath, [path.join(__dirname, '..', 'tools', 'test.js'), '--list'],
+            { encoding: 'utf8' });
+
+    found.forEach((file) => {
+        const name = key(file).split('/').slice(2).join('/').replace('.test.js', '');
+        assert.ok(listed.indexOf(name) >= 0, 'tools/test.js does not list ' + name);
     });
 });
 

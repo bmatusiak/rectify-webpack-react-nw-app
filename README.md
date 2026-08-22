@@ -381,11 +381,12 @@ npm test -- requires         only test/requires.test.js
 npm test -- --list           what there is to aim at
 ```
 
-Tests live in two places, and the split is not filing — it is about what can be
-answered where.
+Tests live in three places, and the split is about **who owns the test** and
+**what it needs to run**, in that order.
 
-**`test/`** holds what needs no app: the shape of the tree, the build, pure
-logic. Three of those carry more than their own subject:
+**`test/`** is about the app itself — the shape of the tree, the build, the
+boots. Nothing there belongs to one plugin. Three carry more than their own
+subject:
 
 - `plugin-scan.test.js` keeps the five discovery sites agreeing about what a
   plugin is. One taking a file the others miss is a plugin that runs in
@@ -397,7 +398,14 @@ logic. Three of those carry more than their own subject:
 - `server-graph.test.js` builds the real server entry with webpack and boots it.
   It is the only place the bundled node half runs outside nw.
 
-**Beside each plugin** sits `<context>.test.js` — a test that is itself a
+**Beside a plugin, `node.test.js`** — an ordinary node test file for the parts
+of that plugin that answer without an app: `core/io/node.test.js` requires
+`./fanout.js` and `./mock.js` and asks them questions. Same runner as `test/`, a
+different subject. Six of these used to be in `test/` under names that said what
+they were about rather than whose they were, which also meant `npm test -- mcp`
+ran a file in `test/` *instead of* the plugin's own suites.
+
+**Beside a plugin, `<context>.test.js`** — a test that is itself a
 plugin. It consumes the services it is about, so the container hands it the real
 ones and loads it after whatever made them: nothing to mock, and no second
 wiring to keep in step.
@@ -498,20 +506,14 @@ src/app/my-thing/
   server.js       runs in the node half
   window.js       runs in the window
   server.test.js  a test, itself a plugin, run inside the app
+  node.test.js    a test of the parts that need no app, if there are any
   README.md       what it is
 ```
 
-Two of those are checked. `test/readme.test.js` fails if the README is missing
-or its table disagrees with the source, and the audit for a missing test is one
-command:
-
-```sh
-for c in main server window cli; do
-  for f in $(find src/app -name "$c.js" -not -path "*/core/selftest/*"); do
-    [ -f "$(dirname $f)/$c.test.js" ] || echo "$f has no tests"
-  done
-done
-```
+Both are checked, and neither audit is a snippet to remember:
+`test/readme.test.js` fails if the README is missing or its table disagrees with
+the source, and `test/plugin-scan.test.js` fails if a context has no test beside
+it — in every tree, not just the first.
 
 ```js
 //src/app/my-thing/server.js

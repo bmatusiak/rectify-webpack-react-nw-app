@@ -239,7 +239,8 @@ a client shows as server logs.
 start it with npm start`. A client that launched the bridge and got silence
 would report an MCP problem to somebody who has an app problem.
 
-[`test/mcp.test.js`](../test/mcp.test.js) speaks the protocol to it over a pipe
+[`src/app_plugins/mcp/node.test.js`](../src/app_plugins/mcp/node.test.js) speaks
+the protocol to it over a pipe
 — every list, a call, a read, a prompt, and the four ways of being wrong,
 including a `resources/read` that tries to climb out of the tree.
 

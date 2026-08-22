@@ -371,10 +371,32 @@ All four were found by the app misbehaving, not by reading:
 
 ## Tests
 
-`npm test` is the whole chain. Most of `test/` is what can be answered **without a running
-app** -- the shape of the tree, the build, pure logic -- and then `selftest.test.js` starts
-the app and asks it to run the suites that live beside each plugin. Four contexts, one
-command, and `.github/workflows/test.yml` runs it on every push.
+`npm test` is the whole chain, and there are three kinds of suite in it:
+
+| where | what it is about | runs in |
+|---|---|---|
+| `test/*.test.js` | **the app itself** -- the shape of the tree, the build, the boots | the test runner |
+| `<plugin>/node.test.js` | **that plugin**, answered without an app | the test runner |
+| `<plugin>/<context>.test.js` | **that plugin**, inside the running app | the app |
+
+`test/selftest.test.js` is what starts the app and asks it for the third kind.
+`.github/workflows/test.yml` runs the lot on every push.
+
+**`test/` is about the app; a plugin's tests are in its folder.** Both of the
+first two kinds are plain node files run the same way -- the difference is
+subject, not runner. Six of them used to be in `test/` under names that said
+what they were about rather than whose they were: `fanout.test.js` and
+`mock.test.js` were `core/io`'s, `capture.test.js` was `core/window`'s. That
+also broke aiming, invisibly -- a file in `test/` was matched before a plugin
+and the search stopped, so **`npm test -- mcp` ran `test/mcp.test.js` INSTEAD of
+the plugin's own two suites** and reported a green run about a third of what was
+asked for. A target that names both now runs both.
+
+**Which kind a new test is, is decided by what it needs.** If it can `require`
+the module and ask it a question, it is `node.test.js` beside that module. If it
+needs the real services, it is a `<context>.test.js` and it consumes them. If it
+is about the tree, the build or the boots -- no single plugin owns it -- it goes
+in `test/`.
 
 On a headless linux runner that needs `xvfb-run`: nw.js is chromium and wants a display.
 
@@ -389,7 +411,10 @@ Three of the rest are load-bearing beyond their own subject:
   express and socket.io. It is the only place the bundled node half is exercised outside
   nw, so a broken `require.context` regex or an unresolvable server graph fails here.
 - `plugin-scan.test.js` keeps the five discovery sites in agreement, and checks that both
-  one-level and two-level plugins are found and that `_`-prefixed folders are skipped.
+  one-level and two-level plugins are found and that `_`-prefixed folders are skipped. It
+  also holds `node.test.js` to being invisible to all five -- loaded as a plugin it would
+  register nothing -- and checks `tools/test.js` can still find every one of them, since a
+  runner that stopped looking would pass with fewer assertions and say nothing.
 - `requires.test.js` resolves every relative require in `src/` and `tools/` that climbs
   out of its own folder. Moving a plugin one level changes what `../../..` means, and a
   main-side require is read off disk by nw at boot -- so nothing else here catches it.
@@ -436,6 +461,14 @@ belongs to a context by consuming the one in that graph.
 The harness has `ok`, `equal` and `notEqual` and **no `deepEqual`** -- these run inside the
 app, which is not always node.
 
+**A plugin may also carry `node.test.js`**, which is the other half of the same
+idea: an ordinary node test file, in the plugin's folder, for the parts answered
+without an app. `core/io/node.test.js` requires `./fanout.js` and `./mock.js`
+and asks them questions; `core/bridge/node.test.js` wires two `wire.js`
+instances to each other. It is not a plugin and no boot ever sees it -- `node`
+is not one of the four contexts, so every regex and every walk misses it, which
+`test/plugin-scan.test.js` checks on purpose.
+
 ## All four contexts run inside the app
 
 `npm test` and `npm run drive -- --selftest` both ask the running app to run the suites that
@@ -476,15 +509,9 @@ itself.
 
 **Every plugin has a test beside it except `core/selftest` itself**, which is the runner --
 testing it with itself proves nothing that its passing does not already prove. When adding a
-plugin, add its `<context>.test.js` too; the audit is one command:
-
-```sh
-for c in main server window cli; do
-  for f in $(find src/app -name "$c.js" -not -path "*/core/selftest/*"); do
-    [ -f "$(dirname $f)/$c.test.js" ] || echo "$f has no tests"
-  done
-done
-```
+plugin, add its `<context>.test.js` too. The audit is not a snippet to remember any more:
+`test/plugin-scan.test.js` runs it, across every tree, and goes red for a context with no
+test beside it.
 
 **A packaged build cannot load its own tests.** Each `require.context` sits inside the check,
 so webpack drops it, and `main.prod.js` has no equivalent path. `npm run drive -- --build

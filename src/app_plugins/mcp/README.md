@@ -132,8 +132,14 @@ forwarded view of `serving`. Consuming `'http'` here fails the graph outright.
 
 ## the tests
 
-`server.test.js`, run inside the app, and
-[`test/mcp.test.js`](../../../test/mcp.test.js), which speaks the actual
-protocol to the bridge over a pipe — `initialize`, every list, a call, a read, a
-prompt, and the four ways of being wrong. The second is the one that would catch
-a change to these shapes, because it reads them the way a client does.
+Two, and they sit on opposite sides of the door. [`server.test.js`](server.test.js)
+runs INSIDE the app, against the real registries. [`node.test.js`](node.test.js)
+runs outside it, in the test runner's own process, and speaks the actual protocol
+to the bridge over a pipe — `initialize`, every list, a call, a read, a prompt,
+and the four ways of being wrong. The second is the one that would catch a change
+to these shapes, because it reads them the way a client does.
+
+It is `node.test.js` rather than a context because it cannot be a plugin: the
+point of it is to be a stranger at the door. It lived in `test/` until that was
+noticed to break `npm test -- mcp`, which matched the file and stopped looking
+for the plugin.

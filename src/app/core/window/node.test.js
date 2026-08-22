@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
-const { measure } = require('../src/app/core/window/main.js');
+const { measure } = require('./main.js');
 
 //nw hands back a buffer and nothing else, so the size printed after a capture
 //is read out of the file's own header. a screen at 2x returns an image twice
