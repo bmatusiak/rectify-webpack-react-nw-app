@@ -68,6 +68,13 @@ const SUMMARY = [
   /^\d+ findings?$/, /^nothing to say$/
 ]
 
+// A LINE THAT SAYS IT PASSED IS NOT TROUBLE, whatever words are in it. The
+// trouble list is deliberately broad -- it matches `failed` anywhere -- and a
+// test called "separates a tool that FAILED from a tool that is not there"
+// passed thirteen times while this reported ✖ on a run that exited 0. Checked
+// first, because the tick is a stronger signal than any word after it.
+const PASSED = [/^\s*✔/, /^\s*ok/, /^\s*﹣/, /^\s*ℹ (pass|suites|tests|duration|todo|cancelled|skipped)/]
+
 function matches (line, patterns) { return patterns.some(rx => rx.test(line)) }
 
 // UNBUFFERED, ONE WRITE PER EVENT. A watcher reading this through a pipe gets
@@ -143,6 +150,12 @@ function run (scripts, args, options) {
       return
     }
     frames = 0
+
+    if (matches(clean, PASSED)) {
+      //a summary line is still worth keeping for the ending
+      if (matches(clean, SUMMARY)) { summary.push(clean.trim()); said('· ' + clean.trim()) }
+      return
+    }
 
     if (matches(clean, TROUBLE)) return trouble(clean.trim())
     if (matches(clean, SUMMARY)) { summary.push(clean.trim()); return said('· ' + clean.trim()) }
