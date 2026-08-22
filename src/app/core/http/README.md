@@ -94,7 +94,11 @@ with a **503 rather than a 404**, because *off* and *not a route* are different
 facts and a log deserves to say which.
 
 In a packaged build there is no webpack and nothing to exempt, so off means no
-port at all.
+port at all — and **on** means [build](../build/) mounts the three routes a
+browser needs: the page, the window half out of memory, and the stylesheets from
+disk. Until it did, `serve on` in a package opened a port where every request
+answered 404, and nothing noticed: the app's own window loads `view.html` off
+disk and never asks the server for anything.
 
 ## the express app is always real
 

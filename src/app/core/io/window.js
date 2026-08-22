@@ -32,12 +32,22 @@ async function plugin(imports, register) {
     //Deciding on the first look meant an ordinary save left the window on an
     //error overlay, having fallen through to a socket.io server that is off.
     //
-    //Half a second, in animation frames, because this is a race with main and
-    //not with a network. A browser has no main to wait for and simply spends it.
+    //HALF A SECOND, ON A TIMER, NOT IN ANIMATION FRAMES.
+    //
+    //This was requestAnimationFrame, on the reasoning that it is a race with
+    //main rather than with a network. It is, and rAF still cannot be used to
+    //measure it: chromium does not run animation frames for a window nobody is
+    //looking at. A browser view opens, goes behind the app window, and stops
+    //being animated -- so the loop never advanced, the page never fell through
+    //to socket.io, and it sat there forever having logged nothing at all. No
+    //error, no overlay, just a viewer that never arrived.
+    //
+    //A timer is throttled in a background window and still fires, which is the
+    //difference that matters.
     var bridged = null;
     for (var tries = 0; tries < 30 && !bridged; tries++) {
         bridged = bridge();
-        if (!bridged) await new Promise(function (r) { requestAnimationFrame(r); });
+        if (!bridged) await new Promise(function (r) { setTimeout(r, 16); });
     }
 
     if (bridged) {

@@ -12,7 +12,7 @@
 //reach it — a `require('webpack')` in an unreachable function is still bundled,
 //and dragging webpack into a packaged app is exactly what this avoids.
 
-plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle'];
+plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge'];
 plugin.provides = ['build'];
 async function plugin(imports, register) {
     var { app, http, io, window: win, tray, ipc, lifecycle } = imports;
@@ -83,12 +83,45 @@ async function plugin(imports, register) {
 
         //---- packaged ---------------------------------------------------
 
-        //nothing to serve. The window half is evaluated into the page by
-        //src/app/bridge, and the stylesheets sit beside the app as files the
-        //page loads relatively -- so a packaged build opens no port at all.
-        //
-        //no separate bundle to load either, and no reason to reload it
+        //no separate bundle to load, and no reason to reload it
         ready = require('../../../server.js')(host);
+
+        //AND THE ROUTES A BROWSER WOULD NEED, if anybody ever turns the viewer
+        //on. This used to say "nothing to serve ... so a packaged build opens no
+        //port at all", which was true when it was written and stopped being true
+        //when serving became something a package can be asked for. It stopped
+        //quietly: `serve on` opened a port, and every request to it answered 404
+        //while the app's own window carried on working, because the window loads
+        //view.html straight off disk and never asks the server for anything.
+        //
+        //Everything needed is already here. The window half is in memory --
+        //../bridge carries it inside main.bin as a string, which is what keeps
+        //javascript off disk -- and the stylesheets are files beside the app.
+        //
+        //MOUNTED ON THE ROUTER, so ../http's gate covers them: with the viewer
+        //off these are not reachable, which is the whole point of the switch.
+        var path = require('path');
+        var source = imports.bridge.source;
+
+        //the page a browser gets. The window's own view.html has no script in it
+        //-- it does not need one -- and a browser has no other way in.
+        var SHELL = '<!doctype html><meta charset="utf-8">' +
+            '<title>' + (app.appPackage.title || app.appPackage.name) + '</title>' +
+            '<div id="root"></div>' +
+            '<script src="window.js"></script>';
+
+        http.router.get('/', function (req, res) { res.type('html').send(SHELL); });
+
+        http.router.get('/window.js', function (req, res) {
+            if (!source) return res.status(404).type('text').send('this build carries no window half');
+            res.type('js').send(source);
+        });
+
+        //the swatches, which ARE on disk: tools/build.js leaves them beside the
+        //binary rather than inside it, because 230kb each took main.bin from
+        //4mb to 17mb. The page asks for them relatively, so this is where a
+        //browser's `theme/swatch-x.css` lands.
+        http.router.use('/theme', http.express.static(path.join(app.root, 'theme')));
 
     } else {
 

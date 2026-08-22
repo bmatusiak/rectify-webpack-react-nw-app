@@ -121,3 +121,12 @@ has already run. Deciding immediately meant an ordinary save left the window on
 an error overlay, having fallen through to a socket.io server that is off.
 
 A browser has no main to wait for and simply spends the half second.
+
+**It waits on a timer, not in animation frames.** That looked like a race with
+main rather than with a network, so `requestAnimationFrame` seemed the honest
+instrument. It is not one: **chromium does not run animation frames for a window
+nobody is looking at.** A browser view opens, goes behind the app window, stops
+being animated — and the loop never advanced, so the page never fell through to
+socket.io and sat there forever having logged nothing at all. No error, no
+overlay, just a viewer that never arrived. A timer is throttled in a background
+window and still fires, which is the difference that matters.

@@ -19,7 +19,13 @@ bridge.io          the socket.io-Server-shaped end. io/main.js fans out over it
 bridge.attach(win) wire up a window
 bridge.page        'view.html' — the visible page in a package
 bridge.connected
+bridge.source      the window half, for whoever else has to hand it out
 ```
+
+`source` exists because a **browser** viewer in a packaged build has no other way
+to the window half — the point of the package is that there is no javascript on
+disk. [build](../build/) serves it from here rather than reading
+`dist/assets.json` a second time.
 
 ## why the window is on it even in development
 
@@ -79,6 +85,16 @@ A frame answers this about itself: a top-level document is its own `parent`. The
 first version compared against `win.window`, which is right until the page
 reloads — during `document-start` for the *new* document `win.window` still
 refers to the old one, so the guard rejected the very page it exists to protect.
+
+**Both questions are asked now, cheapest first.** `frame === win.window` can only
+ever be a *true* positive — a stale one is a different object, so it says false
+rather than lying — and asking it first keeps chromium quiet: reading
+`frame.parent` in a packaged build is met with *"Cross-Origin-Opener-Policy
+policy would block the window.parent call"* on every page load, warned into a log
+somebody is trying to read. With only the parent check, a packaged window was
+classified as not-top, skipped injection at `document-start`, and worked solely
+because `loaded` puts the way home back afterwards. Working by luck is not the
+same as working.
 
 **`document-start` does not fire again on a reload.** Measured. Webpack
 full-reloads the page whenever it cannot hot swap a module, and `__host` was

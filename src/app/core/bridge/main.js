@@ -106,8 +106,34 @@ async function plugin(imports, register) {
         //holding it, and a cross-origin one throws rather than answering, which
         //is also a no.
         function isTop(frame) {
-            try { return !!frame && frame.parent === frame; }
-            catch (e) { return false; }
+            if (!frame) return false;
+
+            //THE CHEAP ANSWER FIRST, AND IT CAN ONLY BE A TRUE POSITIVE. If this
+            //frame IS the window's own, it is the top one. A stale win.window --
+            //which is what it is during document-start for a reload -- is a
+            //different object, so it says false rather than lying.
+            //
+            //Asking it first also keeps chromium quiet: reading `frame.parent`
+            //in a packaged build is met with "Cross-Origin-Opener-Policy policy
+            //would block the window.parent call" every time, warned into a log
+            //somebody is trying to read.
+            try { if (frame === win.window) return true; }
+            catch (e) { /* cannot even compare: ask the frame instead */ }
+
+            try { return frame.parent === frame; }
+            catch (e) { /* refused: fall through */ }
+
+            //AND WHEN CHROMIUM REFUSES TO ANSWER. In a packaged build reading
+            //`frame.parent` is met with "Cross-Origin-Opener-Policy policy would
+            //block the window.parent call" -- a console warning, not a throw
+            //that says what it wants, and the frame is left unclassified.
+            //
+            //Neither would answer, so it is not ours to inject into. Without
+            //this pair the packaged window was classified as not-top, skipped
+            //injection at document-start, and worked only because `loaded` puts
+            //the way home back afterwards. Working by luck is not the same as
+            //working.
+            return false;
         }
 
         //before any of the page's own script runs, so the page can never find
@@ -288,7 +314,14 @@ async function plugin(imports, register) {
 
             //the visible window's page, which is a file with no script in it.
             //everything executable arrives by eval from main.bin.
-            page: 'view.html'
+            page: 'view.html',
+
+            //THE WINDOW HALF, FOR ANYONE ELSE WHO HAS TO HAND IT OUT. This
+            //window gets it by eval and needs no url -- but a BROWSER viewer in
+            //a packaged build has no other way to it, since the point of the
+            //package is that there is no javascript on disk. ../build serves it
+            //from here rather than reading dist/assets.json a second time.
+            get source() { return source; }
         },
         onDestroy: detach
     });

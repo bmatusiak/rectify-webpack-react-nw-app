@@ -4,7 +4,7 @@ How the app's two other halves get in front of you.
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | `build` | `app`, `http`, `io`, `window`, `tray`, `ipc`, `lifecycle` |
+| `main.js` | `build` | `app`, `http`, `io`, `window`, `tray`, `ipc`, `lifecycle`, `bridge` |
 
 ```
 build.ready()   resolves once the node half is loaded and answering
@@ -28,6 +28,33 @@ its list.
 Webpack collects a dependency wherever it can reach it, so a `require('webpack')`
 in an unreachable function is *still bundled* — and dragging webpack into a
 packaged app is exactly what this avoids.
+
+## what a packaged build serves
+
+Nothing, until somebody turns the browser viewer on — and then three things:
+
+```
+/                the page a browser gets: a title and an empty <div id="root">
+/window.js       the window half, out of memory
+/theme/*.css     the swatches, which are files beside the binary
+```
+
+**This used to say "nothing to serve, so a packaged build opens no port at
+all".** That was true when it was written and stopped being true when serving
+became something a package can be asked for — and it stopped *quietly*.
+`serve on` opened a port and every request to it answered 404, while the app's
+own window carried on working perfectly, because it loads `view.html` straight
+off disk and never asks the server for anything. Nobody would have found it
+except by opening a browser at a packaged app.
+
+Everything it needs was already here: [bridge](../bridge/) carries the window
+half inside `main.bin` as a string, which is what keeps javascript off disk, and
+`tools/build.js` leaves the stylesheets beside the binary because 230kb each took
+`main.bin` from 4mb to 17mb.
+
+The routes are mounted on `http.router`, so [http](../http/)'s gate covers them:
+with the viewer off they are not reachable, which is the whole point of the
+switch.
 
 ## the host
 
