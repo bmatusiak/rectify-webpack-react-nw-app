@@ -156,7 +156,11 @@ npm run drive -- --selftest  and run the in-app suites too
 ```
 
 It takes the same `--build` / `--package` as `npm start`, and leaves the app
-running if it already was. It earns its place: it found the active sidebar pill
+running if it already was -- **unless that app is not the one it was asked
+for**. `--package` against a running dev app used to drive the source tree and
+report `119 checks passed` without a word about the packaged build it never
+touched. `hello` says whether the app is packaged, so the two are compared and a
+disagreement is refused rather than driven. It earns its place: it found the active sidebar pill
 unreadable on thirteen of the twenty-eight swatches, which nothing in `test/`
 could have. What a swatch is allowed to change, and the three things they get
 wrong, is in [theme](../src/app/ui/theme/).

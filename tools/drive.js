@@ -12,7 +12,9 @@
 //   npm run drive -- --shots   and keep a screenshot of every page
 //
 // It leaves the app running if it was already running, and shuts it down if it
-// was the one that started it.
+// was the one that started it -- but only when the running app is the one that
+// was asked for. Driving the source tree while being told --package is a pass
+// about the wrong app.
 
 const path = require('node:path')
 const fs = require('node:fs')
@@ -70,6 +72,24 @@ async function main () {
     }
   } else {
     note('driving the app that is already running')
+
+    // AND IT HAS TO BE THE APP THAT WAS ASKED FOR.
+    //
+    // Reusing whatever is on the socket is right when the two agree and a lie
+    // when they do not: `npm run drive -- --package` against a running dev app
+    // drove the source tree, printed "119 checks passed", and said nothing
+    // about the packaged build it had been asked to test. A pass that is about
+    // something else is worse than a failure.
+    //
+    // The app answers this about itself -- `hello` carries `packaged` -- so
+    // nothing here has to guess from the flags it was given.
+    const info = await ipc.call('hello')
+    if (!!info.packaged !== packaged) {
+      console.log(NEWLINE + 'you asked to drive ' + (packaged ? 'a packaged build' : 'the source tree') +
+        ', and the app already running is ' + (info.packaged ? 'packaged' : 'running from source') + '.')
+      console.log('close it first (node src/cli.js quit), or drop the flag.')
+      process.exit(1)
+    }
   }
 
   // "up" from tools/nw.js means the server is listening, which is earlier than
