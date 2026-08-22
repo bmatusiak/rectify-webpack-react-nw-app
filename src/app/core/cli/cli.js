@@ -1,6 +1,5 @@
-//the command table for src/cli.js.
-//
-//a command is local unless it is not: anything the table does not know is
+//A COMMAND IS LOCAL UNLESS IT IS NOT, and the alternative is a cli half per
+//plugin. Anything the table does not know is
 //forwarded to the running app over the control socket, so a plugin that answers
 //on ipc needs no cli half at all to be reachable from the terminal.
 

@@ -1,4 +1,7 @@
-//the demo's cli half. `npm run cli -- status` is this.
+//`status` IS A LOCAL COMMAND ONLY BECAUSE IT HAS TO ANSWER WHEN THE APP IS
+//NOT RUNNING. Everything else the demo does is forwarded to the app over ipc
+//and needs no file here; this one has to say "not running" without one, which
+//is precisely the case a forwarded command cannot handle.
 
 plugin.consumes = ['cli', 'ipc'];
 plugin.provides = [];

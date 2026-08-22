@@ -4,8 +4,12 @@ var mockPair = require('./mock');
 var bridge = require('../bridge/page');
 var showError = require('../../../overlay');
 
-//the window has no node in it, so everything the node side knows arrives over
-//this socket.
+//THREE WAYS TO ANSWER THE PAGE, AND THE ORDER IS THE POINT. ../bridge first,
+//because that is what a package has and what development should therefore
+//exercise; socket.io second, for a browser looking at the same app; ./mock.js
+//only when asked for by hand. Picking the socket first would mean the transport
+//every shipped app depends on is the one no day of development ever runs -- see
+//../bridge/README.md, which is where that was learned the hard way.
 
 plugin.consumes = [];
 plugin.provides = ['io'];

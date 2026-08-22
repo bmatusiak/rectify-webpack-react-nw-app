@@ -3,12 +3,14 @@ var { useState, useEffect, useCallback } = React;
 
 var pages = require('./pages');
 
-//the demo shell: a sidebar, a page, and somewhere for toasts to land.
+//NOTHING HERE IS A MOCK, and that is the expensive choice. A demo built on
+//canned data renders the same and is finished in a day; this one goes through
+//the real services, so every page is also a test of them -- and when a service
+//breaks, the demo breaks with it rather than continuing to look correct. The
+//stores remember, the socket answers, the tray and the window are the app's own.
 //
-//delete this folder and the app is the scaffold again. everything here is
-//built out of `theme.ui`, and everything it does goes through a real service —
-//the stores remember, the socket answers, the tray and the window are the
-//app's own.
+//DELETE THIS FOLDER AND THE APP IS THE SCAFFOLD AGAIN, which is what keeps that
+//affordable: it is one directory, it provides nothing, and nothing consumes it.
 
 //THE FOUR VENDORED SURFACES ARE CONSUMED HERE RATHER THAN BY THE THEME.
 //Each has a page that shows what it is for, and the demo is the thing that

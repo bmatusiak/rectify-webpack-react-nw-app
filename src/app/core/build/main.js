@@ -1,11 +1,3 @@
-//how the app's two other halves get in front of you.
-//
-//  development   webpack builds them here, serves the window half from memory
-//                and reloads the node half in place on every save
-//  packaged      both were built before packaging. the window half rides along
-//                inside this bundle as a string, and the node half is simply
-//                required — there is nothing to watch and nothing to reload
-//
 //BUILD_PROD is a constant webpack replaces, so only one of these branches is
 //in the packaged bundle. it gates the requires directly rather than sitting
 //inside a function, because webpack collects a dependency wherever it can

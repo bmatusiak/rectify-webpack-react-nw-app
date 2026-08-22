@@ -4,8 +4,6 @@ var { useRef, useState, useEffect } = React;
 var marked = require('./vendor/marked/marked.js');
 
 //---------------------------------------------------------------------------
-//markdown, rendered where it cannot do anything.
-//
 //A PLUGIN WITH ITS OWN VENDOR FOLDER, like ../editor. `marked` belongs to one
 //concern and nothing else in the app should be able to reach it by accident —
 //it does not sanitise, and the safety of every use of it depends on the frame
@@ -20,36 +18,19 @@ var marked = require('./vendor/marked/marked.js');
 plugin.consumes = ['react'];
 plugin.provides = ['markdown'];
 async function plugin(imports, register) {
-    //---- markdown, rendered where it cannot do anything -----------------------
+    //---- the frame ----------------------------------------------------------
     //
-    //A PULL REQUEST BODY IS MARKDOWN THAT GITHUB WILL RENDER, so a preview of it
-    //that is not rendered is a preview of the wrong thing. As source it is a wall
-    //of pipes and hashes, and the one thing it was formatted for is the thing that
-    //does not happen.
+    //WHY AN IFRAME WITH A POLICY, and what it refuses, is ./README.md's first
+    //section: it is the argument for using this plugin at all rather than
+    //calling `marked` and setting innerHTML, which is what everybody does and
+    //what puts somebody else's <script> inside a page that has node behind it.
     //
-    //IN AN IFRAME, AND THAT IS THE WHOLE DESIGN rather than a convenience for
-    //styling. This text came off a machine running a script somebody wrote, so it
-    //is exactly as trustworthy as that script — and markdown carries raw HTML
-    //through BY DESIGN, which `marked` does not sanitise and has never claimed to.
-    //Put in this document it would be running inside a page that has node behind it.
+    //TWO THINGS THAT USED TO BE WRITTEN HERE ARE NO LONGER TRUE, and are worth
+    //naming so they are not written again: there is no `sandbox` attribute (it
+    //rendered nothing in this nw build -- measured five ways, see README), and
+    //this side CAN read the document, which is what `fit` below measures. Both
+    //were true of the version with a sandbox and neither is true now.
     //
-    //So it renders into a frame that can do nothing:
-    //
-    //  no allow-scripts   a <script> or an onerror in the markdown never runs. This
-    //                     is the load-bearing one, and both halves are measured in
-    //                     the Kit pane rather than assumed.
-    //  a CSP too          default-src 'none', so a remote <img> cannot phone home —
-    //                     which would otherwise turn "somebody opened this" into a
-    //                     request to a host of the author's choosing.
-    //  srcdoc             no file is written anywhere to show it.
-    //
-    //What it does NOT have is an opaque origin — see the note on the sandbox
-    //attribute below for why, and why that is survivable here and would not be if
-    //scripts could run.
-    //
-    //THE COST OF A REAL SANDBOX is that this side cannot measure the frame to size
-    //it, because reading contentDocument needs allow-same-origin. So it takes a
-    //height and scrolls inside, which is what these panels do anyway.
     //TWO PALETTES, AND THE CALLER PICKS -- the same shape as ../xterm, and for
     //the same reason: this plugin knows nothing about the theme, so whoever does
     //know which mode is showing says so.

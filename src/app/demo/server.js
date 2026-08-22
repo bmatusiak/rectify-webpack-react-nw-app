@@ -1,9 +1,11 @@
 var fs = require('fs');
 var path = require('path');
 
-//the demo's node half. every button on the System page lands in one of these,
-//so nothing on that page is a mock — the numbers are this process, and the
-//window and tray it moves are the app's own.
+//EVERY BUTTON ON THE SYSTEM PAGE LANDS IN ONE OF THESE. The numbers are this
+//process, not a fixture that renders the same and proves nothing: memory is
+//read here, the tray items are added to the real tray, and "hide the window"
+//hides the window somebody is looking at. A demo that cannot break is a demo
+//that cannot tell you the app is broken.
 
 plugin.consumes = ['app', 'appPackage', 'tray', 'ipc', 'window'];
 plugin.provides = [];

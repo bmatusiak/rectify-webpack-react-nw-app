@@ -1,5 +1,7 @@
-//the message protocol the packaged build talks over, in one file so both ends
-//run the same code rather than two implementations of the same idea.
+//ONE FILE, NOT ONE PER END. Both ends of this could have been written where
+//they are used -- ./main.js frames what it sends, ./page.js parses it -- and
+//then a change to the framing is correct in one of them until somebody notices.
+//A protocol with two implementations is two protocols.
 //
 //it is deliberately the shape the control socket already uses: one json object
 //per line, and a reply carries the id of the thing it answers. that is also

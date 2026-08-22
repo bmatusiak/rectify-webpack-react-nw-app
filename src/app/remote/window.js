@@ -1,6 +1,4 @@
-//hands, to go with the eyes that `capture` gave.
-//
-//the window half is the only place that can touch the document, so the actual
+//THE WINDOW HALF IS THE ONLY PLACE THAT CAN TOUCH THE DOCUMENT, so the
 //clicking happens here and the rest of the plugin is plumbing to reach it.
 //
 //deliberately not an `eval` channel. one would have been three lines and would

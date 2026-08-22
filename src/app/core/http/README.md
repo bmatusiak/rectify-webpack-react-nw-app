@@ -62,8 +62,15 @@ npm run cli -- serve        what it is now, without changing it
 npm run cli -- serve on     ... and off, start, stop, yes, no
 ```
 
-The tray has the same switch as a checkbox. Both call `setServing`, so there is
-one implementation and the menu redraws from the real state whoever moved it.
+The tray has the same switch, and it is a **plain item whose label says what
+clicking it will do** — *Serve to a browser* / *Stop serving to a browser*. It
+was a `type: 'checkbox'` item first, which is the obvious way to show a state:
+nw draws no checkmark for one on windows, so the menu showed an item that looked
+like every other item and told you nothing. A control that cannot show its state
+has to say its action instead.
+
+Both call `setServing`, so there is one implementation, and the menu redraws
+from the real state whoever moved it.
 
 **A bare `serve` asks rather than toggling.** A toggle would be a trap in a
 script: the same command twice leaves it where it started.

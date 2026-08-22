@@ -1,7 +1,7 @@
-//the tray icon, and the menu other plugins add to.
-//
-//this is what makes closing the window survivable: without somewhere to reopen
-//from, hiding a window would strand the app with no way back.
+//WITHOUT THIS THE WINDOW CANNOT BE ALLOWED TO CLOSE. Closing hides it and
+//leaves the node half running, which is only survivable because there is
+//somewhere to reopen from -- take the tray away and the same close strands a
+//running app with no way back to it, and no way to stop it either.
 
 plugin.consumes = ['app', 'http', 'window', 'lifecycle'];
 plugin.provides = ['tray'];

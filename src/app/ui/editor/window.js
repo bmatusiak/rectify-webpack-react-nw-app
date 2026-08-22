@@ -25,14 +25,9 @@ var AceDiff = aceDiff.default || aceDiff.AceDiff || aceDiff;
 require('./vendor/ace-diff/ace-diff.css');
 
 //---------------------------------------------------------------------------
-//the editor: code that is READ.
-//
-//A <pre> IS NOT GOOD ENOUGH, AND THAT IS AN ARGUMENT ABOUT APPROVALS RATHER THAN
-//ABOUT LOOKS. Two things in this app are read carefully enough that a decision
-//hangs on them: the source of a job somebody has to approve, and a branch's diff
-//somebody has to judge. A hundred lines of undifferentiated JavaScript is not
-//something a person reads — it is something a person scrolls past and then
-//approves anyway, which defeats the whole point of putting it on the screen.
+//A <pre> IS THE OBVIOUS OTHER WAY, and it costs about 900KB less. What it costs
+//instead is in ./README.md's first section, which is an argument about approvals
+//rather than about looks.
 //
 //READ-ONLY IN FOUR WAYS, not one. The content is not editable; the cursor is
 //hidden so it does not invite one; the active-line highlight is off for the same

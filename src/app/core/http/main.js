@@ -1,20 +1,16 @@
 var http = require('http');
 var express = require('express');
 
-//one express app, one server, and two separate facts about it.
+//TWO FACTS, NOT ONE BOOLEAN -- see ./README.md for what each one means. One
+//flag cannot describe development: webpack needs the port to exist and hot
+//reload over it, while the app needs to behave like a package, which means
+//refusing browsers. Collapsing them means either no hot reload or no way to
+//test the code a package ships with.
 //
-//LISTENING is whether there is a port at all. In development there always is,
-//because webpack serves the window half over it and hot reloads it; in a
-//packaged build there is one only if somebody asked for it.
-//
-//SERVING is whether a browser may be a CLIENT -- whether socket.io will take a
-//connection and the tray offers to open one. It can be turned off while the
-//server is still listening, which is exactly the development case: webpack keeps
-//its port, and the app behaves the way a package does.
-//
-//THE NW WINDOW IS ON NEITHER OF THESE. It talks to main over ../bridge in every
-//build, so none of this decides whether the app works -- only whether a second
-//viewer can join.
+//THE NW WINDOW IS ON NEITHER OF THEM. It talks to main over ../bridge in every
+//build, so nothing here decides whether the app works -- only whether a second
+//viewer may join. That is what makes turning it off safe enough to be a tray
+//item somebody can click by accident.
 
 plugin.consumes = ['app', 'ipc'];
 plugin.provides = ['http'];

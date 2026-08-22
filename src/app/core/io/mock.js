@@ -1,7 +1,9 @@
-//a socket.io shaped pair of endpoints, in memory. because both halves of a
-//plugin are in the client bundle too, the browser can run the server half
-//against this when nothing answers on the wire — a live mock made of the real
-//server code rather than a second implementation of it.
+//A MOCK MADE OF THE REAL SERVER CODE, rather than a second implementation of
+//it. The usual way is to write stub answers in the window and hope they keep
+//matching ./serve.js; these are two endpoints wired to each other, so the
+//window runs the actual server half against them when nothing answers on the
+//wire. A stub drifts silently -- this one cannot, because there is only one
+//set of answers in the app.
 
 function endpoint() {
     var handlers = {};

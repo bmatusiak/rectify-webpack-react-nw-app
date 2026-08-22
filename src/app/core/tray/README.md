@@ -31,8 +31,9 @@ async function plugin(imports, register) {
         click: function () { console.log('hello'); }
     });
 
-    //all of nw.MenuItem's options work: type, checked, enabled, tooltip,
-    //icon, submenu, key, modifiers
+    //all of nw.MenuItem's options are passed through: type, checked, enabled,
+    //tooltip, icon, submenu, key, modifiers -- though passed through is not the
+    //same as drawn, see below
 
     await register(null, { onDestroy: function () { item.remove(); } });
 }

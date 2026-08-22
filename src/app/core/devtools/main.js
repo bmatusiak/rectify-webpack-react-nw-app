@@ -2,7 +2,11 @@ var fs = require('fs');
 var path = require('path');
 var http = require('http');
 
-//devtools for either half, on the tray, and neither opens by itself.
+//NEITHER OPENS BY ITSELF, and the obvious other way is one line: call
+//showDevTools() at boot the way the old scaffold did. Then every start throws
+//an inspector in front of whoever ran `npm start`, including the runs that are
+//driving the app rather than reading it -- and `npm run drive` starts the app
+//dozens of times a day.
 
 plugin.consumes = ['app', 'window', 'tray'];
 plugin.provides = [];

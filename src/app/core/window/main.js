@@ -1,4 +1,8 @@
-//the nw.js window. it is a view onto a server that outlives it.
+//THE WINDOW IS NOT THE APP, and everything awkward in this file follows from
+//that. Closing it hides it, quitting goes through ../lifecycle, and the handle
+//is held here rather than in the reloadable half -- because a save rebuilds
+//that half, and a window rebuilt with it is a window that blinks out of
+//existence while somebody is reading it.
 
 plugin.consumes = ['app', 'http', 'lifecycle', 'bridge'];
 plugin.provides = ['window'];

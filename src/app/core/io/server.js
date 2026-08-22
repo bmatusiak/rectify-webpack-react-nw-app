@@ -1,7 +1,9 @@
 var serve = require('./serve');
 
-//the handlers. reloaded on every save, so they come off again in onDestroy —
-//otherwise each reload would leave another copy listening.
+//THE HANDLERS COME OFF AGAIN, and forgetting that is not visible for a while:
+//this half is rebuilt on every save, so a listener left behind is a second copy
+//answering the next call, then a third. The first symptom is a reply arriving
+//twice, long after the save that caused it.
 
 plugin.consumes = ['app', 'Plugin'];
 plugin.provides = ['io'];

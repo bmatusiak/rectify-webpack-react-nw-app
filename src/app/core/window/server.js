@@ -1,7 +1,8 @@
-//the same plugin, seen from the app's node half.
-//
-//the window itself is owned by ./main.js, because it has to outlive the bundle
-//this half lives in. what arrives here is a controller, handed over on the host.
+//WHAT ARRIVES HERE IS A CONTROLLER, NOT A WINDOW. The handle belongs to
+//./main.js because it has to outlive this bundle, which is rebuilt on every
+//save; holding it here would mean the window is only as durable as the last
+//edit. Everything below is this half asking that controller for something and
+//putting the answer on the socket.
 
 var fs = require('fs');
 var path = require('path');

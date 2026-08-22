@@ -1,7 +1,5 @@
 var wire = require('./wire');
 
-//the packaged build has no http server and no socket.io. The window is opened
-//straight out of the package and talks to this half by passing messages: main
 //BOTH DIRECTIONS ARE DIRECT CALLS, and neither is postMessage.
 //
 //main plants a function on the page's global before any of the page's own

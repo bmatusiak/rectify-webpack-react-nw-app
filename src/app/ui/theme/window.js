@@ -4,23 +4,16 @@
 //style is the expected thing to do — tailwind, your own css, a component
 //library, or nothing at all.
 //
-//`theme` is the slot. it is the only name anything outside this directory
-//knows: a plugin asks for `theme` and reads `theme.ui`. so a kit swap is this
-//whole directory replaced by one that provides the same service with whatever
-//it carries. what this one carries:
+//`theme` is the slot: it is the only name anything outside this directory
+//knows, so a kit swap is this whole directory replaced by one that provides
+//`theme` with whatever it carries. What THIS one carries is in ./README.md --
+//none of those names are required, they are what this kit happens to hand out
+//and what the demo happens to use.
 //
-//  ui               every component, in ./components
-//  themeSwitcher    flips light/dark, remembered in the `settings` store
-//  mode             which of the two is on
-//  swatches         the stylesheets in ./swatch, by name
-//  swatch           which one is on
-//  setSwatch        wear a different one, now
-//  bs               the kit's own library, bootstrap's javascript
-//  $                the kit's dom helper, jquery. deliberately not a top level
-//                   service, since another kit may not want one
-//
-//none of those names are required either. they are what this kit provides and
-//what the demo happens to use.
+//jquery is deliberately NOT a top level service. Registering `$` would make
+//every page that used it un-swappable: the next kit has to ship jquery whether
+//it wants one or not, or twenty pages break at once. It goes out on `theme.$`,
+//where it belongs to the kit that chose it.
 //
 //src/config.js pins the starting colour mode, if you want one.
 //---------------------------------------------------------------------------

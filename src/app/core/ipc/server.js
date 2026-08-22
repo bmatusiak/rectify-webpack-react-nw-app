@@ -1,8 +1,8 @@
-//the control socket, seen from the app's node half.
-//
-//the listener is owned by ./main.js because it outlives this bundle. commands
-//registered here are handed back on reload, so a save does not leave the
-//previous build's answers still wired up.
+//THE LISTENER IS ./main.js's, NOT THIS FILE'S, and it is the reload that
+//decides it. This bundle is torn down and rebuilt on every save; a listener
+//owned here would be rebound each time -- or worse, not unbound, leaving the
+//previous build's answers still wired up and two handlers racing to reply.
+//Commands registered here are handed back when this half goes.
 
 plugin.consumes = ['app'];
 plugin.provides = ['ipc'];

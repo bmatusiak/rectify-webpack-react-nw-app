@@ -8,12 +8,15 @@ console.log(typeStore.testing);//'ok-default', and assigning to it saves
 
  */
 
-//two stores over the browser's own storage, differing only in which one they
-//sit on: `settings` survives the window closing, `session` does not.
+//NAMED settings, NOT config, and the name is the whole of the reason. Every
+//plugin already receives a `config` as its third setup argument -- its slice of
+//src/config.js -- so a service by that name puts two different things called
+//config in one function, and the one somebody reaches for is whichever they
+//happened to think of. That is a bug nobody reports, because both exist.
 //
-//named settings rather than config because a plugin's third setup argument is
-//already called config -- that one is what src/config.js put there, this one is
-//what the user changed.
+//TWO STORES FROM ONE FACTORY, which is the line between bundling and dogma:
+//they differ only in which browser storage they sit on, and neither can change
+//without the other. Splitting them would be two plugins with one body.
 //
 //a store is described by its defaults. every key you pass becomes a property
 //that reads through to storage and writes back on assignment, so there is no

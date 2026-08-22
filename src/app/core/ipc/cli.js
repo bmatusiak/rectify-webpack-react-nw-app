@@ -2,10 +2,11 @@ var fs = require('fs');
 var net = require('net');
 var endpoint = require('./endpoint');
 
-//the other end of the control socket, for src/cli.js.
-//
-//no dependencies: the cli is plain node talking to a pipe, which is most of
-//the reason for choosing one over the socket the window uses.
+//NO DEPENDENCIES, WHICH IS MOST OF WHY THE CLI IS ON A PIPE AND NOT THE SOCKET
+//THE WINDOW USES. socket.io-client would work and would put a package, a
+//handshake and a reconnect policy between typing a command and getting an
+//answer. This is plain node writing lines to a pipe, so `node src/cli.js status`
+//starts, answers and exits without loading anything that could be out of date.
 
 var NL = String.fromCharCode(10);
 

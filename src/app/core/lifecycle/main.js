@@ -1,7 +1,15 @@
 var fs = require('fs');
 var path = require('path');
 
-//quitting, crashing, and telling the launcher we are here.
+//ONE WAY OUT, AND EVERYTHING TAKES IT. `nw.App.quit()` is right there and is
+//what a plugin would reach for, and it leaves the tray icon, the http server,
+//socket.io and webpack's watchers open -- so the process stays alive with
+//nothing on screen. Everything that ends the app comes through shutdown()
+//instead: plugins are destroyed in reverse, THEN nw is asked to go, and a
+//300ms unref'd timer exits by hand for the handles that outlive even that.
+//
+//The window closing and the node half failing to start both land here, which is
+//why the first line of it is a re-entry guard rather than an assertion.
 
 plugin.consumes = ['app'];
 plugin.provides = ['lifecycle'];

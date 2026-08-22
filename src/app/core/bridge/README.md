@@ -17,10 +17,18 @@ Plus two files with no `provides`:
 ```
 bridge.io          the socket.io-Server-shaped end. io/main.js fans out over it
 bridge.attach(win) wire up a window
+bridge.detach()    take it off again -- and attach() calls this first
 bridge.page        'view.html' — the visible page in a package
 bridge.connected
 bridge.source      the window half, for whoever else has to hand it out
 ```
+
+`detach` is exported, and nothing outside this plugin calls it: it is on the
+surface because `onDestroy` is it, and because a reader who finds `attach`
+without it will reasonably assume attaching twice is safe. It is not. `attach`
+calls `detach` first for the reason under *four things about timing* below —
+leaving the old listeners on the window sent everything main said to a document
+that had already gone, quietly.
 
 `source` exists because a **browser** viewer in a packaged build has no other way
 to the window half — the point of the package is that there is no javascript on

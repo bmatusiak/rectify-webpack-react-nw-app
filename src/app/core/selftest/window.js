@@ -1,9 +1,12 @@
 var suites = require('./suites');
 var mount = require('./mount');
 
-//the window's side of it. Everything a window test needs is already here and
-//cannot be anywhere else: a document, a stylesheet that has actually loaded,
-//react having rendered, and the services the page really got.
+//THE ALTERNATIVE IS A FAKE DOCUMENT, and it answers the wrong question. jsdom
+//will render a component and let a test read its markup, and it has no layout,
+//no compositor and no stylesheet that has actually loaded -- so every question
+//worth asking here comes back wrong or comes back "yes" for free: is the canvas
+//sized to its box, did the swatch reach the gutter, is this text readable
+//against what is behind it. This half runs where those have real answers.
 
 plugin.consumes = ['io'];
 plugin.provides = ['selftest'];

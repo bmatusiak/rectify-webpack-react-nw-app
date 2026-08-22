@@ -3,10 +3,7 @@ var net = require('net');
 var crypto = require('crypto');
 var endpoint = require('./endpoint');
 
-//the app's control socket: a named pipe on windows, a unix domain socket
-//elsewhere. src/cli.js talks to it, and any plugin can answer on it.
-//
-//it lives here rather than in the reloadable half for the same reason the
+//IT LIVES HERE RATHER THAN IN THE RELOADABLE HALF for the same reason the
 //window and the tray do — a reload would otherwise drop every connected client
 //and race to re-listen on an address that is still held.
 //

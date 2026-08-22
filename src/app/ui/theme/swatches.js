@@ -1,6 +1,4 @@
-//every stylesheet the kit can wear.
-//
-//the folder is the registry here too: drop a bootswatch build into
+//THE FOLDER IS THE REGISTRY HERE TOO: drop a bootswatch build into
 //./swatch/<name>/ and it appears, delete one and it does not. webpack emits
 //each as its own file rather than inlining it, so only the chosen one is ever
 //fetched and parsed — but every one of them is still carried in the package,

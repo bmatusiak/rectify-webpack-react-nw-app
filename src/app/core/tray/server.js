@@ -1,6 +1,6 @@
-//the tray, seen from the app's node half.
-//
-//the icon is owned by ./main.js because it outlives this bundle. items added
+//THE ICON IS ./main.js's, for the same reason ../ipc's listener is: this half
+//is rebuilt on every save and an icon rebuilt with it would flicker out of the
+//tray, or stack up a second one beside the first. Items added
 //here are given back on reload, so a save does not leave a second copy of
 //every menu entry behind.
 

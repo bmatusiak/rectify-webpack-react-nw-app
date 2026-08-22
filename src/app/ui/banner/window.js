@@ -2,27 +2,19 @@ var React = require('react');
 var { useState, useEffect } = React;
 
 //---------------------------------------------------------------------------
-//a banner: something true about the app, said across the top of it.
+//AN ALERT WITH ITS BOX MODEL FLATTENED, rather than a `.banner` of its own --
+//and what that buys is contrast nobody had to measure. ../theme sets an alert's
+//colour and background TOGETHER, because several bootswatch builds override one
+//and not the other; a hand-rolled bar inherits none of that and is readable on
+//the swatch it was designed against. The first banner raised in anger measured
+//15.81:1 without a line of styling here. Which components were considered and
+//rejected is in ./README.md.
 //
-//BOOTSTRAP HAS NO SUCH COMPONENT. It has an alert, which is an inline block
-//with a margin and rounded corners meant to sit in a column of content; a
-//toast, which goes away; and modals and offcanvases, which block the page.
-//A bar under the title bar that stays until the thing it is about stops being
-//true is none of those, and every app ends up building one.
-//
-//SO IT IS AN ALERT WITH ITS BOX MODEL FLATTENED, which is what bootstrap's own
-//documentation site does with a hand-rolled `.bd-banner`. Using the alert means
-//it inherits the pairing fix in ../theme -- an alert's colour and background are
-//set together there, because several bootswatch builds override one and not the
-//other -- so a banner is readable on all twenty-eight swatches from the first
-//day rather than after somebody measures it.
-//
-//THIS CONSUMES THE THEME, AND THAT IS THE DIFFERENCE between this plugin and
-//the four beside it. ../editor, ../markdown, ../xterm and ../litegraph wrap a
-//vendored library and know nothing about the theme, because the theme is a slot
-//somebody may replace. This is not a surface, it is a composition OF the kit --
-//so it asks for the kit. Nothing in the theme consumes this back, so there is no
-//cycle; if that ever changes, this is the plugin that has to move.
+//IT CONSUMES THE THEME, which the four plugins beside it deliberately do not.
+//They wrap a vendored library and know nothing about the kit, because the kit
+//is a slot somebody may replace; this is a composition OF the kit, so it asks
+//for it. Nothing in the theme consumes this back -- the day it does, this is
+//the plugin that moves, not the theme.
 //
 //A SERVICE AND A COMPONENT, NOT JUST A COMPONENT. What raises a banner is
 //usually not what renders it: the node half failing to reload, a socket

@@ -1,5 +1,9 @@
-//the middle of it: a command off the control socket, out over socket.io, into
-//whichever view is the app.
+//THE MIDDLE OF IT, AND IT DECIDES WHO ANSWERS. A command arrives on the
+//control socket and there may be a window, a browser view, several, or none --
+//so this picks the app's own window when there is one and says which view
+//answered when there is not. Broadcasting instead would run the same click in
+//every view that happens to be open, which is how a driver ends up clicking
+//twice and reporting once.
 
 plugin.consumes = ['io', 'ipc', 'Plugin'];
 plugin.provides = [];
