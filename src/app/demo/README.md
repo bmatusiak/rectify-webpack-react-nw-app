@@ -46,7 +46,7 @@ Five are whole pages out of `bootstrap-5.3.8-examples`, each rebuilt so that
 | **Checkout** | a cart whose total is typed in | a cart that adds up, a promo code that is real (`DEMO10`), and a form the store remembers |
 | **Blog** | lorem posts, links that go nowhere | notes about this app, and the side column actually opens them |
 | **Cover** | a whole window, three dead links | the same page in a box, since this app already owns the window, and the three links switch it |
-| **Cheatsheet** | every component listed again | the values underneath them — colours, type scale, edges — read off the **live page**, so it says what the swatch you are wearing resolved to |
+| **Cheatsheet** | every component listed again | the values underneath them — colours, type scale, edges — read off the **live page**, so it says what the swatch you are wearing resolved to; and all 2,078 icons, filterable, click one to copy its markup |
 
 The chart is deliberately not a dependency. It is a `polyline` in a `viewBox`,
 which is all that example draws, and it takes its colour from the swatch like

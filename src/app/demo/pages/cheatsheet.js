@@ -21,6 +21,29 @@ module.exports = function Cheatsheet(props) {
 
     var [values, setValues] = useState({});
 
+    //ALL OF THEM, WHICH IS TWO THOUSAND -- so a filter is not a nicety here.
+    //The sprite is one document injected once, so showing every icon costs no
+    //fetch and no parse; what it costs is dom, and the reason this renders the
+    //filtered list rather than hiding the rest with css is that `display: none`
+    //still leaves two thousand <svg><use> in the tree to lay out.
+    var [hunt, setHunt] = useState('');
+
+    var showing = hunt
+        ? theme.icons.filter(function (name) { return name.indexOf(hunt.toLowerCase().trim()) >= 0; })
+        : theme.icons;
+
+    //A CHEATSHEET IS SOMETHING YOU COPY FROM. The name alone is the thing that
+    //is hard to remember, but the markup is what actually gets pasted.
+    function copy(name) {
+        var markup = '<Icon name="' + name + '" />';
+
+        //clipboard access can be refused, and a toast that says it copied when
+        //it did not is worse than one that says it could not
+        Promise.resolve(navigator.clipboard && navigator.clipboard.writeText(markup))
+            .then(function () { toast(markup + ' copied', 'success', 'clipboard-check'); },
+                function () { toast('could not reach the clipboard -- the name is ' + name, 'warning'); });
+    }
+
     //re-read whenever the swatch or the mode moves under us
     useEffect(function () {
         function sample() {
@@ -134,24 +157,47 @@ module.exports = function Cheatsheet(props) {
               </Columns>
             </Section>
 
-            <Section title="Icons" lead="bootstrap-icons, one sprite, injected once"
-                aside={<Button size="sm" outline variant="secondary"
-                    onClick={function () { toast('one document, and every use resolves against it', 'secondary'); }}>
-                    Where from?
-                </Button>}>
-                <div className="d-flex flex-wrap gap-3">
-                    {['box-seam', 'cpu', 'ui-radios', 'input-cursor-text', 'table', 'window-stack',
-                        'chevron-expand', 'columns-gap', 'speedometer2', 'bag-check', 'file-text',
-                        'rocket-takeoff', 'plug', 'shield-lock', 'diagram-3', 'palette'].map(function (name) {
-                        return (
-                            <span key={name} className="d-inline-flex flex-column align-items-center gap-1"
-                                style={{ width: '5rem' }}>
-                                <Icon name={name} size="24" />
-                                <small className="text-body-secondary text-truncate w-100 text-center">{name}</small>
-                            </span>
-                        );
-                    })}
-                </div>
+            <Section title="Icons" lead={theme.icons.length + ' of them, one sprite, injected once'}
+                aside={
+                    <input type="search" className="form-control form-control-sm"
+                        style={{ width: '14rem' }}
+                        placeholder={'filter ' + theme.icons.length + ' icons'}
+                        value={hunt}
+                        onChange={function (e) { setHunt(e.target.value); }} />
+                }>
+
+                <p className="text-body-secondary small">
+                    <Icon name="info-circle" /> Every name here is read out of the sprite itself,
+                    so this is what <code>&lt;Icon&gt;</code> will answer to rather than a list
+                    somebody kept up to date. Click one to copy its markup.
+                    {hunt ? <> Showing <strong>{showing.length}</strong> of {theme.icons.length}.</> : null}
+                </p>
+
+                {showing.length ? (
+                    <div className="d-flex flex-wrap gap-3">
+                        {showing.map(function (name) {
+                            //WIDE ENOUGH FOR THE NAME, which is the point of the grid: at
+                            //5rem with truncation ten neighbours all read `arrow-do...`, so
+                            //the icons were distinguishable and the names -- the thing you
+                            //came here for -- were not.
+                            return (
+                                <button key={name} type="button"
+                                    className="btn btn-link text-decoration-none d-inline-flex flex-column align-items-center gap-1 p-1"
+                                    style={{ width: '7rem' }}
+                                    title={name}
+                                    onClick={function () { copy(name); }}>
+                                    <Icon name={name} size="24" />
+                                    <small className="text-body-secondary w-100 text-center lh-sm"
+                                        style={{ wordBreak: 'break-word', fontSize: '.7rem' }}>{name}</small>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <p className="mb-0">
+                        Nothing matches <code>{hunt}</code>.
+                    </p>
+                )}
             </Section>
         </>
     );

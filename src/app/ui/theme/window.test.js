@@ -9,10 +9,12 @@
 //which makes them the tests for the work that was previously only checkable by
 //taking a screenshot and looking at it.
 
+var React = require('react');
+
 plugin.consumes = ['selftest', 'theme'];
 plugin.provides = [];
 function plugin(imports, register) {
-    var { describe, it, assert } = imports.selftest;
+    var { describe, it, assert, mount } = imports.selftest;
     var theme = imports.theme;
 
     function read(name) {
@@ -115,6 +117,58 @@ function plugin(imports, register) {
         it('says which mode is really on, not which was asked for', function () {
             var painted = luminance(ground(document.body)) < 0.18 ? 'dark' : 'light';
             assert.equal(document.body.getAttribute('data-bs-theme'), painted);
+        });
+
+        //THE NAMES ARE READ OFF THE SPRITE, AND THIS IS WHERE THAT IS WORTH
+        //CHECKING. `theme.icons` comes from a regex over the svg source before
+        //it is injected; the symbols in the document come from the browser
+        //parsing that same source. Two counts from two readings of one file --
+        //if they ever disagree, the regex is wrong, and a page that maps over
+        //the list is drawing icons that resolve to nothing.
+        it('knows every icon in the sprite, and no others', function () {
+            var names = theme.icons;
+            assert.ok(Array.isArray(names), 'icons is not an array');
+            assert.ok(names.length > 1000, 'only ' + names.length + ' icons');
+
+            var symbols = document.querySelectorAll('#bootstrap-icon-svg symbol[id]');
+            assert.equal(names.length, symbols.length,
+                names.length + ' names against ' + symbols.length + ' symbols in the document');
+
+            //and they are the same names, not merely the same number of them
+            var missing = [].slice.call(symbols).filter(function (symbol) {
+                return names.indexOf(symbol.id) < 0;
+            });
+            assert.equal(missing.length, 0,
+                'in the sprite and not in the list: ' + missing.slice(0, 5).map(function (s) { return s.id; }).join(', '));
+        });
+
+        //SORTED AND FROZEN, because a page renders it directly. A caller that
+        //could sort it in place would be reordering what every other caller is
+        //about to draw.
+        it('hands the list out sorted, and not the original', function () {
+            var names = theme.icons;
+            var sorted = names.slice().sort();
+
+            assert.equal(names.join(','), sorted.join(','), 'the list is not sorted');
+            assert.equal(Object.isFrozen(names), true, 'the list can be edited by whoever asks for it');
+        });
+
+        //A NAME IN THE LIST HAS TO BE A NAME <Icon> ANSWERS TO -- the whole
+        //point of reading them off the sprite rather than listing them.
+        it('draws one of the names it hands out', async function () {
+            var name = theme.icons[Math.floor(theme.icons.length / 2)];
+            var view = await mount(React.createElement(theme.ui.Icon, { name: name, size: '24' }));
+
+            try {
+                var use = view.find('svg.bi use');
+                assert.ok(use, 'no <use> was rendered for ' + name);
+                assert.equal(use.getAttribute('xlink:href') || use.getAttribute('href'), '#' + name);
+
+                //and the sprite really has that symbol to point at
+                assert.ok(document.getElementById(name), 'nothing in the document answers to #' + name);
+            } finally {
+                view.unmount();
+            }
         });
     });
 

@@ -38,6 +38,13 @@ async function plugin(imports, register, config) {
     var bootstrapSVG = require('bootstrap-icons/bootstrap-icons.svg');
     bootstrapSVG = bootstrapSVG.default || bootstrapSVG;//asset/source gives the string, raw-loader gives .default
 
+    //the ids in that sprite, which is what an `<Icon name=…>` resolves against.
+    //Sorted here rather than at every caller: it is read once and handed out
+    //frozen, so a page that renders all of them is a map over one array.
+    var icons = Object.freeze((bootstrapSVG.match(/<symbol[^>]+id="([^"]+)"/g) || [])
+        .map(function (tag) { return tag.replace(/^[\s\S]*id="/, '').replace(/"$/, ''); })
+        .sort());
+
     const bootstrap = require('bootstrap');
 
     //src/config.js can pin this, otherwise follow the os
@@ -138,6 +145,16 @@ async function plugin(imports, register, config) {
         get modeLocked() { return locked; },
 
         swatches: Object.keys(swatches).sort(),
+
+        //EVERY NAME `<Icon>` WILL ANSWER TO, read out of the sprite that was
+        //just injected rather than listed here. A list would be two thousand
+        //strings maintained by hand against a file that ships its own, and it
+        //would be wrong the first time bootstrap-icons adds one.
+        //
+        //Off the STRING, not the document: the same characters that go into the
+        //page, so this cannot disagree with what is there, and it costs nothing
+        //at a moment when the sprite may not be in the dom yet.
+        icons: icons,
 
         setSwatch: function (name) {
             var applied = wear(name);

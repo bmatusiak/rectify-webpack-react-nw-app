@@ -14,11 +14,28 @@ theme.showing        which of the two the swatch actually painted
 theme.modeLocked     true when the swatch will not honour the mode
 theme.onModeChange   so a component can re-render when it flips
 theme.swatches       the stylesheets in ./swatch, by name
+theme.icons          every name <Icon> answers to, read off the sprite
 theme.swatch         which one is worn
 theme.setSwatch      wear a different one, now
 theme.bs             bootstrap's own javascript
 theme.$              jquery, this kit's dom helper
 ```
+
+## the icons are a list, because they were already a document
+
+The sprite is one svg injected once — 2,078 symbols, about 1.1MB of markup —
+so every `<Icon>` resolves against it without a second request. `theme.icons`
+is the names in it, **read out of that same string** rather than listed here:
+a hand-kept list is two thousand strings maintained against a file that ships
+its own, and it is wrong the first time bootstrap-icons adds one.
+
+It is read off the source rather than queried out of the document, so it does
+not depend on when the sprite reaches the dom — and `window.test.js` checks the
+two agree, name for name, which is the only thing that would catch a regex that
+quietly stopped matching.
+
+Sorted and frozen: the Cheatsheet page maps over it directly, so a caller that
+sorted it in place would be reordering what everything else is about to draw.
 
 Bootstrap, jquery and bootstrap-icons are here because **something had to be**.
 Bringing your own is the expected thing to do — tailwind, plain css, a component
