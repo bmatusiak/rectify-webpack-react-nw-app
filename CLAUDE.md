@@ -15,6 +15,8 @@ npm test -- core/ipc      # only that plugin, in every context it has one
 npm test -- --list        # what there is to aim at
 npm run log      # what the running app has been saying, minus chromium's noise
 npm run drive    # start the app, drive it, check what only the real app can answer
+npm run docs     # read the plugin READMEs back off the code -- deliberately not in npm test
+npm run monitor test    # any of the above, as one line per event, ending with ✔ or ✖
 
 npm start -- --serve             # and let a browser be a client, on a free port
 npm start -- --serve=8080        # ... at that port
@@ -55,6 +57,42 @@ again, without restarting anything.
 `npm run drive` takes the same `--build` / `--package` as `npm start`, plus `--shots` to
 keep a screenshot of every page and `--swatches` to check all twenty-eight rather than
 three. It leaves the app running if it already was, and shuts it down if it started it.
+
+## How long things take, and how to wait for them
+
+Measured on this machine, warm, with the app already running:
+
+| command | takes | the line that says it is over |
+|---|---|---|
+| `npm run docs` | under 1s | `nothing to say`, or `N findings` |
+| `npm run drive` | 9s | `N checks passed`, or `N failed, M passed` |
+| `npm test` | 15s | `ℹ fail 0` |
+| `npm run drive -- --shots` | 14s | as `drive` |
+| `npm run drive -- --swatches` | ~4m | as `drive` |
+| `npm run dist` | ~3m | `packaged into build/out` |
+| `npm run drive -- --package` | ~1m | `shutting it down again` then the count |
+
+**Run the first four in the foreground.** They finish before a poll loop could
+ask twice, and a foreground call returns the output in one step.
+
+**Wait on an event, never on a timer.** For the long three, start the command in
+the background and then *stop*: the completion notification is the event. Reading
+the output file on a loop to see whether it has finished yet is five round trips
+where one would do, and it is the same mistake as sleeping instead of polling --
+one layer up.
+
+**`node tools/monitor.js <command>` is that, as a stream.** One line per thing
+that happened, `x` for anything wrong, and a last line that is always `✔` or
+`✖` -- so nothing watching has to know which words a particular tool ends with.
+It reports its own silence as well, because a command that hangs prints nothing
+and nothing is indistinguishable from working. `--quiet=N` and `--give-up=N`
+before the command name, the command's own arguments after `--`.
+
+When progress matters rather than just the end -- a package build, a swatch
+sweep -- watch the stream and let each interesting line be its own event, using
+the marker lines above plus whatever says it went wrong (`✖`, `x `, `Error`).
+A watcher that only matches success is silent through a crash, and silence
+reads exactly like still-running.
 
 ## The four contexts
 

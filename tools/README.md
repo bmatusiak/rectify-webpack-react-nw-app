@@ -189,6 +189,128 @@ while every link in it was the colour of the ground, because it measured
 `.app-sidebar` rather than the links inside. Sabotage the thing before trusting
 the test that watches it.
 
+## watching a command, one line per event
+
+```
+node tools/monitor.js test
+node tools/monitor.js drive -- --swatches
+node tools/monitor.js dist
+```
+
+It runs one of this repo's own commands and prints **one line per thing that
+happened**, ending with a line that says it is over:
+
+```
+·  something happened, and it is going fine
+x  something is wrong -- a failing test, a stack, an error line
+✔  finished, and nothing was wrong          THE LAST LINE
+✖  finished, and something was              THE LAST LINE
+```
+
+```
+· test started
+· ℹ pass 343
+· ℹ fail 0
+✔ done in 15s -- ℹ pass 343 -- ℹ fail 0
+```
+
+**Why not just `grep` the tool.** That is one line and it is what this replaces:
+`node tools/test.js | grep -E "pass|fail"`. Two problems, and the second is the
+one that matters. The filter has to be rewritten per command, because each tool
+ends differently — `npm test` with `ℹ fail 0`, drive with `N checks passed`
+unless it ends with `N failed`, pack with `packaged into build/out`. And a
+filter written for the good case is **silent when the command dies**: nothing
+matches a stack trace, so a watcher sees the last progress line and then
+nothing, which is indistinguishable from still-running.
+
+Here the last line is printed by a `finally`. A non-zero exit, a signal, a tool
+that could not start at all — every one of them ends the stream with ✖ and a
+reason, and the exit code is the command's own.
+
+**`dist` is two commands and stops at the first failure**, because packaging a
+build that did not happen makes a package of whatever was in `build/` from last
+time — which is the kind of green that costs an afternoon.
+
+**And saying nothing is an event too.** Everything above fires when a line
+arrives, so a command that hangs produces no events at all — and silence reads
+exactly like progress, which is the same trap one level up. The quiet is
+reported instead, and it says which silence it is:
+
+```
+· quiet 30s -- 412 lines, none worth an event      webpack, mid-build
+· quiet 60s -- nothing at all from tools/drive.js  waiting on something
+x nothing for 600s, past --give-up=600 -- stopping tools/drive.js
+```
+
+`--quiet=N` is how long before the first of those (default 30s, `0` turns it
+off), and each wait is twice the last up to five minutes — a heartbeat every
+thirty seconds through a four-minute package is eight events that all say the
+same thing. `--give-up=N` kills the command after that much silence (default
+600s, `0` never). Both come **before** the command name; the command's own
+arguments come after `--`.
+
+**Two clocks, and they are not the same one.** `--give-up` counts silence from
+the CHILD; the heartbeat spacing counts from the last thing this tool said. With
+one clock each heartbeat reset the thing it was measuring, and `--give-up=12`
+fired after twenty-two seconds. The deadline is also checked every second rather
+than only when a heartbeat is due, for the same reason: a number somebody typed
+should mean what it says.
+
+**What it is not:** a test runner, a scheduler, or a log. `npm run log` is the
+app's log; this watches a command that ends.
+
+## reading the documentation back off the code
+
+```
+npm run docs
+```
+
+[`test/readme.test.js`](../test/readme.test.js) checks that every plugin **has**
+a README and that its table lists the right contexts with the right
+`provides`/`consumes` — read back off the plugin files, so the table cannot
+drift. It cannot check a sentence, and a sentence is what goes stale: two places
+said one fact, one of them was edited, and the other kept reading perfectly.
+
+Six of those were found by hand in an afternoon — a protocol described as
+packaged-only that every build now uses, a frame described as sandboxed that has
+no sandbox attribute, a tray checkbox nw never drew. `tools/docs.js` is the five
+checks that found them:
+
+| | asks |
+|---|---|
+| 1 | every name a plugin **registers** appears somewhere in its README |
+| 2 | every name the README's surface block advertises **exists in code** |
+| 3 | every file and `--flag` named in backticks is something the repo has |
+| 4 | a `\| test \|` table names tests that actually run |
+| 5 | counted claims — *28 swatches* — against the count |
+
+**It is deliberately not part of `npm test`.** Three of the five are heuristics,
+and a heuristic that goes red on a Friday teaches people to ignore red. Run it
+when the docs matter: after a sweep, before a release, when a README has been
+sitting a while. It exits non-zero on a finding, so it can be wired into a suite
+the day the heuristics have earned it.
+
+**Every check was written by breaking the thing it watches**, and four of the
+five were wrong the first time — which is the argument for doing that, not
+against it:
+
+- check 2 searched the source *text*, so an invented `window.capture().photograph()`
+  went unreported: `photograph` is a word `window/main.js` uses in a comment. It
+  reads code with the comments and string literals taken out now — and the third
+  place the word survived was a comment in `index.scss`, which is why scss is
+  stripped too.
+- check 3 was then handed that same stripped copy and reported
+  `_generated_background_page.html`, a page **nw** makes and this app only ever
+  names in a comment. The two questions are different: *does this exist* is about
+  code, *is this referred to* is about everything. There are two haystacks now.
+- check 5 knew the literal words *28 swatches*, so editing a README to say *31*
+  matched nothing at all. It reads whatever number the prose says and compares.
+  It also used to count pages and contexts, and had to stop: this app writes
+  sentences like *"inline code at 1.49:1 on four pages"*, and three false alarms
+  out of four findings is how a check gets ignored.
+- check 3 also reported `--bs-emphasis-color`, which is a css custom property
+  rather than a flag anybody passes.
+
 ## reading the log
 
 The app is launched detached with its output going to `nw.log`, so that file is

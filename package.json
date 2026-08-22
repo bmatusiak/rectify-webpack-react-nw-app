@@ -12,6 +12,8 @@
   "scripts": {
     "start": "node tools/nw.js",
     "drive": "node tools/drive.js",
+    "docs": "node tools/docs.js",
+    "monitor": "node tools/monitor.js",
     "log": "node tools/log.js",
     "cli": "node src/cli.js",
     "build": "node tools/build.js",
