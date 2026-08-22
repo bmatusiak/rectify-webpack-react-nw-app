@@ -17,6 +17,7 @@ npm run log      # what the running app has been saying, minus chromium's noise
 npm run drive    # start the app, drive it, check what only the real app can answer
 npm run docs     # read the plugin READMEs back off the code -- deliberately not in npm test
 npm run monitor test    # any of the above, as one line per event, ending with ✔ or ✖
+node tools/mcp.js       # an MCP server for the running app, on stdin and stdout
 
 npm start -- --serve             # and let a browser be a client, on a free port
 npm start -- --serve=8080        # ... at that port

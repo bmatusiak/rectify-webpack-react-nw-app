@@ -10,12 +10,13 @@
 //JSON-RPC to tools/mcp.js over a pipe. This half is about what a plugin can
 //register and what comes back out of the four ipc commands.
 
-plugin.consumes = ['selftest', 'mcp', 'ipc'];
+plugin.consumes = ['selftest', 'mcp', 'ipc', 'app', 'appPackage'];
 plugin.provides = [];
 function plugin(imports, register) {
     var { describe, it, assert } = imports.selftest;
     var mcp = imports.mcp;
     var ipc = imports.ipc;
+    var app = imports.app;
 
     describe('mcp, in the running app', function () {
 
@@ -212,6 +213,114 @@ function plugin(imports, register) {
                 assert.ok(String(answer.why).indexOf('not a plugin folder') >= 0, answer.why);
             } finally {
                 handle.remove();
+            }
+        });
+
+        //---- the second transport ---------------------------------------------
+        //
+        //MCP over the app's own http server, which is a LISTENING surface and so
+        //is behind the browser viewer's switch. These turn it on and put it back
+        //the way they found it -- io/server.test.js does the same, and for the
+        //same reason: the switch belongs to whoever is using the app.
+
+        function post(url, body, headers) {
+            return fetch(url, {
+                method: 'POST',
+                headers: Object.assign({ 'content-type': 'application/json' }, headers || {}),
+                body: JSON.stringify(body)
+            });
+        }
+
+        async function whileServing(run) {
+            var host = app.host;
+            var was = host.http.serving;
+            if (!was) await host.http.setServing(true);
+
+            try { return await run(host.http.url); }
+            finally { if (!was) await host.http.setServing(false); }
+        }
+
+        it('answers the protocol over http as well as over the socket', async function () {
+            await whileServing(async function (url) {
+                var answer = await post(url + 'mcp', {
+                    jsonrpc: '2.0', id: 1, method: 'initialize',
+                    params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } }
+                });
+
+                assert.equal(answer.status, 200);
+                var body = await answer.json();
+
+                assert.equal(body.result.protocolVersion, '2025-06-18');
+                assert.equal(body.result.serverInfo.name, imports.appPackage.name);
+
+                //THE SAME ANSWER AS THE OTHER TRANSPORT, which is the point of
+                //./rpc.js being shared: if these ever diverge, one of the two
+                //grew a second implementation.
+                var tools = await (await post(url + 'mcp', { jsonrpc: '2.0', id: 2, method: 'tools/list' })).json();
+                var overSocket = await ipc.invoke('mcp:describe');
+
+                assert.equal(tools.result.tools.length, overSocket.tools.length,
+                    'http and the socket disagree about how many tools there are');
+            });
+        });
+
+        //DNS REBINDING IS THE NAMED RISK IN THE TRANSPORT SPEC. A page on the
+        //open internet cannot read this port's replies, but it can send to it --
+        //and "cannot read the reply" is no comfort when the request was a click.
+        it('refuses an origin that is not local, and takes one that is', async function () {
+            await whileServing(async function (url) {
+                var foreign = await post(url + 'mcp',
+                    { jsonrpc: '2.0', id: 3, method: 'ping' },
+                    { origin: 'https://evil.example.com' });
+
+                assert.equal(foreign.status, 403, 'a foreign origin was answered');
+
+                var mine = await post(url + 'mcp',
+                    { jsonrpc: '2.0', id: 4, method: 'ping' },
+                    { origin: 'http://localhost:3000' });
+
+                assert.equal(mine.status, 200, 'a local origin was refused');
+            });
+        });
+
+        //A NOTIFICATION HAS NOTHING TO SAY BACK, and the spec asks for 202 with
+        //no body rather than an empty result object.
+        it('answers a notification with 202 and nothing', async function () {
+            await whileServing(async function (url) {
+                var answer = await post(url + 'mcp', { jsonrpc: '2.0', method: 'notifications/initialized' });
+
+                assert.equal(answer.status, 202);
+                assert.equal((await answer.text()).length, 0, 'it said something to a notification');
+            });
+        });
+
+        //THERE IS NO STREAM, and saying 405 with `Allow: POST` is how a client
+        //learns that rather than concluding the endpoint does not exist.
+        it('says there is no stream rather than 404', async function () {
+            await whileServing(async function (url) {
+                var answer = await fetch(url + 'mcp');
+                assert.equal(answer.status, 405);
+                assert.equal(answer.headers.get('allow'), 'POST');
+            });
+        });
+
+        //AND IT IS CLOSED WHEN THE VIEWER IS OFF. The window is on the bridge in
+        //every build, so turning the browser viewer off is meant to leave
+        //nothing outside the app able to reach it -- an MCP endpoint that kept
+        //answering would be a hole in exactly that promise.
+        it('is closed while the browser viewer is off', async function () {
+            var host = app.host;
+            var was = host.http.serving;
+            if (was) await host.http.setServing(false);
+
+            try {
+                var url = host.http.url;
+                if (!url) return; //nothing is listening at all, which is the same answer
+
+                var answer = await post(url + 'mcp', { jsonrpc: '2.0', id: 5, method: 'ping' });
+                assert.ok(answer.status >= 400, 'the endpoint answered with the viewer off: ' + answer.status);
+            } finally {
+                if (was) await host.http.setServing(true);
             }
         });
     });

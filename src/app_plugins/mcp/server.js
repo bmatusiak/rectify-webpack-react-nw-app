@@ -20,7 +20,20 @@
 //http transport is the one that opens something, which is why it is gated by
 //../../app/core/http's `serving` switch rather than by this.
 
-plugin.consumes = ['ipc', 'appPackage', 'Plugin'];
+//THE REQUIRE IS GATED, NOT JUST THE CALL -- the same rule ../../app/core/io
+//follows, and for the same measured reason: webpack collects a dependency
+//wherever it can reach it, so `mount(...)` behind a constant would still drag
+//./http.js and express's json parser into a binary built with
+//"canServe": false, while the README claimed the routes were gone.
+var mountHttp = null;
+if (BUILD_SERVABLE) mountHttp = require('./http');
+
+//`http` IS NOT A SERVICE IN THIS CONTEXT. It is provided by core/http/main.js,
+//which runs on nw's node side; this half is the bundle, and what it gets is
+//`app.host` -- the router to mount on and a forwarded view of whether anything
+//is being served. Consuming 'http' here fails the graph outright with "nothing
+//provides: http (wanted by mcp/server.js)", which is at least an honest error.
+plugin.consumes = ['ipc', 'appPackage', 'app', 'Plugin'];
 plugin.provides = ['mcp'];
 async function plugin(imports, register) {
     var ipc = imports.ipc;
@@ -283,6 +296,26 @@ async function plugin(imports, register) {
             try { handle.remove(); } catch (e) { /* already gone */ }
         });
     });
+
+    //---- the second transport ------------------------------------------------
+    //
+    //THE STDIO BRIDGE IS THE ONE TO PREFER and it needs nothing from here --
+    //tools/mcp.js reaches the same four commands over the control socket. This
+    //is for a client that cannot launch a process, and it is a LISTENING
+    //surface, so it sits behind the browser viewer's own switch: mounted here,
+    //refused with a reason while `http.serving` is off, and absent entirely
+    //from a build that cannot serve.
+    if (mountHttp) {
+        var at = mountHttp(imports.app.host, ipc, {
+            instructions: 'These tools drive a running desktop app. `screenshot` is the ' +
+                'only way to see what it looks like -- prefer it to guessing.'
+        });
+
+        //said once, at boot, rather than on every request: the url is only
+        //true while something is listening, and the point of the line is that
+        //somebody reading the log knows the endpoint exists at all
+        console.log('mcp: also on ' + at + ' when the browser viewer is on');
+    }
 
     await register(null, {
         mcp: self.api({

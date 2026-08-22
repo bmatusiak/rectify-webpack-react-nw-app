@@ -198,8 +198,13 @@ claude mcp add rectify-nw -- node /path/to/tools/mcp.js
 `tools/mcp.js` is launched by an MCP client, speaks JSON-RPC on stdin and
 stdout, and forwards what it is asked to the app that is **already running**,
 over the control socket [ipc](../src/app/core/ipc/) already listens on. What the
-app offers is [`src/app_plugins/mcp`](../src/app_plugins/mcp/) — this file is an
-envelope and a socket.
+app offers is [`src/app_plugins/mcp`](../src/app_plugins/mcp/); the protocol
+itself is `rpc.js` in that folder, shared with the app's **other** transport —
+`POST /mcp`, for a client that cannot launch a process. This file is a socket, a
+line splitter, and stdout.
+
+Prefer this one. The http transport is a listening surface and is behind three
+gates because of it; this opens nothing.
 
 | it speaks | |
 |---|---|

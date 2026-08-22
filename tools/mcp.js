@@ -138,125 +138,25 @@ async function ask (command, data) {
 }
 
 //---- JSON-RPC, on stdin and stdout ------------------------------------------
+//
+//THE PROTOCOL ITSELF IS NOT HERE EITHER. src/app_plugins/mcp/rpc.js answers the
+//methods, and it is shared with the http transport beside it -- two files
+//speaking one protocol drifted about an hour after the second was written. This
+//file is a socket, a line splitter, and stdout.
+const rpc = require(path.join(ROOT, 'src', 'app_plugins', 'mcp', 'rpc.js'))(ask)
 
 function send (message) { process.stdout.write(JSON.stringify(message) + NEWLINE) }
 
-function reply (id, result) { send({ jsonrpc: JSONRPC, id, result }) }
-
-// -32601 unknown method, -32602 bad params, -32603 something broke here,
-// -32002 the resource is not there. The numbers are the spec's; the messages
-// are ours, and a client shows them to somebody.
-function fail (id, code, message, data) {
-  send({ jsonrpc: JSONRPC, id, error: data ? { code, message, data } : { code, message } })
-}
-
-const METHODS = {
-  async initialize (params) {
-    const wanted = (params && params.protocolVersion) || SPOKEN[0]
-    const described = await ask('mcp:describe')
-
-    return {
-      protocolVersion: SPOKEN.includes(wanted) ? wanted : SPOKEN[0],
-      capabilities: described.capabilities,
-      serverInfo: {
-        name: described.serverInfo.name,
-        title: described.serverInfo.title,
-        version: described.serverInfo.version
-      },
-
-      // instructions are for the model rather than the client's ui, so this
-      // says the thing a model cannot work out from a tool list
-      instructions: 'These tools drive a running desktop app. `screenshot` is ' +
-        'the only way to see what it looks like -- prefer it to guessing, and ' +
-        'read app://plugins before answering questions about how the app is built.'
-    }
-  },
-
-  async 'tools/list' () {
-    const described = await ask('mcp:describe')
-    return { tools: described.tools }
-  },
-
-  async 'tools/call' (params, id) {
-    const answer = await ask('mcp:call', { name: params && params.name, arguments: params && params.arguments })
-
-    // AN UNKNOWN TOOL IS A PROTOCOL ERROR AND A FAILING TOOL IS NOT -- the app
-    // makes that distinction, and this only carries it. Getting it backwards
-    // means a model either cannot see why its call failed, or treats a typo as
-    // something it can retry differently.
-    if (answer.unknown) {
-      fail(id, -32602, 'Unknown tool: ' + (params && params.name))
-      return null
-    }
-
-    return answer.result
-  },
-
-  async 'resources/list' () {
-    const described = await ask('mcp:describe')
-    return { resources: described.resources }
-  },
-
-  async 'resources/templates/list' () {
-    const described = await ask('mcp:describe')
-    return { resourceTemplates: described.resourceTemplates }
-  },
-
-  async 'resources/read' (params, id) {
-    const answer = await ask('mcp:read', { uri: params && params.uri })
-
-    if (answer.unknown) {
-      fail(id, -32002, answer.why || 'Resource not found', { uri: params && params.uri })
-      return null
-    }
-
-    return { contents: answer.contents }
-  },
-
-  async 'prompts/list' () {
-    const described = await ask('mcp:describe')
-    return { prompts: described.prompts }
-  },
-
-  async 'prompts/get' (params, id) {
-    const answer = await ask('mcp:prompt', { name: params && params.name, arguments: params && params.arguments })
-
-    if (answer.unknown) {
-      fail(id, -32602, 'Unknown prompt: ' + (params && params.name))
-      return null
-    }
-
-    if (answer.missing) {
-      fail(id, -32602, 'Missing required arguments: ' + answer.missing.join(', '))
-      return null
-    }
-
-    return { description: answer.description, messages: answer.messages }
-  },
-
-  // a ping is the one thing that must answer without the app, because it is how
-  // a client checks this process is alive
-  ping () { return {} }
-}
-
 async function arrived (line) {
   let message
-  try { message = JSON.parse(line) } catch (e) { return fail(null, -32700, 'Parse error') }
-
-  // A NOTIFICATION HAS NO id AND MUST NOT BE ANSWERED. `notifications/initialized`
-  // is the common one; replying to it is a protocol error that some clients
-  // report and others quietly ignore, which is worse.
-  if (message.id === undefined || message.id === null) return
-
-  const run = METHODS[message.method]
-  if (!run) return fail(message.id, -32601, 'Method not found: ' + message.method)
-
   try {
-    const result = await run(message.params, message.id)
-    if (result !== null) reply(message.id, result)
+    message = JSON.parse(line)
   } catch (e) {
-    fail(message.id, -32603, (e && e.message) || String(e))
+    return send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })
   }
+
+  const answer = await rpc.handle(message)
+  if (answer) send(answer)
 }
 
 function main () {

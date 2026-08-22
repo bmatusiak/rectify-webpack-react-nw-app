@@ -178,7 +178,23 @@ module.exports = (env, argv = {}) => {
                 asString,
                 { test: /\.(eot|ttf|woff|woff2|png|jpg|gif)$/i, type: 'asset/source' }
             ]
-        }
+        },
+        //THE SAME BUILD-TIME FACTS AS THE OTHER TWO BUNDLES. This half had no
+        //DefinePlugin at all, which was invisible until a server-side plugin
+        //asked whether the build may serve: `BUILD_SERVABLE is not defined`,
+        //thrown while resolving the graph, so the whole node half failed to
+        //load rather than the one plugin that asked.
+        //
+        //It matters beyond the crash. src/app_plugins/mcp gates its http
+        //transport on this, and a constant webpack does not replace is a branch
+        //webpack cannot fold -- so `"canServe": false` would still have carried
+        //the endpoint and express's json parser into the bundle.
+        plugins: [
+            new webpack.DefinePlugin({
+                BUILD_PROD: JSON.stringify(isProduction),
+                BUILD_SERVABLE: JSON.stringify(canServe)
+            })
+        ]
     };
 
     //the packaged main. only built by tools/build.js, never in development.

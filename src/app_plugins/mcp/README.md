@@ -5,7 +5,7 @@ registers, answered over the control socket the app already listens on.
 
 | file | provides | consumes |
 |---|---|---|
-| `server.js` | `mcp` | `ipc`, `appPackage`, `Plugin` |
+| `server.js` | `mcp` | `ipc`, `appPackage`, `app`, `Plugin` |
 
 ```
 mcp.tool(name, { title, description, inputSchema, outputSchema, annotations, run })
@@ -15,8 +15,10 @@ mcp.prompt(name, { title, description, arguments, get })
 mcp.offering    what is registered right now
 ```
 
-[`tools/mcp.js`](../../../tools/mcp.js) is the transport — it turns this into
-JSON-RPC on stdin and stdout. [mcp-example](../mcp-example/) is a plugin that
+Two transports, and `./rpc.js` is the protocol they share:
+[`tools/mcp.js`](../../../tools/mcp.js) speaks it on stdin and stdout to a
+client that launched it, and `./http.js` speaks it over the app's own http
+server to one that cannot. [mcp-example](../mcp-example/) is a plugin that
 registers one of everything.
 
 ```
@@ -32,9 +34,12 @@ second implementation of everything here.
 
 That cut is the point. **A plugin offering a tool should not have to know what a
 JSON-RPC envelope looks like**, and a transport should not have to know what
-this app can do — which is what makes a second transport (MCP over the http
-server, for a client that cannot launch a process) a file that talks to these
-same four commands.
+this app can do — which is what made the second transport a file that talks to
+these same four commands, and `./rpc.js` a thing both of them borrow.
+
+`./rpc.js` is shared for a measured reason: the version with the dispatch
+written out twice lasted about an hour before the two disagreed about what
+`resources/read` does with a uri nobody registered.
 
 ## opt in, not reflect
 
@@ -57,10 +62,9 @@ socket `node src/cli.js` uses, with the same token. **Anything that can reach
 this can already run `node src/cli.js quit`.** Adding MCP over the socket adds a
 vocabulary, not an entrance.
 
-That is not true of the http transport, which is why it is not built into this
-plugin: it would be gated by [http](../../app/core/http/)'s `serving` switch,
-off unless asked for, and gone entirely from a build made with
-`"canServe": false`.
+That is not true of `./http.js`, which is why it is behind three gates rather
+than one — see below. It is off unless somebody asked for a browser viewer, and
+gone entirely from a build made with `"canServe": false`.
 
 **It is not a security boundary.** It is a described, schema'd, deliberately
 small subset of the app aimed at a model instead of at a person.
@@ -93,6 +97,38 @@ block, which is what the spec asks for: a client that validates against
 `outputSchema` gets to, and one that does not still shows something readable in
 a transcript. `structuredContent` is only sent when the tool declared an
 `outputSchema`, since without one there is nothing to validate it against.
+
+## the second transport, and every gate it is behind
+
+`./http.js` answers MCP at **`POST /mcp`** on the app's own server, for a client
+that cannot launch a process. Prefer the stdio bridge, which opens nothing.
+
+This one is a listening surface, so it sits behind three gates:
+
+| | |
+|---|---|
+| `BUILD_SERVABLE` | a build made with `"canServe": false` has no routes at all, and **the require is gated, not just the call** — the same measured rule [io](../../app/core/io/) follows, or webpack ships `http.js` and express's json parser into a binary whose README says they are gone |
+| `http.serving` | off unless somebody asked for a browser viewer — the switch the tray flips |
+| `Origin` | refused unless it is absent or local |
+
+**The Origin check is not decoration.** A page on the open internet cannot read
+this port's replies, but it can send to it — and "cannot read the reply" is no
+comfort when the request was `tools/call click`. That is DNS rebinding, it is
+the named risk in the transport spec, and an unexpected Origin is the only
+signal separating it from the client that is meant to be here.
+
+**It is stateless, and says so.** The spec's streamable transport can hold a
+session and push messages over SSE; nothing here has anything to push, so a POST
+is a question and its answer, `Mcp-Session-Id` is not issued, and a GET answers
+**405 with `Allow: POST`** rather than falling through to the app's 404 — which
+would tell a client the endpoint does not exist when only the stream does not.
+
+A notification gets **202 and no body**. A batch is answered as a batch.
+
+**`http` is not a service in this context.** It is provided by
+[core/http](../../app/core/http/) on nw's node side; this half is the bundle,
+and what it gets is `app.host` — the swappable router to mount on and a
+forwarded view of `serving`. Consuming `'http'` here fails the graph outright.
 
 ## the tests
 
