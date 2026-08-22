@@ -29,7 +29,12 @@ do not go over a port. Turn the browser viewer off and you are running the code
 path a package ships with.
 
 `"app": { "serve": true }` in package.json is the other way to say it, and the
-flag wins. `src/serve.js` answers `false` or `{host, port}`. The tray has a
+flag wins. `"app": { "canServe": false }` is a different question: it is decided
+at BUILD time and becomes the `BUILD_SERVABLE` constant, so webpack folds the
+routes and the socket.io server out of the binary entirely. A runtime flag can be
+flipped by whoever runs the app; that one cannot be flipped by anybody. Asking
+such a build to serve throws and names the key rather than quietly doing nothing.
+Development always has the ability. `src/serve.js` answers `false` or `{host, port}`. The tray has a
 **Serve to a browser** checkbox that switches it while the app is running.
 
 Call the cli as `node src/cli.js <cmd>` when driving the app yourself, not

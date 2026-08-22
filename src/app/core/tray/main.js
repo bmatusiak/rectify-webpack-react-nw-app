@@ -36,7 +36,10 @@ async function plugin(imports, register, config) {
         //nw redraws the whole menu on every rebuild, so this is read from
         //`http.serving` at draw time rather than from anything kept here --
         //there is no second copy of the answer to fall out of step.
-        menu.append(new nw.MenuItem({
+        //A BUILD WITHOUT THE ABILITY DOES NOT OFFER IT -- the same reasoning as
+        //the two Inspect items, which are absent from a package. A menu entry
+        //that cannot do its job teaches somebody the app is broken.
+        if (http.servable) menu.append(new nw.MenuItem({
             label: http.serving ? 'Stop serving to a browser' : 'Serve to a browser',
             click: function () {
                 http.setServing(!http.serving).then(function (on) {

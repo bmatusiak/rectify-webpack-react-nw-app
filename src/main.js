@@ -16,6 +16,13 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 //webpack replaces this in the packaged bundle; here it just has to exist
 global.BUILD_PROD = false;
 
+//DEVELOPMENT CAN ALWAYS SERVE, whatever the manifest says. The build-time
+//switch exists so a SHIPPED binary can be built without the ability at all;
+//taking it away from the source tree would only mean the thing you develop
+//against is not the thing you ship. Whether it IS serving is still runtime,
+//and still off by default.
+global.BUILD_SERVABLE = true;
+
 var rectify = require('@bmatusiak/rectify');
 var fs = require('fs');
 var path = require('path');

@@ -56,6 +56,10 @@ The routes are mounted on `http.router`, so [http](../http/)'s gate covers them:
 with the viewer off they are not reachable, which is the whole point of the
 switch.
 
+And they are behind `BUILD_SERVABLE`, so a package built with
+`"canServe": false` does not contain them at all — see [http](../http/) for the
+difference between a switch that is off and an ability that is not there.
+
 ## the host
 
 The node half is not part of this graph. It gets one object:

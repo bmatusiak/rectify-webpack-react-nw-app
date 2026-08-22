@@ -23,7 +23,7 @@ var suites = require('./suites');
 plugin.consumes = ['app', 'ipc', 'io'];
 plugin.provides = ['selftest'];
 async function plugin(imports, register) {
-    var { ipc, io } = imports;
+    var { app, ipc, io } = imports;
     var mine = suites();
 
     //THE NW WINDOW, AND NOT MERELY THE FIRST THING CONNECTED.
@@ -120,6 +120,22 @@ async function plugin(imports, register) {
         //else, rather than waiting on the two it did not ask about.
         var only = (data && data.contexts) || null;
         function asked(name) { return !only || only.indexOf(name) >= 0; }
+
+        //A PACKAGED BUILD HAS NO TESTS, AND SHOULD SAY SO IN THOSE WORDS.
+        //
+        //Each require.context that gathers them sits inside a check webpack
+        //drops, so a package genuinely cannot load them. Without this it
+        //answered three empty contexts and the runner reported "no tests ran in
+        //the main context" three times -- which reads as something broken rather
+        //than as a build that was never going to have any. Said out loud, the
+        //runner reports them as skipped with the reason, which is what `missing`
+        //is for.
+        if (app.isPackaged) {
+            var none = ['main', 'server', 'window'].map(function (name) {
+                return absent(name, 'a packaged build cannot load its own tests');
+            });
+            return { contexts: none, passed: 0, failed: 0 };
+        }
 
         function passedOver(name) {
             return { context: name, suites: [], passed: 0, failed: 0, missing: 'not asked for' };

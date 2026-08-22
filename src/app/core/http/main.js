@@ -45,7 +45,14 @@ async function plugin(imports, register) {
     });
 
     var url = null;
-    var serving = !!app.serve;
+    //A BUILD THAT CANNOT SERVE IS NOT SERVING, whatever was asked for. See
+    //webpack.config.js: this is a constant, so a binary built with
+    //"canServe": false has no routes and no socket.io server inside it at all.
+    var serving = BUILD_SERVABLE && !!app.serve;
+
+    if (!BUILD_SERVABLE && app.serve) console.error(
+        'this build cannot serve a browser: it was built with "canServe": false. ' +
+        'Ignoring the request to serve.');
     var watchers = [];
 
     //WHERE TO LISTEN, KEPT SEPARATELY FROM WHETHER TO. src/serve.js answers
@@ -173,6 +180,9 @@ async function plugin(imports, register) {
         //whether to take a socket, and the tray reads it to label its item.
         get serving() { return serving; },
 
+        //whether it COULD, which is decided when the binary is built
+        get servable() { return !!BUILD_SERVABLE; },
+
         //TURNING IT OFF DOES NOT ALWAYS STOP LISTENING, and that asymmetry
         //is the point: development needs the port for webpack whatever the
         //answer is. A packaged build has nothing else using it, so off means
@@ -183,6 +193,15 @@ async function plugin(imports, register) {
         //menu item for a server that is not there.
         setServing: async function (on) {
             on = !!on;
+
+            //REFUSED OUT LOUD, NOT QUIETLY IGNORED. A switch that appears to
+            //work and does nothing is worse than one that is not there: the
+            //point of building without the ability is that somebody can be
+            //sure, and silence is not proof of anything.
+            if (on && !BUILD_SERVABLE) throw new Error(
+                'this build cannot serve a browser. It was built with ' +
+                '"canServe": false in package.json, so the routes and the ' +
+                'socket.io server are not in it to be switched on.');
             if (on === serving) return serving;
 
             var was = serving;

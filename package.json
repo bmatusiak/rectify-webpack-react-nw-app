@@ -5,6 +5,10 @@
   "description": "Minimal rectify + webpack + react scaffold, running as an nw.js desktop app",
   "type": "commonjs",
   "main": "main.js",
+  "app": {
+    "serve": false,
+    "canServe": true
+  },
   "scripts": {
     "start": "node tools/nw.js",
     "drive": "node tools/drive.js",

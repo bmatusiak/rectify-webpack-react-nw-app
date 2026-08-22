@@ -100,6 +100,13 @@ async function plugin(imports, register) {
         //
         //MOUNTED ON THE ROUTER, so ../http's gate covers them: with the viewer
         //off these are not reachable, which is the whole point of the switch.
+        //WRAPPED SO WEBPACK CAN DROP IT. BUILD_SERVABLE is a constant, so a
+        //binary built with "canServe": false does not contain these routes at
+        //all -- which is the difference between a switch that is off and an
+        //ability that is not there.
+        if (BUILD_SERVABLE) mountBrowserRoutes();
+
+        function mountBrowserRoutes() {
         var path = require('path');
         var source = imports.bridge.source;
 
@@ -122,6 +129,7 @@ async function plugin(imports, register) {
         //4mb to 17mb. The page asks for them relatively, so this is where a
         //browser's `theme/swatch-x.css` lands.
         http.router.use('/theme', http.express.static(path.join(app.root, 'theme')));
+        }
 
     } else {
 

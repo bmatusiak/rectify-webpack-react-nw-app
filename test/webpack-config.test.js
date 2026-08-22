@@ -53,6 +53,43 @@ test('the packaged main is told it is packaged', () => {
     assert.deepEqual(defines, ['true'], 'BUILD_PROD gates webpack itself out of the package');
 });
 
+// THE HARDENING SWITCH, WHICH IS A CONSTANT RATHER THAN A SETTING.
+//
+// A binary built with "canServe": false must not CONTAIN the routes or the
+// socket.io server -- a runtime flag can be flipped by whoever runs the app,
+// and the point of this one is that there is nothing left to flip. That only
+// holds while it reaches the bundle as a define, so this checks it does.
+test('the packaged main is told whether it may ever serve', () => {
+    const defines = main.plugins
+        .filter((p) => p.definitions)
+        .map((p) => p.definitions.BUILD_SERVABLE)
+        .filter((v) => v !== undefined);
+
+    assert.equal(defines.length, 1, 'BUILD_SERVABLE never reaches the packaged bundle');
+    assert.ok(defines[0] === 'true' || defines[0] === 'false', 'it is ' + defines[0]);
+});
+
+// ABSENT FROM THE MANIFEST MEANS YES. Anything else would make every app that
+// has never heard of this key silently unable to serve.
+test('a manifest that says nothing about serving may still serve', () => {
+    const manifest = require('../package.json');
+    const said = manifest.app && manifest.app.canServe;
+
+    if (said === false) {
+        assert.equal(defineFor('BUILD_SERVABLE'), 'false', 'the manifest says no and the build says yes');
+    } else {
+        assert.equal(defineFor('BUILD_SERVABLE'), 'true',
+            'the manifest does not say no, so the build must allow it');
+    }
+});
+
+function defineFor (name) {
+    return main.plugins
+        .filter((p) => p.definitions)
+        .map((p) => p.definitions[name])
+        .filter((v) => v !== undefined)[0];
+}
+
 test('the window bundle is named after its entry, not main.js', () => {
     //otherwise it overwrites the packaged main, which also writes into dist
     assert.equal(windowBundle.output.filename, 'window.js');

@@ -1,4 +1,12 @@
-var { Server } = require('socket.io');
+//THE REQUIRE IS GATED, NOT JUST THE CALL.
+//
+//webpack collects a dependency wherever it can reach it, so `new Server(...)`
+//behind a constant still drags the whole of socket.io into the binary -- the
+//same reason ../build gates its webpack require directly rather than from inside
+//a function. Without this, a build made with "canServe": false still CONTAINED
+//socket.io, and the refusal message claiming otherwise would have been a lie.
+var Server = null;
+if (BUILD_SERVABLE) Server = require('socket.io').Server;
 var fanout = require('./fanout');
 
 //THE APP HAS TWO KINDS OF CLIENT AND ONE SET OF HANDLERS.
@@ -25,11 +33,11 @@ async function plugin(imports, register) {
     //browser viewer on while the app is running and there would otherwise be
     //nothing to switch on. A socket.io server on a port that is not listening
     //costs a few objects and refuses nobody, because nobody can reach it.
-    var browsers = new Server(http.server);
+    var browsers = Server ? new Server(http.server) : null;
 
     //THE GATE. A refused connection gets an error rather than a silent hang, so
     //a browser pointed at an app with the viewer off is told why.
-    browsers.use(function (socket, next) {
+    if (browsers) browsers.use(function (socket, next) {
         if (http.serving) return next();
         next(new Error('the browser viewer is off'));
     });
@@ -38,9 +46,11 @@ async function plugin(imports, register) {
     //while leaving old ones live would make the tray item a lie: the point of
     //switching it off is that nothing outside this window is talking to the app.
     var watching = http.onServing(function (on) {
-        if (!on) try { browsers.disconnectSockets(true); } catch (e) { /* none */ }
+        if (!on && browsers) try { browsers.disconnectSockets(true); } catch (e) { /* none */ }
     });
 
+    //fanout drops a missing one, so a build that cannot serve simply has one
+    //transport and nothing above here changes
     var io = fanout([imports.bridge.io, browsers]);
 
     await register(null, {

@@ -6,6 +6,12 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 //src/app/*/window.js, src/server.js every src/app/*/server.js — so a plugin
 //declares where it runs by which files it has, and neither bundle carries the
 //other's half. the third boot, src/main.js, is loaded off disk by nw.js.
+const manifest = require('./package.json');
+
+//whether a packaged build may serve a browser AT ALL. Absent means yes; the
+//runtime switch still decides whether it is doing so, and still starts off.
+const canServe = !(manifest.app && manifest.app.canServe === false);
+
 module.exports = (env, argv = {}) => {
 
     const isProduction = ((argv.mode || process.env.NODE_ENV) == 'production');
@@ -197,7 +203,17 @@ module.exports = (env, argv = {}) => {
         node: { __dirname: false, __filename: false },
         module: { rules: [babel, asString] },
         plugins: [
-            new webpack.DefinePlugin({ BUILD_PROD: JSON.stringify(true) }),
+            //BUILD_SERVABLE IS THE HARDENING SWITCH, and it is a constant rather
+            //than a setting for the reason a constant is worth having: webpack
+            //folds away every branch behind it, so a binary built with
+            //"canServe": false does not CONTAIN the routes or the socket.io
+            //server. A runtime flag can be flipped by whoever runs the app; this
+            //cannot be flipped by anybody, because there is nothing left to
+            //flip. Absent from the manifest means true.
+            new webpack.DefinePlugin({
+                BUILD_PROD: JSON.stringify(true),
+                BUILD_SERVABLE: JSON.stringify(canServe)
+            }),
             //express reaches for a view engine by name at runtime; nothing here
             //renders server side templates, so the miss is expected
             new webpack.ContextReplacementPlugin(/express.lib/, /$^/)

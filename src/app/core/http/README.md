@@ -100,6 +100,41 @@ disk. Until it did, `serve on` in a package opened a port where every request
 answered 404, and nothing noticed: the app's own window loads `view.html` off
 disk and never asks the server for anything.
 
+## and whether it may serve at all
+
+```json
+"app": { "serve": false, "canServe": true }
+```
+
+Two different questions, and only one of them is a setting.
+
+**`serve`** is the runtime default — what this build does on startup, overridable
+by `--serve` and by the tray and the cli while it runs.
+
+**`canServe`** is decided when the binary is built. `false` means the packaged
+app does not *contain* the ability: `webpack.config.js` turns it into a
+`BUILD_SERVABLE` constant, and webpack folds away every branch behind it — the
+routes in [build](../build/) and the socket.io server in [io](../io/) are not in
+the file. **A runtime flag can be flipped by whoever runs the app; this cannot be
+flipped by anybody, because there is nothing left to flip.**
+
+Measured: `canServe: false` took `main.bin` from 8,014,504 to 7,456,928 bytes.
+That only happened once the `require` was gated and not just the call — webpack
+collects a dependency wherever it can reach it, so `new Server(…)` behind a
+constant still dragged the whole of socket.io in, and the refusal below would
+have been claiming something untrue.
+
+**The refusal is loud.** `setServing(true)` throws and names the manifest key,
+`npm run cli -- serve on` prints it, and the tray does not offer an item it
+cannot honour — the same reasoning as the two Inspect items being absent from a
+package. A switch that appears to work and does nothing is worse than one that is
+not there: the point of building without the ability is that somebody can be
+sure, and silence is not proof of anything.
+
+Development always has the ability, whatever the manifest says. Taking it away
+from the source tree would only mean the thing you develop against is not the
+thing you ship.
+
 ## the express app is always real
 
 This used to hand back a stub whose every verb returned itself, so a plugin could
