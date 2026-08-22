@@ -233,8 +233,8 @@ Three of the rest are load-bearing beyond their own subject:
   Regrouping under `core/` broke four of them and left the suite green.
 
 `npm run drive` is the other half of it: start the real app and drive it over its own
-control socket -- every page opened, every heading and every piece of muted text measured
-for contrast, optionally in every swatch. It is the only check that can see the window, and
+control socket -- every page opened, and every heading, paragraph, piece of muted text,
+inline `code` and alert measured for contrast, optionally in every swatch. It is the only check that can see the window, and
 it earns its place: it found the active sidebar pill unreadable on thirteen of the
 twenty-eight swatches, which nothing in `test/` could have.
 

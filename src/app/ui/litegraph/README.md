@@ -26,7 +26,9 @@ list a reader works shape out by holding it in their head.
 
 rectify keeps the resolved graph on the `app` service as `app.plugins` — frozen
 `{ name, provides, consumes }` records, in load order, because only the container
-can know it. Left to right on the page is that load order: nothing is drawn until
+can know it. The `name` is the folder path, stamped by the boot through
+`src/target.js`; without that every record is called `plugin`, which is what
+every setup function in this app is called. Left to right on the page is that load order: nothing is drawn until
 everything feeding it has been.
 
 ## it takes a description, not a graph

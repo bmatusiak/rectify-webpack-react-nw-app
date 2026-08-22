@@ -145,8 +145,14 @@ binary.
 ## driving the real app
 
 `npm run drive` is the only check that can see the window. It starts the app,
-opens every page over the control socket, and measures every heading, every piece
-of muted text, every inline `code` and every alert against WCAG's 4.5.
+opens every page over the control socket, and measures every heading, every
+paragraph, every piece of muted text, every inline `code` and every alert against
+WCAG's 4.5. Text that is not there is skipped: a `.placeholder-glow` paragraph is
+a skeleton with no words in it.
+
+**The per-page pass runs on whatever swatch the app is wearing**, so what it
+reports moves with the last selection made in the window. `--swatches` is the
+pass that does not depend on that.
 
 ```
 npm run drive                whatever swatch is worn

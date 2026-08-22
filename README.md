@@ -26,7 +26,7 @@ src/
   index.html
   overlay.js    the message drawn over a page whose boot threw
   serve.js      whether a browser may be a client, and where
-  target.js     which suites a targeted test run should take
+  target.js     which suites a targeted run takes, and what a plugin is called
   app/          the plugins, below
 ```
 
@@ -430,6 +430,12 @@ Targeting happens **when the run is asked for**, not when the app starts.
 `run({ only })` filters on that. A flag deciding what to *load* would mean
 restarting the app to change target, which is the thing this avoids.
 
+The same file answers **what a plugin is called**. Every setup function here is
+named `plugin`, and rectify names a plugin after its setup function — so all five
+boots stamp the folder path on the way in, and a plugin is `core/io/server.js` in
+`app.plugins`, on the Graph page, and in the message naming one that could not be
+resolved.
+
 **A packaged build cannot load its own tests.** Each `require.context` for them
 sits inside a check webpack drops, and `src/main.prod.js` has no equivalent path
 at all. `npm run drive -- --build --selftest` says so rather than reporting three
@@ -438,15 +444,18 @@ empty contexts as failures.
 ### driving the real app
 
 `npm run drive` is the only check that can see the window: it starts the app,
-opens every page over the control socket, and measures every heading, every piece
-of muted text, every inline `code` and every alert against WCAG's 4.5, optionally
-in every swatch. It earns its place — it found the active sidebar pill unreadable
-on thirteen of the twenty-eight swatches, and later found inline code at 1.49:1
-inside an alert on four pages, which nothing in `test/` could have.
+opens every page over the control socket, and measures every heading, every
+paragraph, every piece of muted text, every inline `code` and every alert against
+WCAG's 4.5, optionally in every swatch. It earns its place — it found the active
+sidebar pill unreadable on thirteen of the twenty-eight swatches, inline code at
+1.49:1 inside an alert on four pages, minty's ordinary prose at 3.54:1, and a
+carousel caption at 1:1 — white on near-white. None of those were reachable from
+`test/`.
 
-**What it measures is what stays fixed.** Both of those lived for as long as they
-did because this only ever looked at headings and muted text. See
-[tools](tools/).
+**What it measures is what stays fixed.** Every one of them lived for as long as
+it did because this looked at what had been found wrong last time: headings and
+muted text, then code and alerts, and never a plain paragraph — which is most of
+what the app is made of. See [tools](tools/).
 
 ## adding a plugin
 

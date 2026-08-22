@@ -59,7 +59,7 @@ Four more are about a vendored surface, one page each:
 
 | page | plugin | what it shows |
 |---|---|---|
-| **Editor** | [ui/editor](../ui/editor/) | the three bundled ace modes, and the same four sentences highlighted as prose and as javascript, which is why the default is plain text |
+| **Editor** | [ui/editor](../ui/editor/) | the three bundled ace modes; the same four sentences highlighted as prose and as javascript, which is why the default is plain text; and a diff twice over &mdash; read-only to judge a change, and editable with copy arrows to resolve one |
 | **Markdown** | [ui/markdown](../ui/markdown/) | a document containing a real `<script>`, a real `onerror` and a real remote image, none of which the frame lets run |
 | **Terminal** | [ui/xterm](../ui/xterm/) | the same bytes through xterm and through a `<pre>`, side by side — plus the app's own `nw.log`, which is live |
 | **Graph** | [ui/litegraph](../ui/litegraph/) | this app's own dependency graph, both halves of it, out of `app.plugins` and `ext.dependents()` |

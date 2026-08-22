@@ -193,5 +193,5 @@ until the paragraph above was written. A check that only looks at headings will
 keep finding headings.
 
 `npm run drive -- --swatches` is what holds this up: 28 swatches in both modes,
-every heading and every piece of muted text measured. It is how the three above
+every heading, paragraph, piece of muted text, inline `code` and alert measured. It is how the three above
 were found and how they stay found.
