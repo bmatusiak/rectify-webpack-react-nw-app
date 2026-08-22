@@ -16,10 +16,11 @@ var express = require('express');
 //build, so none of this decides whether the app works -- only whether a second
 //viewer can join.
 
-plugin.consumes = ['app'];
+plugin.consumes = ['app', 'ipc'];
 plugin.provides = ['http'];
 async function plugin(imports, register) {
     var app = imports.app;
+    var ipc = imports.ipc;
 
     //ALWAYS BUILT, EVEN WHEN NOTHING WILL EVER LISTEN. This used to hand back a
     //stub whose every verb returned itself, so that a plugin could mount a route
@@ -30,8 +31,18 @@ async function plugin(imports, register) {
     var expressApp = express();
     var server = http.createServer(expressApp);
 
+    //THE GATE, IN FRONT OF THE APP'S OWN ROUTES.
+    //
+    //With the viewer off, nothing outside this window may reach the app: no
+    //socket.io (../io refuses it) and no api. Requests fall through rather than
+    //being answered here, because webpack's middleware is mounted after this and
+    //still has to serve the window its bundle -- whatever it does not recognise
+    //is refused by the gate installed at the end of listen().
     var router = express.Router();
-    expressApp.use(function (req, res, next) { router(req, res, next); });
+    expressApp.use(function (req, res, next) {
+        if (!serving) return next();
+        router(req, res, next);
+    });
 
     var url = null;
     var serving = !!app.serve;
@@ -54,8 +65,29 @@ async function plugin(imports, register) {
         });
     }
 
+    //ADDED ONCE, AND ONLY WHEN THERE IS SOMETHING BEHIND IT. By the time this
+    //runs, src/boot.js has already let ../build mount webpack's middleware, so
+    //this sits at the end of the chain: everything webpack recognises has been
+    //served, and what is left is the app's own -- which is exactly what the gate
+    //above stepped over.
+    //
+    //A 503 RATHER THAN A 404, because "off" and "not a route" are different
+    //facts and somebody reading a log deserves to know which they hit.
+    var gated = false;
+    function gate() {
+        if (gated) return;
+        gated = true;
+
+        expressApp.use(function (req, res) {
+            if (!serving) return res.status(503).type('text')
+                .send('the browser viewer is off. start with --serve, or turn it on from the tray.');
+            res.status(404).type('text').send('not found');
+        });
+    }
+
     function listen() {
         if (url) return Promise.resolve(url);
+        gate();
 
         return new Promise(function (resolve, reject) {
             function failed(e) {
@@ -108,78 +140,102 @@ async function plugin(imports, register) {
         });
     }
 
-    await register(null, {
-        http: {
-            express: express,
-            app: expressApp,
-            server: server,
+    //THE SAME SWITCH THE TRAY FLIPS, FROM A TERMINAL.
+    //
+    //`../cli` forwards anything its own table does not know, so this needs no
+    //cli half of its own: `npm run cli -- serve '{"on":true}'` reaches here.
+    //
+    //It exists to be USED -- turning the viewer on from a script, or off again
+    //when you are done -- and because a control that can only be reached by
+    //clicking a native menu item is a control nothing can check.
+    var api = {
+        express: express,
+        app: expressApp,
+        server: server,
 
-            get url() { return url; },
-            get listening() { return !!url; },
+        get url() { return url; },
+        get listening() { return !!url; },
 
-            //where it will listen, or is listening. A caller that wants to say
-            //so -- the tray's tooltip, the demo's System page -- should not have
-            //to take the url apart to find out.
-            get host() { return HOST; },
-            get port() { return url ? server.address().port : PORT; },
-            get router() { return router; },
+        //where it will listen, or is listening. A caller that wants to say
+        //so -- the tray's tooltip, the demo's System page -- should not have
+        //to take the url apart to find out.
+        get host() { return HOST; },
+        get port() { return url ? server.address().port : PORT; },
+        get router() { return router; },
 
-            //a fresh router, so routes from the previous load do not stack up
-            swapRouter: function () {
-                router = express.Router();
-                return router;
-            },
-
-            //WHETHER A BROWSER MAY BE A CLIENT. ../io reads this to decide
-            //whether to take a socket, and the tray reads it to label its item.
-            get serving() { return serving; },
-
-            //TURNING IT OFF DOES NOT ALWAYS STOP LISTENING, and that asymmetry
-            //is the point: development needs the port for webpack whatever the
-            //answer is. A packaged build has nothing else using it, so off means
-            //off, and the app goes back to having no port at all.
-            //
-            //AND IF IT THROWS, THE ANSWER GOES BACK TO WHAT IT WAS. Leaving
-            //`serving` true because listen() failed would put a tick beside a
-            //menu item for a server that is not there.
-            setServing: async function (on) {
-                on = !!on;
-                if (on === serving) return serving;
-
-                var was = serving;
-                serving = on;
-
-                try {
-                    if (on) await listen();
-                    else if (app.isPackaged) await stop();
-                } catch (e) {
-                    serving = was;
-                    announce();
-                    throw e;
-                }
-
-                announce();
-                return serving;
-            },
-
-            onServing: function (fn) {
-                watchers.push(fn);
-                return function () {
-                    var i = watchers.indexOf(fn);
-                    if (i >= 0) watchers.splice(i, 1);
-                };
-            },
-
-            //src/boot.js calls this. Development listens either way, because
-            //webpack has nowhere else to put the window half; a packaged build
-            //listens only if it was asked to serve.
-            listen: function () {
-                if (!app.isPackaged || serving) return listen();
-                return Promise.resolve(null);
-            }
+        //a fresh router, so routes from the previous load do not stack up
+        swapRouter: function () {
+            router = express.Router();
+            return router;
         },
+
+        //WHETHER A BROWSER MAY BE A CLIENT. ../io reads this to decide
+        //whether to take a socket, and the tray reads it to label its item.
+        get serving() { return serving; },
+
+        //TURNING IT OFF DOES NOT ALWAYS STOP LISTENING, and that asymmetry
+        //is the point: development needs the port for webpack whatever the
+        //answer is. A packaged build has nothing else using it, so off means
+        //off, and the app goes back to having no port at all.
+        //
+        //AND IF IT THROWS, THE ANSWER GOES BACK TO WHAT IT WAS. Leaving
+        //`serving` true because listen() failed would put a tick beside a
+        //menu item for a server that is not there.
+        setServing: async function (on) {
+            on = !!on;
+            if (on === serving) return serving;
+
+            var was = serving;
+            serving = on;
+
+            try {
+                if (on) await listen();
+                else if (app.isPackaged) await stop();
+            } catch (e) {
+                serving = was;
+                announce();
+                throw e;
+            }
+
+            announce();
+            return serving;
+        },
+
+        onServing: function (fn) {
+            watchers.push(fn);
+            return function () {
+                var i = watchers.indexOf(fn);
+                if (i >= 0) watchers.splice(i, 1);
+            };
+        },
+
+        //src/boot.js calls this. Development listens either way, because
+        //webpack has nowhere else to put the window half; a packaged build
+        //listens only if it was asked to serve.
+    listen: function () {
+        if (!app.isPackaged || serving) return listen();
+        return Promise.resolve(null);
+    }
+    };
+
+    //THE SAME SWITCH THE TRAY FLIPS, FROM A TERMINAL.
+    //
+    //`../cli` forwards anything its own table does not know, so this needs no
+    //cli half of its own: `npm run cli -- serve '{"on":true}'` reaches here.
+    //
+    //It exists to be USED -- turning the viewer on from a script, or off again
+    //afterwards -- and because a control that can only be reached by clicking a
+    //native menu item is a control nothing can check.
+    var answered = ipc && ipc.handle('serve', async function (data) {
+        if (data && typeof data.on != 'undefined') await api.setServing(!!data.on);
+        return { serving: api.serving, listening: api.listening, url: api.url, host: api.host, port: api.port };
+    });
+
+    await register(null, {
+        http: api,
         onDestroy: function () {
             watchers.length = 0;
+            if (answered) answered.remove();
             try { server.close(); } catch (e) { /* never listened */ }
         }
     });

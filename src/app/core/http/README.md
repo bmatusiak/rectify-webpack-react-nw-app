@@ -4,7 +4,8 @@ One express app, one server, and **two separate facts about it**.
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | `http` | `app` |
+| `main.js` | `http` | `app`, `ipc` |
+| `cli.js` | — | `cli`, `ipc` |
 
 ```
 http.listening    is there a port at all
@@ -53,6 +54,47 @@ The address is **kept separately from whether to use it**, because the tray can
 switch the viewer off and on again and it should come back where it was asked
 for rather than wherever happens to be free the second time. `HOST` and `PORT`
 in the environment still work, and lose to an explicit address.
+
+## turning it on and off while it runs
+
+```
+npm run cli -- serve        what it is now, without changing it
+npm run cli -- serve on     ... and off, start, stop, yes, no
+```
+
+The tray has the same switch as a checkbox. Both call `setServing`, so there is
+one implementation and the menu redraws from the real state whoever moved it.
+
+**A bare `serve` asks rather than toggling.** A toggle would be a trap in a
+script: the same command twice leaves it where it started.
+
+The command exists only because the words matter — `../cli` forwards anything
+its table does not know, so `serve '{"on":true}'` already reached here. What it
+did not do was read like something a person types, print the address afterwards,
+or refuse a word it could not read instead of quietly doing nothing.
+
+## what "off" actually stops
+
+| | serving | off |
+|---|---|---|
+| socket.io | takes connections | refused, with a reason |
+| the app's own routes | served | **503** |
+| webpack's bundle and hot reload | served | **served** |
+| the nw window | unaffected | unaffected |
+
+**Webpack is exempt, and it has to be.** In development the window fetches its
+own page and bundle over http — that is how hot reload works — so page hosting
+cannot be switched off without breaking the window it exists to serve. What can
+be switched off is everything the app itself answers, which is what stops
+anything outside this window reaching it.
+
+So the gate steps over app routes when off and lets webpack's middleware have the
+request; whatever webpack does not recognise is refused at the end of the chain
+with a **503 rather than a 404**, because *off* and *not a route* are different
+facts and a log deserves to say which.
+
+In a packaged build there is no webpack and nothing to exempt, so off means no
+port at all.
 
 ## the express app is always real
 
