@@ -130,6 +130,47 @@ Three things a swatch styles for a page it expected, not the one it got:
 All three are mixed from `--bs-emphasis-color` instead, the one bootstrap
 guarantees stands against the background either way.
 
+## the same mistake, three more times
+
+Every one of these was something taking its colour from a value that was already
+wrong, and each was found by measuring rather than looking:
+
+| | was | now |
+|---|---|---|
+| inline `code` | 3.82:1 on white, **1.49:1** in an alert | takes the colour of the text around it |
+| alerts | **1.6:1** on flatly | background and text set as a pair |
+| sidebar links | 3.4 / 2.63 / 4.27:1 on minty, morph, spacelab | from `--bs-emphasis-color` |
+
+**`code` is `color: inherit`, and the route there is the lesson.** It started as a
+tint — three quarters of the surrounding text mixed with the primary — which
+reads as an accent and passed on most swatches. superhero came out at 3.77:1;
+dropping the tint to 15% moved it to 4.13, still under. The number was never the
+problem: that `code` sits on a **panel**, not the page, and a mix toward one fixed
+swatch colour lands differently on every background it is used over. There is no
+percentage that is safe on all of them. The monospace face is distinction enough,
+and it is distinction that cannot cost anything.
+
+**An alert's text and background have to be set together.** Several bootswatch
+builds override the background alone — flatly says
+`--bs-alert-color: var(--bs-secondary-text-emphasis)` and then
+`background-color: #95a5a6` — so the text is coloured for a pale tint and put on
+a solid mid grey. Restoring just the background made it **worse**, 1.18:1, because
+flatly also forces white alert text. Half a pair is not a pair.
+
+**The sidebar took `--bs-body-color`**, which looks like the safest possible
+choice — whatever this swatch uses for its own text — and inherits the swatch's
+mistakes with it. minty's body colour measures **3.54:1 against its own
+background**: its prose is under the floor before this shell touches it.
+
+That last one is worth knowing about beyond the sidebar: **ordinary prose on
+minty is still below the floor**, and nothing here overrides it. Doing so means
+repainting every swatch's body text from the emphasis colour, which changes what
+each of them looks like — a design decision rather than a bug fix.
+
+None of it was caught for so long because `tools/drive.js` measured headings and
+muted text and nothing else. It measures inline `code` and alerts now. A check
+that only looks at headings will keep finding headings.
+
 `npm run drive -- --swatches` is what holds this up: 28 swatches in both modes,
 every heading and every piece of muted text measured. It is how the three above
 were found and how they stay found.

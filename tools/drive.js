@@ -112,6 +112,18 @@ async function main () {
     await readable(ipc, page, 'main h1, main h2, main h4, main .h2', 'headings')
     await readable(ipc, page, 'main .text-body-secondary', 'muted text')
 
+    // INLINE CODE, WHICH THIS DID NOT LOOK AT AND SHOULD HAVE. bootstrap pins it
+    // to one fixed colour whatever the swatch is: 3.82:1 on plain white and
+    // 1.49:1 inside an alert on flatly, on four pages, for as long as those pages
+    // have existed. A check that measures headings and muted text and nothing
+    // else will keep finding headings and muted text.
+    await readable(ipc, page, 'main code', 'inline code')
+
+    // AND THE ALERTS THEY SIT IN. Found the same way: code inside one measured
+    // 1.6:1 and the alert's own text measured the same, because the code was
+    // faithfully inheriting a colour that was already wrong.
+    await readable(ipc, page, 'main .alert', 'alerts')
+
     if (wantShots) {
       const file = path.join(SHOTS, page.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.png')
       const shot = await ipc.call('capture', { path: file }, 20000).catch(e => ({ error: e.message }))
@@ -192,6 +204,8 @@ async function swatches (ipc) {
 
     await readable(ipc, 'swatch ' + name, 'main h1, main h2, main h4', 'headings')
     await readable(ipc, 'swatch ' + name, 'main .text-body-secondary', 'muted text')
+    await readable(ipc, 'swatch ' + name, 'main code', 'inline code')
+    await readable(ipc, 'swatch ' + name, 'main .alert', 'alerts')
     await readable(ipc, 'swatch ' + name, '.navbar-brand', 'the brand')
     await readable(ipc, 'swatch ' + name, '.app-sidebar .nav-pills .nav-link', 'the sidebar')
   }

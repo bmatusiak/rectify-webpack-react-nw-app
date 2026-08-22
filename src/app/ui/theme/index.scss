@@ -87,7 +87,21 @@ label {
     //full strength, not dimmed. Recessing the resting items was worth a little
     //when the active one was a solid pill; now that it is a tint with a bar
     //down its edge, the dimming bought nothing and cost contrast.
-    color: var(--bs-body-color) !important;
+    //
+    //AND FROM EMPHASIS, NOT THE BODY COLOUR. Taking the body colour looked like
+    //the safest possible choice -- whatever this swatch uses for its own text --
+    //and it inherits the swatch's mistakes with it. minty's body colour is
+    //rgb(136,136,136), which measures 3.54:1 against its own background: its
+    //prose is under the floor before this shell touches it, and the sidebar was
+    //faithfully reproducing that at 3.4. morph and spacelab the same.
+    //
+    //--bs-emphasis-color is the one bootstrap guarantees stands against the
+    //background in either mode, which is why the headings and the muted text
+    //already come from it. Mixed a little toward the ground so the hover below,
+    //which is full strength, still has somewhere to go.
+    color: color-mix(in srgb,
+        var(--bs-emphasis-color, var(--bs-body-color)) 92%,
+        var(--bs-body-bg)) !important;
     font-size: .875rem;
     font-weight: 500;
 }
@@ -126,6 +140,68 @@ label {
     color: color-mix(in srgb,
         var(--bs-emphasis-color, var(--bs-body-color)) 82%,
         var(--bs-body-bg)) !important;
+}
+
+//AN ALERT'S TEXT AND ITS BACKGROUND HAVE TO BE THE PAIR BOOTSTRAP CHOSE.
+//
+//bootstrap sets both from one variant: --bs-alert-color is worked out FOR
+//--bs-alert-bg. Several bootswatch builds then override the background alone --
+//flatly says
+//
+//    .alert-secondary { --bs-alert-color: var(--bs-secondary-text-emphasis);
+//                       --bs-alert-bg:    var(--bs-secondary-bg-subtle) }
+//    .alert-secondary { background-color: #95a5a6 }
+//
+//-- so the text is coloured for a pale tint and then put on a solid mid grey.
+//It measured 1.6:1, and every piece of inline code inside it inherited that.
+//
+//RESTORING THE BACKGROUND ALONE IS NOT ENOUGH, and trying it is how the rest of
+//this was found. flatly's alerts are solid on purpose and it forces WHITE text
+//to go with them, so putting the pale background back gave white on near-white:
+//1.18:1, worse than the 1.6:1 it replaced. Half a pair is not a pair.
+//
+//So both ends are set here. The subtle background is the one bootstrap computes
+//per variant and is close to the page's own, and --bs-emphasis-color is the one
+//bootstrap guarantees stands against that in either mode -- the same reasoning
+//as the muted text below, which is the other thing swatches paint for a page
+//they expected rather than the one they got.
+.alert {
+    background-color: var(--bs-alert-bg) !important;
+    color: var(--bs-emphasis-color, var(--bs-body-color)) !important;
+}
+
+//CODE TAKES ITS COLOUR FROM THE TEXT AROUND IT.
+//
+//bootstrap pins `code` to one fixed pink whatever the swatch is, and that colour
+//knows nothing about what it has been put on. On plain white it measured 3.82:1,
+//already under the 4.5 floor; inside an alert-secondary on flatly -- a mid grey
+//-- it measured 1.49:1. It was like that on System, Editor, Markdown and Graph,
+//and nothing noticed, because tools/drive.js measured headings and muted text
+//and never looked at inline code.
+//
+//THE FIX IS NOT ANOTHER FIXED COLOUR. Code sits inside things whose background
+//the theme's variables know nothing about -- an alert, a card header, a badge --
+//so a colour mixed from --bs-body-bg would be wrong in exactly those places.
+//
+//NO TINT AT ALL, AND THE ROUTE TO THAT IS WORTH KEEPING.
+//
+//It began as a tinted version of the surrounding text -- three quarters of it
+//mixed with the primary -- which reads as an accent and looked right on most
+//swatches. superhero came out at 3.77:1. Taking the tint down to fifteen percent
+//moved it to 4.13, still under the floor, which is the point at which the number
+//stopped being the problem.
+//
+//The code on that page sits on a PANEL, not on the page: rgb(78, 93, 108) rather
+//than the body. The surrounding muted text measured 10.79:1 and the code beside
+//it measured 4.13, because a mix toward one fixed swatch colour lands differently
+//on every background it is used over -- and code is used over several. There is
+//no percentage that is safe on all of them.
+//
+//So code takes exactly the colour of the text around it. That text is readable on
+//whatever it is sitting on, by construction, wherever it appears; the monospace
+//face is distinction enough, and it is distinction that cannot cost anything.
+code {
+    color: inherit;
 }
 
 //a readout is not a button. left as a disabled one it takes the swatch's

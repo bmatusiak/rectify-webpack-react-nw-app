@@ -145,8 +145,8 @@ binary.
 ## driving the real app
 
 `npm run drive` is the only check that can see the window. It starts the app,
-opens every page over the control socket, and measures every heading and every
-piece of muted text against WCAG's 4.5.
+opens every page over the control socket, and measures every heading, every piece
+of muted text, every inline `code` and every alert against WCAG's 4.5.
 
 ```
 npm run drive                whatever swatch is worn
