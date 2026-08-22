@@ -46,6 +46,43 @@ function plugin(imports, register) {
             assert.equal(typeof markdown.Frame, 'function');
         });
 
+        //A FRAME CANNOT INHERIT ANYTHING. Everything else in the app takes its
+        //colours from the page around it; a document in an iframe has no page
+        //around it, so the whole stylesheet is handed over -- which is why this
+        //is two complete palettes rather than a colour or two.
+        it('carries two palettes, and defaults to dark', function () {
+            assert.equal(typeof markdown.look, 'function');
+            assert.ok(markdown.LOOKS.dark, 'no dark palette');
+            assert.ok(markdown.LOOKS.light, 'no light palette');
+
+            assert.equal(markdown.look('nonsense'), markdown.LOOKS.dark);
+            assert.equal(markdown.look(), markdown.LOOKS.dark);
+
+            //stable, so a page passing look(mode) does not hand the frame a new
+            //srcdoc on every render
+            assert.equal(markdown.look('light'), markdown.look('light'));
+
+            assert.notEqual(markdown.LOOKS.dark.colours.bg, markdown.LOOKS.light.colours.bg);
+            assert.notEqual(markdown.LOOKS.dark.colours.text, markdown.LOOKS.light.colours.text);
+        });
+
+        it('paints the document in the palette it was given', async function () {
+            var view = await mount(React.createElement(markdown.Frame, {
+                text: '# a heading', height: 200, look: markdown.look('light')
+            }));
+
+            try {
+                var doc = await inside(view);
+                var body = doc.body;
+                var painted = doc.defaultView.getComputedStyle(body).backgroundColor;
+
+                //rgb(255,255,255) rather than the dark ground
+                assert.ok(/25[0-9]|255/.test(painted), 'the light palette did not reach the frame: ' + painted);
+            } finally {
+                view.unmount();
+            }
+        });
+
         it('renders markdown as markup', async function () {
             var view = await mount(React.createElement(markdown.Frame, {
                 text: '# A heading\n\nSome **bold** text.\n\n| a | b |\n|---|---|\n| 1 | 2 |',
@@ -61,6 +98,89 @@ function plugin(imports, register) {
             } finally {
                 view.unmount();
             }
+        });
+
+        //A DOCUMENT THAT GROWS SHOULD NOT BE CUT OFF INSIDE THE FRAME.
+        //
+        //Without `fit` the caller guesses a height, and a scrollbar inside a
+        //panel that is already inside a scrolling page is two scrollbars for one
+        //document. The frame is same-origin, so this side can measure what the
+        //browser actually made of it rather than guess.
+        it('fits its box to the document when asked, and not otherwise', async function () {
+            var long = [];
+            for (var i = 0; i < 40; i++) long.push('Paragraph ' + i + ', which is here to take up room.\n');
+
+            var fixed = await mount(React.createElement(markdown.Frame, {
+                text: long.join('\n'), height: 200
+            }));
+            var fitted = await mount(React.createElement(markdown.Frame, {
+                text: long.join('\n'), height: 200, fit: true
+            }));
+
+            try {
+                await inside(fixed);
+                await inside(fitted);
+                for (var f = 0; f < 8; f++) { await fixed.painted(); await fitted.painted(); }
+
+                var asked = fixed.find('iframe.md').getBoundingClientRect().height;
+                var grown = fitted.find('iframe.md').getBoundingClientRect().height;
+
+                assert.ok(Math.abs(asked - 200) < 4, 'the unfitted one is ' + Math.round(asked) + ', not 200');
+                assert.ok(grown > asked + 200,
+                    'forty paragraphs fitted into ' + Math.round(grown) + 'px');
+
+                //and what it fitted to is the document, not a number that merely
+                //grew: nothing should be left to scroll
+                var doc = fitted.find('iframe.md').contentDocument;
+                assert.ok(grown >= doc.body.scrollHeight - 4,
+                    'the frame is ' + Math.round(grown) + 'px around a ' + doc.body.scrollHeight + 'px document');
+            } finally {
+                fixed.unmount();
+                fitted.unmount();
+            }
+        });
+
+        //AND IT COMES BACK DOWN, which is the assertion that tells
+        //`body.scrollHeight` from the root's. The root's is never less than the
+        //box it is in, so a frame measured that way grows once and then stays
+        //grown for every document after it -- and every check above would still
+        //pass.
+        it('comes back down when the document gets shorter', async function () {
+            var long = [];
+            for (var i = 0; i < 40; i++) long.push('Paragraph ' + i + '.\n');
+
+            var view = await mount(React.createElement(markdown.Frame, {
+                text: long.join('\n'), height: 200, fit: true
+            }));
+
+            try {
+                await inside(view);
+                await view.until(function () {
+                    return view.find('iframe.md').getBoundingClientRect().height > 500;
+                }, 'the long document never grew the frame');
+
+                view.render(React.createElement(markdown.Frame, {
+                    text: 'one line', height: 200, fit: true
+                }));
+
+                await view.until(function () {
+                    return view.find('iframe.md').getBoundingClientRect().height < 240;
+                }, 'the frame stayed tall after the document got short');
+            } finally { view.unmount(); }
+        });
+
+        //AND `height` IS THE FLOOR, so one line does not collapse the panel
+        it('does not shrink below the height it was given', async function () {
+            var view = await mount(React.createElement(markdown.Frame, {
+                text: 'one line', height: 300, fit: true
+            }));
+
+            try {
+                await inside(view);
+                for (var i = 0; i < 8; i++) await view.painted();
+                var tall = view.find('iframe.md').getBoundingClientRect().height;
+                assert.ok(tall >= 296, 'one line collapsed it to ' + Math.round(tall) + 'px');
+            } finally { view.unmount(); }
         });
 
         //THE FRAME FILLS ITS BOX. An iframe with nothing said about it is 300px

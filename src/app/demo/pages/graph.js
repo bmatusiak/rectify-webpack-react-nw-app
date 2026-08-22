@@ -19,13 +19,27 @@ var { useState, useEffect, useMemo } = React;
 //rectify's own, and `Plugin` is pushed in by the boot. Drawing them as nodes is
 //more honest than dropping the edges: `app` is the most-consumed thing in
 //either graph, and a picture that hid it would be a picture of a different app.
-var CONTAINER = { colour: '#3d2f14', background: '#241d10' };
+//THE PAGE'S OWN NODE COLOURS NEED BOTH MODES TOO.
+//
+//../../ui/litegraph paints the canvas and the ordinary nodes from the palette it
+//is handed, but these two kinds are the PAGE's idea and the page has to say what
+//they look like. Left dark-only they stayed dark on a light canvas -- and worse,
+//the title colour comes from the palette, so a dark node in light mode had dark
+//text on it and could not be read at all.
+var CONTAINER = {
+    dark: { colour: '#3d2f14', background: '#241d10' },
+    light: { colour: '#f0e2c0', background: '#fbf3e0' }
+};
+
+var TEST_COLOURS = {
+    dark: { colour: '#14303d', background: '#101f24' },
+    light: { colour: '#cfe4ee', background: '#eaf4f9' }
+};
 
 //test plugins are plugins, and drawing them is part of the point -- but they
 //provide nothing and consume `selftest`, so they hang off the right-hand edge
 //in a column of their own. A different colour says which is which without a
 //legend.
-var TEST = { colour: '#14303d', background: '#101f24' };
 
 //WHAT TO CALL A NODE, WHICH IS NOT ITS name.
 //
@@ -56,7 +70,10 @@ function label(entry) {
     return name.replace(/\.test\.js$/, '').replace(/\.js$/, '');
 }
 
-function build(plugins) {
+function build(plugins, mode) {
+    var container = CONTAINER[mode === 'light' ? 'light' : 'dark'];
+    var test = TEST_COLOURS[mode === 'light' ? 'light' : 'dark'];
+
     var provider = {};
     plugins.forEach(function (p) {
         p.provides.forEach(function (name) { provider[name] = p.name; });
@@ -126,8 +143,8 @@ function build(plugins) {
     Object.keys(columns).forEach(function (d) {
         columns[d].forEach(function (n, i) {
             n.pos = [40 + Number(d) * 300, 40 + i * 110];
-            if (n.container) { n.colour = CONTAINER.colour; n.background = CONTAINER.background; }
-            if (n.test) { n.colour = TEST.colour; n.background = TEST.background; }
+            if (n.container) { n.colour = container.colour; n.background = container.background; }
+            if (n.test) { n.colour = test.colour; n.background = test.background; }
         });
     });
 
@@ -150,6 +167,15 @@ module.exports = function GraphPage(props) {
     var { Section, Panel, Columns, Button, ButtonGroup, Badge, Alert, Icon, ListGroup, ListItem } = theme.ui;
     var Graph = litegraph.Graph;
 
+    //THE PAGE PICKS THE PALETTE, NOT THE PLUGIN -- see the Terminal page for the
+    //full reasoning. `theme.showing` and not `theme.mode`: a dark-only swatch
+    //asked for light stays dark, and a white surface in it would be a hole cut
+    //in the window.
+    var [mode, setMode] = useState(theme.showing);
+    useEffect(function () { return theme.onModeChange(function () { setMode(theme.showing); }); }, []);
+
+    var look = litegraph.look(mode);
+
     var [side, setSide] = useState('window');
     var [server, setServer] = useState(null);
     var [picked, setPicked] = useState(null);
@@ -163,7 +189,7 @@ module.exports = function GraphPage(props) {
     }, []);
 
     var plugins = side === 'window' ? here : (server || []);
-    var graph = useMemo(function () { return build(plugins); }, [plugins]);
+    var graph = useMemo(function () { return build(plugins, mode); }, [plugins, mode]);
 
     //A NEW ARRAY EVERY RENDER WOULD REBUILD THE CANVAS EVERY RENDER, and
     //rebuilding it loses wherever you had panned to. So the description is
@@ -234,7 +260,11 @@ module.exports = function GraphPage(props) {
 
                 {side === 'server' && server === null
                     ? <Alert variant="warning"><Icon name="hourglass" /> asking the node half&hellip;</Alert>
-                    : <Graph nodes={nodes} links={links} height={520} onSelect={setPicked} />}
+                    //FITTED, because this graph grows every time a plugin is
+                    //added. At a fixed 520 the bottom row was simply cut off,
+                    //with nothing on screen to say there was more below.
+                    : <Graph nodes={nodes} links={links} height={420} fit
+                        look={look} onSelect={setPicked} />}
             </Section>
 
             <Section title="What was clicked" lead="the same record, in words">

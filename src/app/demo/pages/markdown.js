@@ -1,5 +1,5 @@
 var React = require('react');
-var { useState } = React;
+var { useState, useEffect } = React;
 
 //MARKDOWN, RENDERED WHERE IT CANNOT DO ANYTHING.
 //
@@ -87,6 +87,15 @@ module.exports = function MarkdownPage(props) {
 
     var [view, setView] = useState('rendered');
 
+    //THE PAGE PICKS THE PALETTE, NOT THE PLUGIN -- see the Terminal page for the
+    //full reasoning. `theme.showing` and not `theme.mode`: a dark-only swatch
+    //asked for light stays dark, and a white surface in it would be a hole cut
+    //in the window.
+    var [mode, setMode] = useState(theme.showing);
+    useEffect(function () { return theme.onModeChange(function () { setMode(theme.showing); }); }, []);
+
+    var look = markdown.look(mode);
+
     return (
         <>
             <Section title="Markdown" lead="rendered where it cannot do anything"
@@ -113,7 +122,7 @@ module.exports = function MarkdownPage(props) {
                 </Alert>
 
                 {view === 'rendered'
-                    ? <Frame text={DOC} height={520} />
+                    ? <Frame text={DOC} height={320} fit look={look} />
                     : <Code tall text={DOC} mode="markdown" />}
             </Section>
 

@@ -39,6 +39,52 @@ function plugin(imports, register) {
             assert.ok(litegraph.LiteGraph.registered_node_types, 'LiteGraph did not initialise');
         });
 
+        //A CANVAS INHERITS NOTHING EITHER. litegraph paints every pixel itself,
+        //so there is no cascade to take a colour from and the whole palette has
+        //to be handed over -- the same shape as ../markdown's iframe.
+        it('carries two palettes, and defaults to dark', function () {
+            assert.equal(typeof litegraph.look, 'function');
+            assert.ok(litegraph.LOOKS.dark, 'no dark palette');
+            assert.ok(litegraph.LOOKS.light, 'no light palette');
+
+            assert.equal(litegraph.look('nonsense'), litegraph.LOOKS.dark);
+            assert.equal(litegraph.look(), litegraph.LOOKS.dark);
+            assert.equal(litegraph.look('light'), litegraph.look('light'));
+
+            assert.notEqual(litegraph.LOOKS.dark.background, litegraph.LOOKS.light.background);
+            assert.notEqual(litegraph.LOOKS.dark.text, litegraph.LOOKS.light.text);
+        });
+
+        it('paints the canvas in the palette it was given', async function () {
+            async function groundOf(look) {
+                var view = await mount(React.createElement(litegraph.Graph, {
+                    nodes: NODES, links: LINKS, height: 300, look: look
+                }));
+                try {
+                    var canvas = view.find('canvas');
+                    for (var i = 0; i < 10; i++) await view.painted();
+
+                    //AVERAGED, NOT SAMPLED AT A CORNER. The first version read
+                    //one pixel at (2,2) and got zero from both palettes:
+                    //litegraph paints its background on a second canvas and
+                    //blits it, so a corner is not reliably anything. The mean of
+                    //the whole surface is, and it is the ground that dominates
+                    //it either way.
+                    var data = canvas.getContext('2d')
+                        .getImageData(0, 0, canvas.width, canvas.height).data;
+
+                    var total = 0;
+                    for (var p = 0; p < data.length; p += 4) total += data[p] + data[p + 1] + data[p + 2];
+                    return total / (data.length / 4);
+                } finally { view.unmount(); }
+            }
+
+            var dark = await groundOf(litegraph.look('dark'));
+            var light = await groundOf(litegraph.look('light'));
+
+            assert.ok(light > dark, 'the light ground (' + light + ') is not lighter than the dark one (' + dark + ')');
+        });
+
         it('draws into a canvas sized to its box', async function () {
             var view = await mount(React.createElement(litegraph.Graph, {
                 nodes: NODES, links: LINKS, height: 300
@@ -64,6 +110,53 @@ function plugin(imports, register) {
             } finally {
                 view.unmount();
             }
+        });
+
+        //A GRAPH THAT GROWS SHOULD NOT BE CUT OFF AT THE BOTTOM.
+        //
+        //Without `fit` the caller guesses: the same height for four nodes and
+        //for thirty, so one is mostly empty and the other loses its bottom row
+        //with nothing on screen to say there is more. The nodes know where they
+        //ended up.
+        it('fits its box to the graph when asked, and not otherwise', async function () {
+            var tall = [];
+            for (var i = 0; i < 12; i++) {
+                tall.push({ id: 'n' + i, title: 'n' + i, inputs: [], outputs: [], pos: [20, 20 + i * 110] });
+            }
+
+            var fixed = await mount(React.createElement(litegraph.Graph, {
+                nodes: tall, links: [], height: 300
+            }));
+            var fitted = await mount(React.createElement(litegraph.Graph, {
+                nodes: tall, links: [], height: 300, fit: true
+            }));
+
+            try {
+                for (var f = 0; f < 5; f++) { await fixed.painted(); await fitted.painted(); }
+
+                var asked = fixed.find('.graph').getBoundingClientRect().height;
+                var grown = fitted.find('.graph').getBoundingClientRect().height;
+
+                assert.ok(Math.abs(asked - 300) < 4, 'the unfitted one is ' + Math.round(asked) + ', not 300');
+                assert.ok(grown > asked + 200,
+                    'twelve rows of nodes fitted into ' + Math.round(grown) + 'px');
+            } finally {
+                fixed.unmount();
+                fitted.unmount();
+            }
+        });
+
+        //AND `height` IS THE FLOOR, so a nearly empty graph does not collapse
+        it('does not shrink below the height it was given', async function () {
+            var view = await mount(React.createElement(litegraph.Graph, {
+                nodes: [NODES[0]], links: [], height: 400, fit: true
+            }));
+
+            try {
+                for (var i = 0; i < 5; i++) await view.painted();
+                var tall = view.find('.graph').getBoundingClientRect().height;
+                assert.ok(tall >= 396, 'one node collapsed it to ' + Math.round(tall) + 'px');
+            } finally { view.unmount(); }
         });
 
         //IT FOLLOWS ITS BOX, WHICH IS THE PART NOTHING ELSE DOES.

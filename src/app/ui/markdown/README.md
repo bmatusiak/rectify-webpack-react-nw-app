@@ -7,7 +7,9 @@ Markdown, rendered where it cannot do anything.
 | `window.js` | `markdown` | `react` |
 
 ```
-markdown.Frame  <Frame text height />
+markdown.Frame     <Frame text height fit look />
+markdown.look(m)   the palette for 'light' or 'dark'
+markdown.LOOKS     both of them, built once
 ```
 
 One component, and it is the one part that must not be got wrong.
@@ -54,6 +56,61 @@ Executing inline event handler violates ... The action has been blocked.
 Loading the image 'https://example.invalid/pixel.png' violates ... "img-src data:".
 ```
 
+## it fits its box to the document, when asked
+
+```jsx
+<Frame text={body} height={320} fit />
+```
+
+Without `fit` the box is the `height` given, which is what it always was -- and a
+document taller than that scrolls **inside** a panel that is already inside a
+scrolling page. Two scrollbars for one document, and the outer one gives no hint
+that the inner one exists.
+
+The frame is same-origin, so this side can read what the browser made of the
+document and does not have to guess how tall it came out.
+
+**`body.scrollHeight` and not `documentElement`'s.** In standards mode the
+viewport propagates from the root element, so the root's scrollHeight is never
+less than the box it is in -- measure that and the frame grows to the tallest
+document it has ever shown and never comes back down. The body is laid out to
+its content, so it answers the question that was asked. That is the one
+difference `comes back down when the document gets shorter` exists to catch:
+with the root measured instead, every other test here still passes.
+
+**`onLoad` settles it, and the effect only covers the rest.** A new `doc` string
+is a new `srcdoc`, which is a reload: measuring from an effect at that moment
+reads the document on its way out. The effect handles `fit` being switched on
+over a document that is already there, and owns a `ResizeObserver` -- because a
+narrower frame re-wraps the text and **no load event fires for a resize**.
+
+`height` stays the **floor**, so one line does not collapse the panel.
+
+## light and dark, and the caller picks
+
+`look('light')` and `look('dark')`, handed to `<Frame look={...} />`. Anything it
+does not recognise is **dark**, because that is what this was before there was a
+choice -- the same shape as [xterm](../xterm/) and [litegraph](../litegraph/),
+and for the same reason: every page consumes the theme, so a theme consumed back
+would be a cycle.
+
+**A frame inherits nothing, and that makes this more than a colour or two.**
+Everything else on the page takes its colours from the page around it. A document
+in an iframe has no page around it -- `srcdoc` is a document of its own, with its
+own root and no cascade reaching in -- so the whole stylesheet has to be handed
+over, twice. That is why these are two complete palettes rather than a background
+and a foreground.
+
+Both are built once, so `look(mode)` returns the same object every time. A fresh
+style string per call would be a fresh `srcdoc` per render, and a frame handed a
+new `srcdoc` reloads: the document would be reparsed, and anything scrolled to
+would jump back to the top on every render of the page around it.
+
+The demo's Markdown page asks the theme for **`showing`, not `mode`** -- `mode`
+is the setting, `showing` is what the swatch actually painted, and they differ
+whenever a dark-only swatch is asked for light. A white document in a window that
+stayed dark is a hole cut in it.
+
 ## the tests
 
 `window.test.js`, run inside the app. The frame is same-origin — there is no
@@ -62,7 +119,13 @@ document, which is the only way to check a policy that a browser has to enforce.
 
 | test | what breaking it looks like |
 |---|---|
+| hands out the frame and nothing else | the plugin starts providing more than the one part that must not be got wrong |
+| carries two palettes, and defaults to dark | `look()` stops defaulting, or its result stops being stable |
+| paints the document in the palette it was given | the style is built from a fixed palette rather than the one asked for |
 | renders markdown as markup | `marked` stops being called, or the frame never parses |
+| fits its box to the document when asked, and not otherwise | `fit` is ignored, or it fits to a number rather than to the document |
+| comes back down when the document gets shorter | the root is measured instead of the body |
+| does not shrink below the height it was given | `height` stops being the floor and one line collapses the panel |
 | fills the width it was given | the width and border come off the iframe |
 | carries the policy that makes it safe | the meta tag is dropped or weakened |
 | refuses a script and an inline handler | the policy stops holding |

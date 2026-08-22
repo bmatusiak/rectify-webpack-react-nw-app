@@ -62,10 +62,14 @@ async function plugin(imports, register) {
         window.LGraphCanvas = LGraphCanvas;
     }
 
-    //MATCHES THE OTHER SURFACES IN THIS APP rather than litegraph's own grey, so
-    //a graph sitting in a page does not look like a hole cut in it. The same
-    //colours as ../xterm's LOOK, on purpose.
-    var LOOK = {
+    //TWO PALETTES, AND THE CALLER PICKS -- the same shape as ../xterm and
+    //../markdown, and for the same reason: this plugin knows nothing about the
+    //theme, so whoever knows which mode is showing says so.
+    //
+    //A CANVAS INHERITS NOTHING EITHER. litegraph paints every pixel itself, so
+    //there is no cascade to take a colour from -- the whole palette has to be
+    //handed over, exactly as with a document in an iframe.
+    var DARK = {
         background: '#0a0d12',
         node: '#161b22',
         title: '#1c2430',
@@ -73,11 +77,31 @@ async function plugin(imports, register) {
         link: '#4aa3ff'
     };
 
+    var LIGHT = {
+        background: '#ffffff',
+        node: '#f2f4f6',
+        title: '#dde3ea',
+        text: '#1f2328',
+        link: '#0969da'
+    };
+
+    var LOOKS = { dark: DARK, light: LIGHT };
+
+    //anything unrecognised is dark, because that is what this was before there
+    //was a choice
+    function look(mode) { return mode === 'light' ? LIGHT : DARK; }
+
+    //what a caller that says nothing gets
+    var LOOK = DARK;
+
     //ONE NODE TYPE, REGISTERED ONCE. litegraph is built for graphs that RUN:
     //every node is a class with an onExecute, registered by name before one can
     //be created. Nothing here runs — these are boxes with named ports — so
     //there is a single type that draws whatever it was told to, and the registry
     //is not something callers have to think about.
+    //room above and below a fitted graph, so the top node is not against the edge
+    var PADDING = 24;
+
     var TYPE = 'rectify/node';
     if (!LiteGraph.registered_node_types[TYPE]) {
         var Box = function () { /* ports are added per instance, in build() */ };
@@ -87,7 +111,8 @@ async function plugin(imports, register) {
 
     //---- a description in, a graph out ---------------------------------------
 
-    function build(graph, nodes, links) {
+    function build(graph, nodes, links, skin) {
+        skin = skin || DARK;
         var made = {};
 
         (nodes || []).forEach(function (spec) {
@@ -105,8 +130,8 @@ async function plugin(imports, register) {
             node.size[0] = Math.max(node.size[0], 60 + node.title.length * 7);
 
             if (spec.pos) node.pos = [spec.pos[0], spec.pos[1]];
-            node.color = spec.colour || LOOK.title;
-            node.bgcolor = spec.background || LOOK.node;
+            node.color = spec.colour || skin.title;
+            node.bgcolor = spec.background || skin.node;
 
             node.__id = spec.id;
             graph.add(node);
@@ -124,7 +149,33 @@ async function plugin(imports, register) {
         return made;
     }
 
-    function Graph({ nodes, links, height, onSelect }) {
+    //HOW TALL THE GRAPH ACTUALLY IS, once it has been laid out.
+    //
+    //The caller sizes the box, and until now had to guess: a graph with four
+    //nodes got the same 520px as one with thirty, so the small one was mostly
+    //empty and the big one was cut off at the bottom with no sign that there was
+    //more. The nodes know where they ended up, so the box does not have to be
+    //guessed at -- litegraph's own `pos` is the top-left of the BODY, with the
+    //title bar above it, which is why the title height comes off the top.
+    function extentOf(made, LiteGraph) {
+        var top = null;
+        var bottom = null;
+
+        Object.keys(made).forEach(function (id) {
+            var node = made[id];
+            var head = node.pos[1] - (LiteGraph.NODE_TITLE_HEIGHT || 30);
+            var foot = node.pos[1] + (node.size[1] || 0);
+
+            if (top === null || head < top) top = head;
+            if (bottom === null || foot > bottom) bottom = foot;
+        });
+
+        if (top === null) return 0;
+        return Math.ceil(bottom - top);
+    }
+
+    function Graph({ nodes, links, height, fit, onSelect, look: wanted }) {
+        var skin = wanted || DARK;
         var host = useRef(null);
         var canvasRef = useRef(null);
 
@@ -147,13 +198,25 @@ async function plugin(imports, register) {
             canvas.allow_reconnect_links = false;
             canvas.render_canvas_border = false;
             canvas.background_image = null;
-            canvas.clear_background_color = LOOK.background;
-            canvas.default_link_color = LOOK.link;
-            canvas.node_title_color = LOOK.text;
+            canvas.clear_background_color = skin.background;
+            canvas.default_link_color = skin.link;
+            canvas.node_title_color = skin.text;
             canvas.getMenuOptions = function () { return []; };
             canvas.getNodeMenuOptions = function () { return []; };
 
-            build(graph, nodes, links);
+            var made = build(graph, nodes, links, skin);
+
+            //FITTED TO WHAT WAS DRAWN, when the caller asks for it. Still a
+            //definite pixel height -- a canvas fills what it is given and a
+            //container sized by its content gives it nothing -- but the number
+            //is measured off the graph rather than guessed by whoever wrote the
+            //page. `height` is the floor, so a nearly empty graph does not
+            //collapse to nothing.
+            if (fit && host.current) {
+                var tall = extentOf(made, LiteGraph);
+                if (tall) host.current.style.height =
+                    Math.max(tall + 2 * PADDING, height || 0) + 'px';
+            }
 
             if (onSelect) canvas.onSelectionChange = function (selected) {
                 var first = null;
@@ -206,10 +269,16 @@ async function plugin(imports, register) {
                 try { graph.stop(); } catch (e) { /* was not running */ }
                 try { canvas.setGraph(null); } catch (e) { /* already detached */ }
             };
-            //REBUILT WHEN THE DESCRIPTION CHANGES, and only then. The nodes and
-            //the links are the whole content; everything else about a graph is
-            //interaction, and that happens inside it.
-        }, [nodes, links]);
+            //REBUILT WHEN THE DESCRIPTION OR THE PALETTE CHANGES, and only
+            //then. The nodes and the links are the whole content; everything
+            //else about a graph is interaction, and that happens inside it.
+            //
+            //The palette is in here because litegraph paints it INTO the canvas
+            //-- there is no cascade to re-run. Rebuilding costs a pan position,
+            //which a mode change is entitled to; ../xterm cannot do the same
+            //because a terminal has scrollback, and that is not the plugin's to
+            //throw away.
+        }, [nodes, links, wanted, fit, height]);
 
         //THE BOX IS THE CALLER'S AND MUST BE A DEFINITE ONE, exactly as in
         //../xterm: a canvas fills what it is given, and a container sized by its
@@ -224,7 +293,9 @@ async function plugin(imports, register) {
     await register(null, {
         litegraph: {
             Graph: Graph,
-            //THE LOOK, HANDED OUT RATHER THAN COPIED, as ../xterm does.
+            //THE PALETTES, HANDED OUT RATHER THAN COPIED, as ../xterm does.
+            look: look,
+            LOOKS: LOOKS,
             LOOK: LOOK,
             //THE LIBRARY ITSELF, for the thing this component will not cover.
             //Nothing uses these yet; they are here so that needing one is not a
