@@ -140,6 +140,17 @@ async function main () {
 
     // every heading and every piece of muted text on the page, measured
     await readable(ipc, page, 'main h1, main h2, main h4, main .h2', 'headings')
+
+    // THE PROSE ITSELF, WHICH NOTHING HERE MEASURED UNTIL NOW.
+    //
+    // Headings, muted text, code and the sidebar were each checked because each
+    // had been found wrong -- and the plain paragraph between them, the thing
+    // most of this app is made of, was never asked. minty ships
+    // --bs-body-color: rgb(136,136,136), which is 3.54:1 on its own white, so
+    // every <p> in the app was under the floor on that swatch while 278 checks
+    // passed. A check that only looks at what was fixed last time will keep
+    // finding what was fixed last time.
+    await readable(ipc, page, 'main p', 'prose')
     await readable(ipc, page, 'main .text-body-secondary', 'muted text')
 
     // INLINE CODE, WHICH THIS DID NOT LOOK AT AND SHOULD HAVE. bootstrap pins it
@@ -236,6 +247,7 @@ async function swatches (ipc) {
     await settled(ipc)
 
     await readable(ipc, 'swatch ' + name, 'main h1, main h2, main h4', 'headings')
+  await readable(ipc, 'swatch ' + name, 'main p', 'prose')
     await readable(ipc, 'swatch ' + name, 'main .text-body-secondary', 'muted text')
     await readable(ipc, 'swatch ' + name, 'main code', 'inline code')
     await readable(ipc, 'swatch ' + name, 'main .alert', 'alerts')
@@ -273,7 +285,11 @@ async function readable (ipc, page, selector, what) {
   if (!found) return
 
   const items = found.count > 1 ? found.items : [found]
-  const measured = items.filter(item => item.contrast && item.visible)
+  //TEXT THAT IS ACTUALLY THERE. A `.placeholder-glow` paragraph is a skeleton
+  //with no words in it, and the contrast of nothing against anything is not a
+  //fact about whether this app can be read.
+  const measured = items.filter(item =>
+    item.contrast && item.visible && String(item.text || '').trim())
   if (!measured.length) return
 
   const worst = measured.reduce((low, item) => item.contrast.ratio < low.contrast.ratio ? item : low)

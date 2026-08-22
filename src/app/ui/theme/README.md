@@ -162,14 +162,35 @@ choice — whatever this swatch uses for its own text — and inherits the swatc
 mistakes with it. minty's body colour measures **3.54:1 against its own
 background**: its prose is under the floor before this shell touches it.
 
-That last one is worth knowing about beyond the sidebar: **ordinary prose on
-minty is still below the floor**, and nothing here overrides it. Doing so means
-repainting every swatch's body text from the emphasis colour, which changes what
-each of them looks like — a design decision rather than a bug fix.
+That last one went beyond the sidebar: **ordinary prose on minty was below the
+floor too**, on every page, and nothing here overrode it. It does now — the body
+colour is 92% of the emphasis colour, the same proportion the sidebar uses,
+because that is the strength of *text you are meant to read* where 82% is *text
+that is deliberately secondary*.
+
+It repaints every swatch's body text rather than the three that are short, which
+is a design decision and was left alone for a while on purpose. What settled it
+is that the ordering was backwards: on minty the subtitles measured **13.6** and
+the prose under them **3.54**, so the text meant to recede was the readable half.
+Now it is 18.36 against 13.6.
+
+**And the rule has to outrank the swatch on the same element.** A swatch declares
+`:root, [data-bs-theme=light] { --bs-body-color: … }`, and `window.js` puts
+`data-bs-theme` on the **body** — so that attribute rule lands on the element a
+bare `body { … }` was trying to paint, at (0,1,0) against (0,0,1), and wins
+whichever stylesheet loaded last. Measured the confusing way round: the rule was
+in the bundle, on the page, and doing nothing.
+
+**A carousel caption is white**, because bootstrap assumes a photograph behind
+it. The slides in this kit are `bg-body-*` surfaces, so the captions on the
+Disclosure page sat at **1:1** — white on near-white, invisible on a page that
+had been screenshot dozens of times. They take the emphasis colour now.
 
 None of it was caught for so long because `tools/drive.js` measured headings and
-muted text and nothing else. It measures inline `code` and alerts now. A check
-that only looks at headings will keep finding headings.
+muted text and nothing else. It measures inline `code`, alerts and **the prose
+itself** now — the plain `<p>` that most of this app is made of was never asked
+until the paragraph above was written. A check that only looks at headings will
+keep finding headings.
 
 `npm run drive -- --swatches` is what holds this up: 28 swatches in both modes,
 every heading and every piece of muted text measured. It is how the three above

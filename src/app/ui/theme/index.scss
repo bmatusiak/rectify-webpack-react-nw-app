@@ -142,6 +142,55 @@ label {
         var(--bs-body-bg)) !important;
 }
 
+//THE PROSE ITSELF, WHICH IS MOST OF WHAT THIS APP IS.
+//
+//Everything above fixes what a swatch does to this shell's own furniture. This
+//is about the swatch's opinion of body text, and some of them ship one that is
+//under the floor before anything here touches it: minty's --bs-body-color is
+//rgb(136,136,136), which is 3.54:1 on its own white. Every paragraph on every
+//page was under 4.5 on that swatch while every check passed, because nothing
+//measured a paragraph -- headings, muted text, code, alerts and the sidebar
+//were each checked for having been found wrong once, and the plain <p> between
+//them was never asked. `npm run drive` measures it now.
+//
+//IT WAS ALSO THE WRONG WAY ROUND. The muted rule above lifts secondary text to
+//82% of emphasis, so on minty the subtitles measured 13.6 and the prose under
+//them measured 3.54: the text that was meant to recede was the readable half.
+//
+//92%, the same proportion as the sidebar, and for the same reason -- that is
+//the strength of "text you are meant to read", where 82% is "text that is
+//deliberately secondary". One number for each job keeps the ordering right on
+//all twenty-eight rather than on most of them.
+//
+//AND IT IS THE VARIABLE, NOT `color`. Bootstrap components set
+//`color: var(--bs-body-color)` themselves -- `.card` is the one that matters
+//here -- so a rule that only painted `body` would leave every card's text at
+//the swatch's own value, which is exactly where this started.
+//AND THE SELECTOR HAS TO OUTRANK THE SWATCH ON THE SAME ELEMENT. A swatch
+//declares the variable as `:root, [data-bs-theme=light] { --bs-body-color: … }`
+//and ../theme/window.js puts `data-bs-theme` on the BODY -- so that attribute
+//rule lands on the same element this one does, at (0,1,0) against a bare
+//`body`'s (0,0,1), and wins whichever stylesheet loaded last. Measured: the
+//rule was in the bundle, on the page, and doing nothing.
+//
+//Both selectors carry it, so it still applies in the moment before the
+//attribute is set.
+body,
+body[data-bs-theme] {
+    --bs-body-color: color-mix(in srgb, var(--bs-emphasis-color, #000) 92%, var(--bs-body-bg));
+    color: var(--bs-body-color);
+}
+
+//BOOTSTRAP'S CAROUSEL CAPTION IS WHITE, because it assumes a photograph behind
+//it. The slides in this kit are `bg-body-*` surfaces, so white caption text sat
+//on a near-white ground at 1:1 -- invisible, on a page that has been screenshot
+//dozens of times without anybody noticing, because there is nothing to notice.
+//
+//Found by the same check: measuring prose is what made it say so.
+.carousel-caption {
+    color: var(--bs-emphasis-color, var(--bs-body-color));
+}
+
 //AN ALERT'S TEXT AND ITS BACKGROUND HAVE TO BE THE PAIR BOOTSTRAP CHOSE.
 //
 //bootstrap sets both from one variant: --bs-alert-color is worked out FOR
