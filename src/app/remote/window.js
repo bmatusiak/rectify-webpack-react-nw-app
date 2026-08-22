@@ -23,7 +23,11 @@ async function plugin(imports, register) {
             //the page came out of the package and main injected __host into it
             //before any of this ran, which is a better proof than a query
             //string and one a browser could not produce.
-            app: new URLSearchParams(location.search).get('view') === 'app' || !!window.__host,
+            //WHICH VIEW THIS IS, NOT WHAT KIND. ../core/window stamps every
+            //browser view it opens with a session so the two can be told apart
+            //and one of them aimed at; what KIND of view this is was settled by
+            //the transport it arrived on, and is not this page's to say.
+            session: new URLSearchParams(location.search).get('session') || null,
             title: document.title,
             href: location.href
         });

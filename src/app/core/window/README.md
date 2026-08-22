@@ -12,6 +12,7 @@ The nw.js window. It is a view onto a server that outlives it.
 window.url  .isOpen  .current
 window.open()  .show()  .hide()  .openInBrowser()  .quit(reason)
 window.capture({ format })
+window.views       .openView()  .closeView(session)
 ```
 
 The plugin that spans all four runtimes, and `capture` is why: `capturePage`
@@ -68,6 +69,32 @@ proof, and a better one than a query string anybody could type.
 window half in with it; in development the page still fetches its own bundle over
 http so webpack can hot reload it, and the bridge carries only the app's own
 traffic.
+
+## a browser view
+
+```
+npm run cli -- browser open     opened browser-1
+npm run cli -- browser close
+```
+
+**A second window on the same url is already a browser.** It is a remote page
+with no `node-remote`, so it has no node, and [bridge](../bridge/) is only ever
+attached to the app's own window — so socket.io is its only way home. That is
+precisely the path a real browser takes.
+
+It exists because until now nothing exercised that path. The only way to get a
+second viewer was `nw.Shell.openExternal`, which hands the url to whatever
+browser the machine happens to have and can neither be closed again nor asked
+anything. `remote/server.test.js` opens one and drives it.
+
+Each is **stamped with a session** — `?session=browser-1` — because otherwise
+views are only tellable apart by socket.io's own id, which is opaque and changes
+on every reconnect. The page echoes it back; it cannot use it to claim anything,
+since which view is the app window is settled by the transport.
+
+Opening one refuses if the browser viewer is off, because it would have nothing
+to connect to. Turning the viewer off drops any that are open, and this plugin
+closes its own on teardown.
 
 ## capture
 

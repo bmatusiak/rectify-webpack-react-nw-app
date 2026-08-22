@@ -32,29 +32,28 @@ function plugin(imports, register) {
             assert.ok(io.engine.clientsCount > 0, 'nothing connected within two seconds');
         });
 
-        //THE TWO COUNTERS AGREE ONCE A CONNECTION HAS SETTLED, AND NOT BEFORE.
+        //WHAT IS ALWAYS TRUE ABOUT THE TWO COUNTERS, WHICH IS NOT EQUALITY.
         //
         //`engine.clientsCount` counts transports; `sockets.sockets` counts the
-        //namespace's members. A client that has opened a transport and not yet
-        //joined is legitimately in one and not the other, so comparing them at
-        //an arbitrary instant is asserting a coincidence -- which is exactly how
-        //this behaved: green on its own, red about one full run in three, with
-        //`Expected 0 === 1`.
+        //namespace's members. A member must have a transport, so one is never
+        //greater than the other -- and that is a real invariant: a socket in the
+        //namespace with no transport behind it would be a leak.
         //
-        //What is worth asserting is that they CONVERGE: no socket is left half
-        //attached. So it waits for the value to stop moving, and fails if it
-        //never does.
-        it('counts the same sockets two ways, once they have settled', async function () {
-            var mine = 0, theirs = 0;
+        //THE REVERSE IS NOT A FAULT, and asserting it cost two red runs. A
+        //client that has opened a transport and not yet joined is in one and not
+        //the other, and a client that went away WITHOUT a clean close is counted
+        //until socket.io's ping timeout reaps it -- up to about forty seconds.
+        //
+        //This first waited a second for them to converge, which was fine until
+        //the suite itself started opening and closing browser views
+        //(remote/server.test.js). Then "at rest" stopped being something a run
+        //could assume, and the honest assertion is the one that does not need it.
+        it('never has a socket in the namespace the engine does not know about', function () {
+            var mine = io.sockets.sockets.size;
+            var theirs = io.engine.clientsCount;
 
-            for (var i = 0; i < 40; i++) {
-                mine = io.sockets.sockets.size;
-                theirs = io.engine.clientsCount;
-                if (mine === theirs) return;
-                await new Promise(function (resolve) { setTimeout(resolve, 25); });
-            }
-
-            assert.equal(mine, theirs, 'a socket is attached to the engine and not to the namespace');
+            assert.ok(mine <= theirs,
+                mine + ' sockets in the namespace but only ' + theirs + ' transports');
         });
 
         it('is the bridge when packaged, and socket.io when not', function () {

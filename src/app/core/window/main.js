@@ -124,12 +124,75 @@ async function plugin(imports, register, config) {
         });
     }
 
+    //---- browser views -------------------------------------------------------
+    //
+    //A SECOND WINDOW POINTED AT THE SAME URL IS ALREADY A BROWSER.
+    //
+    //It is a remote page with no `node-remote`, so it has no node, and ../bridge
+    //is only ever attached to the app's own window -- so this one has no way
+    //home except socket.io. That is precisely the path a real browser takes, and
+    //until now nothing exercised it: the only way to get a second viewer was
+    //nw.Shell.openExternal, which hands the url to whatever browser the machine
+    //happens to have and cannot be driven or closed again.
+    //
+    //EACH ONE IS STAMPED WITH A SESSION, because otherwise they are only
+    //tellable apart by socket.io's own id -- which is opaque, and which changes
+    //under them on every reconnect. The name main gave it does not.
+    //
+    //The page cannot use this to CLAIM anything: which view is the app window is
+    //settled by the transport it arrived on, not by what it says. A session only
+    //answers "which of these", never "what kind".
+    var views = new Map();
+    var nextView = 1;
+
+    function openView() {
+        if (!http.url) throw new Error('nothing is listening, so there is no page for a view to open');
+        if (!http.serving) throw new Error(
+            'the browser viewer is off, so a view would not be able to connect. `serve on` first');
+
+        var session = 'browser-' + (nextView++);
+
+        return new Promise(function (resolve, reject) {
+            nw.Window.open(http.url + '?session=' + session, {
+                id: session,
+                width: size.width || 1024,
+                height: size.height || 768
+            }, function (w) {
+                if (!w) return reject(new Error('the view failed to open'));
+
+                //IT IS NOT GIVEN A WAY HOME. No bridge.attach here, deliberately:
+                //that is what makes it a browser rather than a second app window.
+                w.on('closed', function () { views.delete(session); });
+                views.set(session, w);
+                resolve(session);
+            });
+        });
+    }
+
+    function closeView(session) {
+        var gone = [];
+
+        views.forEach(function (w, id) {
+            if (session && id !== session) return;
+            try { w.close(true); } catch (e) { /* already gone */ }
+            gone.push(id);
+        });
+
+        gone.forEach(function (id) { views.delete(id); });
+        return gone;
+    }
+
     await register(null, {
         window: {
             get isOpen() { return !!win; },
             get current() { return win; },
 
             open: open,
+
+            //the browser views this app opened, by the name it gave them
+            get views() { return Array.from(views.keys()); },
+            openView: openView,
+            closeView: closeView,
 
             show: function () {
                 if (win) {
@@ -220,6 +283,7 @@ async function plugin(imports, register, config) {
             closeShouldHide: function (yes) { onClose = yes ? 'hide' : 'quit'; }
         },
         onDestroy: function () {
+            closeView();//a view is this plugin's to clean up, not the user's
             try { if (keepAlive) keepAlive.close(true); } catch (e) { /* already gone */ }
             keepAlive = null;
         }

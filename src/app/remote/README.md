@@ -16,7 +16,33 @@ npm run cli -- fill select darkly        choose in it
 npm run cli -- fill "#agree"             toggle it
 npm run cli -- read .nav-link            what is there now, and its contrast
 npm run cli -- views                     which pages are open to be driven
+npm run cli -- browser open              a second viewer, over socket.io
+npm run cli -- read h4 '{"view":"browser-1"}'   ... and aim at it
 ```
+
+## which view, by name
+
+`views` lists what is connected by the name you can aim at:
+
+```
+window      Rectify NW App | Terminal
+browser-1   Rectify NW App | System
+```
+
+**`window` is settled by the transport**, not by anything the page says: only the
+app's own window is on [bridge](../core/bridge/), and the bridge calls its one
+socket `window`. A browser cannot claim it.
+
+**A session only answers *which*, never *what kind*.** [window](../core/window/)
+stamps every browser view it opens with one, and the page echoes it back —
+because socket.io's own id is opaque and changes under a client on every
+reconnect, while the name main gave it does not. A browser somebody opened by
+hand has no session, so it gets `browser-` and the first six characters of its
+socket id.
+
+Without a name to aim at, a browser view could be opened and looked at and never
+driven: the app's own window always wins, which is the right default and a
+useless one if it is the only rule.
 
 `capture` gave it eyes; these are the hands. The window half is the only place
 that can touch the document, so the clicking happens there and the rest is

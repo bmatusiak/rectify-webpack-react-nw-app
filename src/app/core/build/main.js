@@ -51,6 +51,13 @@ async function plugin(imports, register) {
             hide: function () { win.hide(); },
             openInBrowser: function () { if (http.url) nw.Shell.openExternal(http.url); },
             capture: function (options) { return win.capture(options); },
+
+            //the browser views this app opened, which the node half can list,
+            //open and close -- see ../window/main.js for why one of these is a
+            //browser and the app's own window is not
+            get views() { return win.views; },
+            openView: function () { return win.openView(); },
+            closeView: function (session) { return win.closeView(session); },
             quit: function (reason) { lifecycle.shutdown(reason || 'asked to quit'); }
         },
 

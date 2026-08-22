@@ -29,6 +29,22 @@ async function plugin(imports, register) {
     answer('open', function () { control.show(); return 'shown'; });
     answer('hide', function () { control.hide(); return 'hidden'; });
 
+    //A BROWSER VIEW, OPENED AND CLOSED FROM HERE.
+    //
+    //A second window on the same url with no bridge attached, which is what
+    //makes it a browser rather than a second app window -- see ../window/main.js.
+    //It exists so the socket.io path can be driven at all: the only other way to
+    //get a viewer was to hand the url to whatever browser the machine has, which
+    //nothing can close again or ask questions of.
+    answer('browser', async function (data) {
+        var what = (data && data.what) || 'list';
+
+        if (what == 'open') return { opened: await control.openView(), views: control.views };
+        if (what == 'close') return { closed: control.closeView(data && data.session), views: control.views };
+
+        return { views: control.views };
+    });
+
     //the buffer stops here rather than going down the socket: the wire is one
     //json object per line, and a megabyte of base64 on it would be a waste of
     //both ends when the file wants to be a file anyway

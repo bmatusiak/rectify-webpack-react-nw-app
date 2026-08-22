@@ -52,7 +52,10 @@ async function plugin(imports, register) {
                 out.connected + ' connected, none of them a view');
 
             out.views.forEach(function (v) {
-                console.log((v.app ? 'window ' : 'browser') + '  ' + (v.title || v.href));
+                //THE NAME FIRST, because it is what the next command needs:
+                //`click Save '{"view":"browser-1"}'` only works if the listing
+                //said `browser-1` rather than describing the page.
+                console.log((v.session || '?').padEnd(10) + '  ' + (v.title || v.href));
             });
         }
     });

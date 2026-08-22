@@ -31,6 +31,32 @@ async function plugin(imports, register) {
         }
     });
 
+    //`npm run cli -- browser open` — a second viewer, on the socket.io path.
+    //
+    //THE ONLY WAY TO DRIVE THAT PATH AT ALL. `open in browser` hands the url to
+    //whatever browser the machine has, which cannot be closed again or asked
+    //anything; this opens one the app owns and can name.
+    cli.command('browser', {
+        help: 'a second viewer, over http   [open|close] [session]',
+        args: ['what', 'session'],
+        run: async function (data) {
+            var what = (data.what || 'list').toLowerCase();
+            if (['open', 'close', 'list'].indexOf(what) < 0)
+                throw new Error('say `browser open`, `browser close` or `browser`, not "' + data.what + '"');
+
+            var out = await ipc.call('browser', { what: what, session: data.session }, 20000);
+
+            if (what == 'open') console.log('opened ' + out.opened);
+            else if (what == 'close') console.log(out.closed.length
+                ? 'closed ' + out.closed.join(', ')
+                : 'nothing to close');
+
+            console.log(out.views.length
+                ? '  open: ' + out.views.join(', ')
+                : '  no browser views open');
+        }
+    });
+
     await register(null, {});
 }
 

@@ -51,6 +51,14 @@ async function plugin(imports, register) {
             //that exercises this code outside nw unable to say what it means.
             view.app = socket.id === 'window' || !!(d && d.app);
 
+            //WHICH VIEW THIS IS. The app's own window is always `window`; a
+            //browser view carries whatever ../core/window named it when it
+            //opened it. Anything else is a browser somebody opened by hand, and
+            //socket.io's id is the only name it has -- shortened, because the
+            //whole thing is twenty characters of nothing anybody can read.
+            view.session = view.app ? 'window'
+                : ((d && d.session) || ('browser-' + String(socket.id).slice(0, 6)));
+
             //the page is still the only one who knows these
             view.title = (d && d.title) || null;
             view.href = (d && d.href) || null;
@@ -80,7 +88,7 @@ async function plugin(imports, register) {
 
     //the nw window is what "the app" means. a browser view is a bystander, and
     //only gets the click if it is the only thing here.
-    async function pick() {
+    async function pick(session) {
         //the list is an optimisation, not the truth. this half reloads on every
         //save, and a hello sent while it was down went nowhere -- so when it
         //looks empty, ask rather than believe it.
@@ -93,6 +101,17 @@ async function plugin(imports, register) {
         if (!views.length) throw new Error(
             'no view is connected. is the window open, and has it finished loading?');
 
+        //ASKED FOR ONE BY NAME. Without this a browser view can be opened and
+        //looked at and never driven, because the app's own window always wins --
+        //which is the right default and a useless one if it is the only rule.
+        if (session) {
+            var named = views.filter(function (v) { return v.session === session; })[0];
+            if (named) return named;
+
+            throw new Error('no view called "' + session + '". there is ' +
+                views.map(function (v) { return v.session; }).join(', '));
+        }
+
         var own = views.filter(function (v) { return v.app; });
         var from = own.length ? own : views;
         return from[from.length - 1];
@@ -102,7 +121,8 @@ async function plugin(imports, register) {
         //always a promise, never a throw. one handler that does both makes every
         //caller write two kinds of error handling for one kind of failure.
         return async function (data) {
-            var view = await pick();
+            //`view` names one; without it the app's own window wins as before
+            var view = await pick(data && data.view);
 
             return new Promise(function (resolve, reject) {
                 var timer = setTimeout(function () {
@@ -114,7 +134,12 @@ async function plugin(imports, register) {
                     if (!reply) return reject(new Error('the view answered nothing'));
                     if (reply.error) return reject(new Error(reply.error));
 
-                    reply.view = view.app ? 'window' : (view.title || 'browser');
+                    //THE NAME IT CAN BE ASKED FOR AGAIN, not a description of
+                    //it. This used to answer the page's title for a browser
+                    //view, which reads well and is no use: two browser views of
+                    //the same app have the same title, and neither can be aimed
+                    //at by it.
+                    reply.view = view.session;
                     if (views.length > 1) reply.views = views.length;
                     resolve(reply);
                 });
@@ -136,7 +161,7 @@ async function plugin(imports, register) {
         return {
             connected: io.engine ? io.engine.clientsCount : 0,
             views: views.map(function (v) {
-                return { id: v.socket.id, app: v.app, title: v.title, href: v.href };
+                return { id: v.socket.id, session: v.session, app: v.app, title: v.title, href: v.href };
             })
         };
     });
