@@ -48,14 +48,19 @@ browser** and **Quit**.
 
 ## the browser viewer, switchable from here
 
-`Serve to a browser` is a checkbox rather than two items, because it is one fact
-with two states. Nw redraws the whole menu on every rebuild, so the tick comes
-from [`http.serving`](../http/) at draw time rather than from anything kept here
-— there is no second copy of the answer to fall out of step.
+The item says what clicking it will do — **Serve to a browser**, or **Stop
+serving to a browser** once it is on. Nw redraws the whole menu on every
+rebuild, so that is read from [`http.serving`](../http/) at draw time rather than
+from anything kept here: there is no second copy of the answer to fall out of
+step.
 
-**Open in browser** appears only while there is something to open. Nw's own item
-flips its tick before the change is attempted, which would be a lie if the change
-failed, so the menu is drawn again from what actually happened.
+**It was a `type: 'checkbox'` first**, which is the obvious way to draw one fact
+with two states — and it did not appear in the tray menu at all on windows. The
+item was in the menu object and the log line printed its label happily; nw simply
+did not draw it. A plain item needs nothing of the platform, and has the side
+benefit that there is no ambiguity about which way it is about to go.
+
+**Open in browser** appears beside it only while there is something to open.
 
 The tray is not the only way in — a manifest field and `--serve` decide it at
 boot — so it subscribes to `onServing` and redraws whoever changed it. A menu

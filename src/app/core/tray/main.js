@@ -25,18 +25,20 @@ async function plugin(imports, register, config) {
 
         //THE BROWSER VIEWER, SWITCHABLE FROM HERE.
         //
-        //A checkbox rather than two items, because it is one fact with two
-        //states. nw redraws the whole menu on every rebuild, so the tick comes
-        //from `http.serving` at draw time rather than from anything kept here --
+        //A PLAIN ITEM CARRYING ITS OWN STATE, not a checkbox. This was
+        //`type: 'checkbox'` with `checked`, which is the obvious way to show one
+        //fact with two states -- and the item did not appear in the tray menu at
+        //all on windows. It was in the menu object, and the log line below
+        //printed its label happily; nw simply did not draw it. So the label says
+        //what clicking will do, which needs nothing of the platform and leaves
+        //no doubt about which way it is about to go.
+        //
+        //nw redraws the whole menu on every rebuild, so this is read from
+        //`http.serving` at draw time rather than from anything kept here --
         //there is no second copy of the answer to fall out of step.
         menu.append(new nw.MenuItem({
-            type: 'checkbox',
-            label: 'Serve to a browser',
-            checked: http.serving,
+            label: http.serving ? 'Stop serving to a browser' : 'Serve to a browser',
             click: function () {
-                //`this` is nw's own item and has already flipped its tick, which
-                //would be a lie if the change failed. rebuild() below draws it
-                //again from what actually happened.
                 http.setServing(!http.serving).then(function (on) {
                     console.log(on
                         ? 'serving at ' + http.url
