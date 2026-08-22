@@ -34,8 +34,10 @@ at BUILD time and becomes the `BUILD_SERVABLE` constant, so webpack folds the
 routes and the socket.io server out of the binary entirely. A runtime flag can be
 flipped by whoever runs the app; that one cannot be flipped by anybody. Asking
 such a build to serve throws and names the key rather than quietly doing nothing.
-Development always has the ability. `src/serve.js` answers `false` or `{host, port}`. The tray has a
-**Serve to a browser** checkbox that switches it while the app is running.
+Development always has the ability. `src/serve.js` answers `false` or `{host, port}`. The tray
+switches it while the app is running, with a plain item whose LABEL says what clicking will do
+-- nw draws no checkmark for a `type: 'checkbox'` item on windows, so a checkbox there shows
+state to nobody.
 
 Call the cli as `node src/cli.js <cmd>` when driving the app yourself, not
 `npm run cli --`: npm adds ~530ms per call and buries the real exit code and
@@ -86,6 +88,72 @@ correct table, or the suite goes red.**
 
 Prose in a plugin README is not checked, so when you change behaviour, change
 the paragraph about it too.
+
+## Who, what, how, why
+
+Four questions, and each one has exactly one place to be answered. A reader
+opening a plugin should be able to walk them in order, the way a book is read.
+
+| | where | answers |
+|---|---|---|
+| **WHO** | the folder, and the context filename | which plugin this is, and which of the four runtimes it is speaking in. `ui/banner/window.js` is the whole answer, and it is the name the app itself uses -- `src/target.js` stamps it, so it is what `app.plugins`, the Graph page and a resolution failure all say |
+| **WHAT** | `README.md` | what it is, what it provides and consumes, what it guarantees, and what it deliberately does not do |
+| **HOW** | the `.js` | the code. Nothing else |
+| **WHY** | comments in the `.js` | why the code is written THIS way and not the obvious other way: the alternative, and what it cost |
+
+**WHY is split by scope, not by file.** The README carries the WHY a reader needs
+*before* opening the file -- the decisions, the design, the reason to use this
+plugin rather than something else. A comment carries the WHY that only means
+anything standing on that line. The test is: **would somebody need this to decide
+whether to open the file, or only to understand the line in front of them?**
+
+```
+README   "Markdown carries raw HTML through by design, so it renders into a
+          frame that can do nothing."               <- decide whether to use it
+comment  "document-start does not fire again on a reload, so main puts __host
+          back on `loaded` too."                    <- understand this line
+```
+
+Say it in one place. `core/appPackage` told the same story -- "it used to be
+registered by io, so wanting the app's title meant consuming a socket" -- in
+`window.js`, in `server.js` and in its README. Three tellings drift into two
+truths and a lie, and the two in the source were the ones nobody was reading.
+
+**A comment that restates the code is HOW written twice.** Delete it. `//set the
+title` above a line that sets the title is noise that has to be maintained.
+
+**A WHY names the road not taken.** Not *what this does* and not *why this
+exists* -- why it is written this way rather than the way somebody would
+reasonably write it instead. The comment has to carry the alternative and what
+it cost: *"an empty `sandbox` attribute renders nothing in this nw build, measured five ways"*,
+*"a fixed number of frames is not a result -- two was enough on an idle machine
+and not enough with the suite running"*, *"a capture that is NOT skipped takes
+fifteen seconds, and sixty of those is a suite that never ends"*.
+
+**The test:** would the comment still be true if the code were rewritten the
+other way? Then it is not a WHY. *"Delivery is a microtask"* describes the line
+and dies with it; *"a synchronous delivery arrives before io/window.js is
+listening, and the wire drops it for want of a handler"* explains why the line
+cannot be the other thing.
+
+That is also what makes a WHY worth keeping. A rejected alternative is the one
+piece of information the code cannot recover on its own -- the next person will
+have exactly that idea, and the comment is what stops them spending the afternoon
+that was already spent.
+
+**Section headers are allowed, and are not WHAT.** `//---- browser views ----`
+is a signpost for the eye, not a description of the code.
+
+**A file that is not a context file may keep one line of WHAT.**
+`demo/pages/*.js`, `ui/theme/components/*.js` and the helpers beside a plugin
+(`io/serve.js`, `bridge/wire.js`) have no README of their own -- the plugin's
+covers the plugin, not each file in it. One orienting line at the top is where
+their WHAT lives; everything after it is still WHY.
+
+**What this does not change:** the exports block at the top of a README, the
+tables, and the `provides`/`consumes` lines are WHAT and stay there;
+`test/readme.test.js` reads them back off the source. Prose is not checked, so
+when behaviour changes, the paragraph about it changes in the same commit.
 
 ## Where a plugin goes
 

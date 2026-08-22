@@ -1,9 +1,10 @@
-//what the app is called, and which version of it this is.
+//OFF THE HOST, NOT OFF DISK -- and the obvious other way is one line shorter.
+//`require('../../../../package.json')` reads here, and it puts the WHOLE manifest
+//in the server bundle: devDependencies, scripts, the lot, shipped to anyone who
+//unpacks the app. The boot picks the six fields it will hand over, so this side
+//cannot widen that set even by accident, and never learns where the app lives.
 //
-//it used to be registered by ./io alongside the socket, because that is how it
-//arrives in the window -- but on this side it comes straight off the host, and
-//nothing about a name and a version has anything to do with a socket. Anything
-//wanting it had to consume 'io' to get it.
+//Why it is this plugin registering it rather than ../io is in ./README.md.
 
 plugin.consumes = ['app'];
 plugin.provides = ['appPackage'];

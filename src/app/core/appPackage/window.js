@@ -1,9 +1,11 @@
-//what the app is called, and which version of it this is.
+//THERE IS NO NODE IN THE WINDOW, so the obvious other way is not available at
+//all: `require('../../../../package.json')` compiles, and then webpack inlines the
+//manifest into the page bundle -- the whole of it, devDependencies included,
+//shipped to a browser. What arrives instead is the six fields the node side
+//already picked, riding in on ../io's handshake and kept on the connection.
 //
-//the window has no node in it, so this arrives over the connection along with
-//everything else the node side knows -- ./io puts the handshake payload on the
-//connection, and this hands it out under its own name. Wanting the app's title
-//should not mean consuming a socket.
+//Taking it off the connection HERE rather than letting callers read
+//`io.appPackage` is what keeps a title from costing a socket -- see ./README.md.
 
 plugin.consumes = ['io'];
 plugin.provides = ['appPackage'];

@@ -16,6 +16,11 @@ bundle. On the node side it comes straight off the host; in the window there is
 no node to read a file with, so it arrives on the socket handshake and this
 hands it out.
 
+**It is read once, at boot, and never again.** Nothing here watches the manifest
+or reloads it: a running app's name and version are what it was started with,
+which is what makes them safe to render without a subscription. And nothing here
+reaches for a file -- neither half knows where the app lives on disk.
+
 ## why it is its own plugin
 
 It used to be registered by [io](../io/) alongside the socket, because in the
