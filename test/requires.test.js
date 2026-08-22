@@ -32,12 +32,24 @@ const LOOKED_AT = ['src', 'tools'];
 //require started all of this. The test passed with the bug back in.
 const SKIP = ['node_modules', 'vendor', 'swatch'];
 
+//AND A FOLDER THE APP ITSELF WOULD NOT LOAD. `src/main.js` and every
+//require.context skip a leading underscore -- that is how a plugin is parked
+//without deleting it -- so a require inside one is not this app's to resolve.
+//
+//It also ends an intermittent failure that reads like a bug in this file:
+//plugin-scan.test.js proves the underscore rule by creating `src/app/_parked`,
+//asserting, and removing it, and node runs test FILES concurrently. This walk
+//could list src/app while the folder existed and descend into it after it was
+//gone -- reported as `ENOENT: scandir .../src/app/_parked`, from a line
+//that is walking a tree nobody edited.
+function parked(name) { return name.charAt(0) === '_'; }
+
 //what a resolved path is allowed to be, since not everything is a bare .js
 const ENDINGS = ['', '.js', '.json', '.jsx', '.scss', '.css', path.sep + 'index.js'];
 
 function sources(dir, found = []) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        if (entry.isDirectory() && SKIP.includes(entry.name)) continue;
+        if (entry.isDirectory() && (SKIP.includes(entry.name) || parked(entry.name))) continue;
 
         const here = path.join(dir, entry.name);
         if (entry.isDirectory()) sources(here, found);
