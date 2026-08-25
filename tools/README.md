@@ -11,6 +11,7 @@ Everything `npm` runs. None of it ships; all of it is plain node.
 | `build.js` | `npm run build` | webpack, `nwjc`, staged into `build/app` |
 | `pack.js` | `npm run dist` | wrap that into a runnable application |
 | `selftest.js` | — | shared by `drive.js` and `test/selftest.test.js` |
+| `sabotage.js` | `npm run sabotage` | break each plugin's own list of things on purpose, and say which checks noticed |
 
 `selftest.js` is shared on purpose: the walk, the cli graph, the launcher and
 the wait are written once, or the day one is fixed the other quietly keeps the

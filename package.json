@@ -22,7 +22,8 @@
     "cli": "node src/cli.js",
     "build": "node tools/build.js",
     "dist": "node tools/build.js && node tools/pack.js",
-    "test": "node tools/test.js"
+    "test": "node tools/test.js",
+    "sabotage": "node tools/sabotage.js"
   },
   "browserslist": [
     "chrome >= 120"

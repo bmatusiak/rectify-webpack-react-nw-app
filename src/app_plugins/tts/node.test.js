@@ -210,7 +210,12 @@ test('a list that is already there is not waited for', async () => {
 //AND AN EMPTY LIST AFTER THE WAIT IS A REAL ANSWER -- a linux box with no
 //speech-dispatcher backend never fires the event at all, and an app that waited
 //forever for it would simply never speak.
-test('a synthesizer that never answers gives up and says none', async () => {
+//A TIMEOUT ON THE TEST ITSELF, because the failure this is watching for is a
+//promise that NEVER settles -- and a test waiting on one does not fail, it
+//hangs. `npm run sabotage` found that the hard way: deleting the give-up timer
+//left the suite running with nothing to report, which is the one outcome
+//indistinguishable from working.
+test('a synthesizer that never answers gives up and says none', { timeout: 3000 }, async () => {
     const synth = fakeSynth([], []);
     const got = await speech.loadVoices(synth, 20);
 

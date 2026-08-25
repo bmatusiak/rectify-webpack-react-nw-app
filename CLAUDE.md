@@ -16,6 +16,7 @@ npm test -- --list        # what there is to aim at
 npm run log      # what the running app has been saying, minus chromium's noise
 npm run drive    # start the app, drive it, check what only the real app can answer
 npm run docs     # read the plugin READMEs back off the code -- deliberately not in npm test
+npm run sabotage # break things on purpose and report which checks noticed
 npm run monitor test    # any of the above, as one line per event, ending with ✔ or ✖
 node tools/mcp.js       # an MCP server for the running app, on stdin and stdout
 
@@ -524,6 +525,25 @@ against a stand-in for nw, and that hid things: its `quit` was a no-op, so a tes
 mid-suite. Its `fakeSocket` meant the io handshake test checked that a listener was attached
 rather than that anything could reach it; that test now opens a real socket.io client to the
 app's own port.
+
+**Sabotage is a file, not a resolution.** Each plugin carries `sabotage.js`
+beside its tests: what would break it, and which suite should go red.
+`npm run sabotage` breaks each one, runs the check that should notice, and
+puts it back -- `npm run sabotage -- tts` for one plugin, `-- --list` to read
+them without breaking anything. **The exit code is inverted**: 0 means every
+sabotage was caught. A surviving entry is the finding, and the answer is
+usually not "add an assertion" but "the test cannot reach that state" -- which
+is what moved two rules out of `tts/window.js` and into `tts/speech.js`, where
+a fake can hold the state a running window will not.
+
+Doing it by hand went wrong three times in one afternoon: a `sed` pattern that
+matched nothing (so the check ran against working code and passed), a
+`git checkout` on a file whose changes were not committed (which deleted an
+hour's work with the sabotage), and an interrupt between the break and the
+undo. The tool refuses a pattern that matches nothing or matches twice, keeps
+a COPY rather than trusting git, and writes a note before touching anything so
+the NEXT run puts back what a killed one left -- signal handlers do not fire
+when the harness kills the process.
 
 **Measure what is read, not what contains it.** The sidebar test passed happily while every
 link in it was the colour of the ground, because it measured `.app-sidebar` rather than the
