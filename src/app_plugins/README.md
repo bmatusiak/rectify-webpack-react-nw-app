@@ -23,6 +23,8 @@ graph, and unlisted again — without a line of the app changing.
 | what | where |
 |---|---|
 | [mcp](mcp/) | an MCP server for this app, over the control socket it already has |
+| [mcp-example](mcp-example/) | one of every MCP surface, registered against the real app |
+| [tts](tts/) | saying something out loud, from either half |
 
 ## why a tree rather than another group under src/app
 

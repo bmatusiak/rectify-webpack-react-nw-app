@@ -79,6 +79,7 @@ folder too, and one line in the manifest:
 |---|---|---|
 | [mcp](src/app_plugins/mcp/) | `server` | an MCP server, over the control socket the app already listens on |
 | [mcp-example](src/app_plugins/mcp-example/) | `server` | one of every MCP surface — tools, resources, a template, prompts |
+| [tts](src/app_plugins/tts/) | `window` `server` `cli` | saying something out loud, through whichever half is there to say it |
 
 `src/app_plugins` can be a checkout, a submodule, somebody else's package, or
 deleted: nothing in `src/app` consumes anything in it. A feature the scaffold

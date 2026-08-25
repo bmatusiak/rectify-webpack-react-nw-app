@@ -214,6 +214,7 @@ src/app/
 src/app_plugins/   a SECOND TREE, and deleting it is a decision about nothing else
   mcp/             an MCP server over the control socket the app already has
   mcp-example/     one of every MCP surface, registered against the real app
+  tts/             saying something out loud, from either half of the app
 ```
 
 **The trees are named in package.json, and nowhere else:**
