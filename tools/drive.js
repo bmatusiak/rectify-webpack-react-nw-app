@@ -59,6 +59,7 @@ function skip (what, why) {
 }
 
 function check (what, ok, detail) {
+  if (process.env.DRIVE_LIST) console.log('  . ' + what)
   if (ok) { passed++; return true }
   failures.push(what + (detail ? '  -- ' + detail : ''))
   console.log('  x ' + what + (detail ? '  ' + detail : ''))

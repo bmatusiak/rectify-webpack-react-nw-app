@@ -1,7 +1,7 @@
 var React = require('react');
 var { useState, useEffect, useCallback } = React;
 
-var pages = require('./pages');
+var ownPages = require('./pages');
 
 //NOTHING HERE IS A MOCK, and that is the expensive choice. A demo built on
 //canned data renders the same and is finished in a day; this one goes through
@@ -18,16 +18,46 @@ var pages = require('./pages');
 //theme -- which the README calls a slot you are expected to replace -- fail to
 //load if you deleted one of them.
 plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'settings', 'session',
-    'editor', 'markdown', 'xterm', 'litegraph', 'ext', 'banner'];
+    'editor', 'markdown', 'xterm', 'litegraph', 'ext', 'banner', 'pages'];
 plugin.provides = [];
 async function plugin(imports, register) {
-    var { react, theme, appPackage, io, settings, session, banner } = imports;
+    var { react, theme, appPackage, io, settings, session, banner, pages } = imports;
     var { Page, Sidebar, Navbar, Footer, Button, Icon, Toasts } = theme.ui;
 
+    //EVERYTHING THIS PAGE NEEDS THAT THE SHELL CANNOT PASS, gathered once. The
+    //demo's pages take a dozen services between them; a page registered by
+    //another plugin takes whatever ITS plugin consumed. So the bag is closed
+    //over here rather than handed down by ../core/pages, which would otherwise
+    //have to know what a page might want -- and every new page would widen a
+    //type nobody owns.
+    var bag = {
+        theme: theme, io: io, appPackage: appPackage, settings: settings, session: session,
+        services: imports.app.services, plugins: imports.app.plugins, ext: imports.ext,
+        editor: imports.editor, markdown: imports.markdown,
+        xterm: imports.xterm, litegraph: imports.litegraph
+    };
+
+    //REGISTERED RATHER THAN RENDERED FROM THE FILE. ./pages/index.js is still
+    //the demo's own list, in its own order; what changed is that the sidebar is
+    //now drawn from the SERVICE, so a plugin in app_plugins can put a page
+    //beside these without editing a line of the demo.
+    ownPages.forEach(function (one, at) {
+        pages.add({
+            id: one.id, label: one.label, icon: one.icon, order: at,
+            Page: function (props) { return React.createElement(one.Page, Object.assign({}, bag, props)); }
+        });
+    });
+
     //which page you were on survives a reload, because it is in the store
-    var ui = session('demo.ui', { page: pages[0].id });
+    var ui = session('demo.ui', { page: pages.list[0].id });
 
     function Demo() {
+        //THE LIST IS THE SERVICE'S, and it can change while the app is open --
+        //a plugin reloading re-registers its page. The hook is ../core/pages's
+        //so that a shell does not have to know that, and the one that forgot
+        //would draw a sidebar that never noticed a page arriving.
+        var showing = pages.usePages();
+
         var [page, setPage] = useState(ui.page);
         var [mode, setMode] = useState(theme.mode);
         var [swatch, setSwatch] = useState(theme.swatch);
@@ -94,11 +124,12 @@ async function plugin(imports, register) {
         //the window's own title, which is also what the tray tooltip and the
         //taskbar show
         useEffect(function () {
-            var current = pages.filter(function (p) { return p.id === page; })[0];
+            var current = showing.filter(function (p) { return p.id === page; })[0];
             document.title = appPackage.title + (current ? ' | ' + current.label : '');
-        }, [page]);
+        }, [page, showing]);
 
-        var current = pages.filter(function (p) { return p.id === page; })[0] || pages[0];
+        var current = showing.filter(function (p) { return p.id === page; })[0] || showing[0];
+        if (!current) return null;//nothing has registered a page yet
         var Body = current.Page;
 
         return (
@@ -132,10 +163,10 @@ async function plugin(imports, register) {
                     }
                     sidebar={function (sections) {
                         return (
-                            <Sidebar items={pages} active={page} onSelect={open}
+                            <Sidebar items={showing} active={page} onSelect={open}
                                 className="app-sidebar d-none d-md-flex"
                                 sections={sections} onJump={jump}
-                                footer={<span>{pages.length} pages, all live</span>} />
+                                footer={<span>{showing.length} pages, all live</span>} />
                         );
                     }}
                     footer={
@@ -150,12 +181,11 @@ async function plugin(imports, register) {
                             }
                             right={<span>{appPackage.name} {appPackage.version}</span>} />
                     }>
-                    <Body theme={theme} io={io} appPackage={appPackage}
-                        settings={settings} session={session} toast={toast} open={open}
-                        services={imports.app.services} plugins={imports.app.plugins}
-                        ext={imports.ext}
-                        editor={imports.editor} markdown={imports.markdown}
-                        xterm={imports.xterm} litegraph={imports.litegraph} />
+                    {/* WHAT THE SHELL PASSES IS THE SHELL'S TO GIVE: where to go, and
+                        how to say something. Everything else a page needs it gets from
+                        the plugin that registered it -- see the bag above. That cut is
+                        what lets a page come from a tree the demo has never heard of. */}
+                    <Body open={open} toast={toast} />
                 </Page>
 
                 <Toasts items={toasts} onDismiss={function (id) {

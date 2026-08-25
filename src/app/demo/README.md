@@ -4,7 +4,7 @@ The example app. **Delete this folder and the app is the scaffold again.**
 
 | file | provides | consumes |
 |---|---|---|
-| `window.js` | — | `app`, `react`, `theme`, `appPackage`, `io`, `settings`, `session`, `editor`, `markdown`, `xterm`, `litegraph`, `ext`, `banner` |
+| `window.js` | — | `app`, `react`, `theme`, `appPackage`, `io`, `settings`, `session`, `editor`, `markdown`, `xterm`, `litegraph`, `ext`, `banner`, `pages` |
 | `server.js` | — | `app`, `appPackage`, `tray`, `ipc`, `window` |
 | `cli.js` | — | `cli`, `ipc` |
 
@@ -20,8 +20,19 @@ answers, and the tray and window it moves are the app's own.
 A sidebar, a page and a toast stack, all built out of `theme.ui`. Which page you
 were on is kept in `session`, so it survives a reload and not a restart.
 
-`pages/index.js` is the sidebar, in order. **Adding a page is a line there and a
-file beside it.**
+`pages/index.js` is the demo's own pages, in its own order — but the sidebar is
+drawn from [core/pages](../core/pages/), which anything can add to. This half
+registers its list into that service at startup and renders whatever is there,
+so **a plugin the demo has never heard of can put a page beside these** without
+editing a line here. [tts-page](../../app_plugins/tts-page/) is one.
+
+Adding one of the demo's own is still a line in `pages/index.js` and a file
+beside it. What changed is that it is no longer the only way in.
+
+**What the shell passes a page is `open` and `toast`, and nothing else.**
+Everything the demo's own pages need is closed over in `window.js` and handed to
+them there — because the registry must not have to know what a page might want,
+or every new page would widen a prop bag nobody owns.
 
 ## the pages
 

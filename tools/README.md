@@ -13,6 +13,10 @@ Everything `npm` runs. None of it ships; all of it is plain node.
 | `selftest.js` | — | shared by `drive.js` and `test/selftest.test.js` |
 | `sabotage.js` | `npm run sabotage` | break each plugin's own list of things on purpose, and say which checks noticed |
 
+`DRIVE_LIST=1 npm run drive` names every check as it is made, rather than only
+the ones that failed. A total that moves is a question -- 122 becoming 121 while
+GAINING a page is not something a count alone can answer.
+
 `selftest.js` is shared on purpose: the walk, the cli graph, the launcher and
 the wait are written once, or the day one is fixed the other quietly keeps the
 old behaviour.
