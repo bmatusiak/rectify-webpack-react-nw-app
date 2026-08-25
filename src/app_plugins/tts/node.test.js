@@ -159,3 +159,84 @@ test('no voices reads as no voices rather than one blank one', () => {
         assert.deepEqual(speech.voicesFrom('\r\n\r\n', platform), [], platform);
     });
 });
+
+//---- the two rules a running app cannot be made to break ------------------
+
+//A FAKE SYNTHESIZER, WHICH IS THE POINT. Both rules below only matter in a
+//state a real window will not hold still in: a page that has just loaded and
+//has no voices yet, and a page nobody has clicked. Sabotage proved it -- with
+//these rules inside window.js, deleting either of them passed all 37 suites in
+//the running app, because that app had been open a minute and clicked once.
+
+function fakeSynth(first, later) {
+    var listeners = {};
+    var voices = first;
+
+    return {
+        getVoices: function () { return voices; },
+        addEventListener: function (name, fn) { (listeners[name] = listeners[name] || []).push(fn); },
+        removeEventListener: function (name, fn) {
+            listeners[name] = (listeners[name] || []).filter(function (one) { return one !== fn; });
+        },
+
+        //what the browser does a moment after the first getVoices()
+        arrive: function () {
+            voices = later;
+            (listeners.voiceschanged || []).slice().forEach(function (fn) { fn(); });
+        },
+        listening: function () { return (listeners.voiceschanged || []).length; }
+    };
+}
+
+test('a voice list that is empty on the first call is waited for', async () => {
+    const synth = fakeSynth([], [{ name: 'Late' }]);
+    const asked = speech.loadVoices(synth, 1000);
+
+    setTimeout(() => synth.arrive(), 10);
+
+    const got = await asked;
+    assert.equal(got.length, 1, 'it believed the first call');
+    assert.equal(got[0].name, 'Late');
+});
+
+test('a list that is already there is not waited for', async () => {
+    const synth = fakeSynth([{ name: 'Ready' }], []);
+    const got = await speech.loadVoices(synth, 50);
+
+    assert.equal(got[0].name, 'Ready');
+    assert.equal(synth.listening(), 0, 'it waited for an event it did not need');
+});
+
+//AND AN EMPTY LIST AFTER THE WAIT IS A REAL ANSWER -- a linux box with no
+//speech-dispatcher backend never fires the event at all, and an app that waited
+//forever for it would simply never speak.
+test('a synthesizer that never answers gives up and says none', async () => {
+    const synth = fakeSynth([], []);
+    const got = await speech.loadVoices(synth, 20);
+
+    assert.deepEqual(got, []);
+    assert.equal(synth.listening(), 0, 'it left a listener behind');
+});
+
+test('no synthesizer at all is no voices, not a crash', async () => {
+    assert.deepEqual(await speech.loadVoices(null, 20), []);
+});
+
+//THE REFUSAL RULE, AS A TRUTH TABLE. `not-allowed` is chromium refusing to
+//speak at all rather than anything about the utterance, and the node half is
+//under no such rule -- but handing it over is only right before anything has
+//been said, and never when the caller named a route.
+test('only a not-allowed refusal, only before anything was said', () => {
+    const refused = { reason: 'not-allowed' };
+
+    assert.equal(speech.fallsBack(refused, 0, undefined), true);
+
+    assert.equal(speech.fallsBack(refused, 2, undefined), false,
+        'it would start the paragraph again from the top');
+    assert.equal(speech.fallsBack(refused, 0, 'speech'), false,
+        'via: speech would quietly become via: node');
+    assert.equal(speech.fallsBack({ reason: 'synthesis-failed' }, 0, undefined), false,
+        'a broken voice is not a refused one');
+    assert.equal(speech.fallsBack(new Error('something else'), 0, undefined), false);
+    assert.equal(speech.fallsBack(null, 0, undefined), false);
+});

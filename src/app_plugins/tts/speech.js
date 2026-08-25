@@ -166,3 +166,56 @@ module.exports.voicesFrom = function voicesFrom(output, platform) {
     //espeak: "Pty Language Age/Gender VoiceName File Other Languages"
     return lines.slice(1).map(function (line) { return line.split(/\s+/)[3]; }).filter(Boolean);
 };
+
+//---- the two rules that only bite in a state a running app cannot be put in ----
+
+//VOICES ARRIVE LATE, ALWAYS. getVoices() answers [] on the first call in every
+//chromium build -- that call is what starts the fetch. Believing it is how an
+//app decides it has no voices half a second before it gets some.
+//
+//`voiceschanged` may also have fired before the caller got here, so the list is
+//checked first; and it may never fire at all, which is what the wait is for. An
+//empty list AFTER that is a real answer: no backend.
+//
+//THE SYNTHESIZER IS AN ARGUMENT, and that is the whole point of this living
+//here. In a window that has been open a minute the first call already answers,
+//so believing it and waiting for it look identical -- a sabotage that removed
+//the waiting passed every test in the app. A fake that answers [] and fires
+//later is the only way to tell them apart, and it cannot be built in a browser
+//that has already loaded its voices.
+module.exports.loadVoices = function loadVoices(synth, wait) {
+    return new Promise(function (resolve) {
+        if (!synth) return resolve([]);
+
+        var ready = synth.getVoices();
+        if (ready.length) return resolve(ready);
+
+        var timer = setTimeout(done, wait || 3000);
+
+        function done() {
+            clearTimeout(timer);
+            synth.removeEventListener('voiceschanged', done);
+            resolve(synth.getVoices());
+        }
+
+        synth.addEventListener('voiceschanged', done);
+    });
+};
+
+//AND WHETHER A REFUSAL IS ONE TO HAND TO THE OTHER HALF.
+//
+//`not-allowed` is chromium refusing to speak at all -- the autoplay policy,
+//since speech is audio -- rather than anything about this utterance. The node
+//half is under no such rule and is the same synthesizer, so it can say what the
+//page was not allowed to.
+//
+//Only before anything has been said, or a paragraph would start again from the
+//top; and never when the caller named a route, or `via: 'speech'` would quietly
+//become `via: 'node'`.
+//
+//Here rather than in ./window.js for the same reason as above: a page somebody
+//has clicked never takes this branch, so in a running app the test for it is
+//unfalsifiable. As a function it is a truth table.
+module.exports.fallsBack = function fallsBack(error, spoken, via) {
+    return !!(error && error.reason === 'not-allowed') && !spoken && !via;
+};

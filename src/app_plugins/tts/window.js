@@ -45,35 +45,16 @@ async function plugin(imports, register, config) {
     //speak() takes the count it started under and gives up when it changes.
     var generation = 0;
 
-    //VOICES ARRIVE LATE, ALWAYS. getVoices() answers [] on the first call in
-    //every chromium build -- that call is what starts the fetch. Believing it
-    //is how an app decides it has no voices half a second before it gets some.
-    //
-    //`voiceschanged` may also have fired before this plugin loaded, so the list
-    //is checked first; and it may never fire at all, which is what the timeout
-    //is for. An empty list after that is a real answer: no backend.
+    //ASKED ONCE AND REMEMBERED. The waiting itself is ./speech.js's, where a
+    //fake can be made to answer late -- in a window that has been open a minute
+    //the first getVoices() already answers, so believing it and waiting for it
+    //look exactly alike, and a sabotage that deleted the waiting passed every
+    //test in this app.
     var VOICE_WAIT = config.voiceWait || 3000;
     var loaded = null;
 
     function voices() {
-        if (loaded) return loaded;
-        if (!synth) return (loaded = Promise.resolve([]));
-
-        loaded = new Promise(function (resolve) {
-            var ready = synth.getVoices();
-            if (ready.length) return resolve(ready);
-
-            var timer = setTimeout(done, VOICE_WAIT);
-
-            function done() {
-                clearTimeout(timer);
-                synth.removeEventListener('voiceschanged', done);
-                resolve(synth.getVoices());
-            }
-
-            synth.addEventListener('voiceschanged', done);
-        });
-
+        if (!loaded) loaded = speech.loadVoices(synth, VOICE_WAIT);
         return loaded;
     }
 
@@ -191,19 +172,18 @@ async function plugin(imports, register, config) {
             try {
                 await say(parts[at], opts, chosen);
             } catch (e) {
-                //CHROMIUM WILL NOT SPEAK IN A PAGE NOBODY HAS TOUCHED. It is the
-                //autoplay policy -- speech is audio, and audio needs a user
-                //activation -- and it arrives as `not-allowed` from a voice that
-                //getVoices() had just listed, which reads as a broken
-                //synthesizer rather than a refused one. Measured: a window the
-                //suite opened and never clicked cannot speak a word.
+                //CHROMIUM WILL NOT SPEAK IN A PAGE NOBODY HAS TOUCHED -- the
+                //autoplay policy, since speech is audio. It arrives as
+                //`not-allowed` from a voice getVoices() had just listed, which
+                //reads as a broken synthesizer rather than a refused one.
+                //Measured both ways: a window the suite opened and never clicked
+                //cannot speak a word, and the same window can once it is clicked.
                 //
-                //The node half is under no such rule, and it is the same
-                //synthesizer. So this is exactly the fallback that already
-                //exists, taken for a second reason -- but only before anything
-                //has been said, or a paragraph would start again from the top in
-                //a different voice.
-                if (e.reason !== 'not-allowed' || spoken || opts.via) throw e;
+                //WHEN a refusal is worth handing to the node half is
+                //./speech.js's, because a page somebody has clicked never
+                //reaches this line -- so a test for it written here is a test
+                //that cannot fail.
+                if (!speech.fallsBack(e, spoken, opts.via)) throw e;
 
                 var handed = await overSocket(text, opts);
                 return {
