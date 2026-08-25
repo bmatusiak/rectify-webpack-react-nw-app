@@ -89,6 +89,42 @@ nudged. A sentence longer than the limit is still left whole: cutting mid word
 to satisfy a number invented here would make the voice stumble over something
 the punctuation never asked it to.
 
+## the audio device goes to sleep, and takes the first word with it
+
+Chromium powers the device down when nothing is playing and **does not wait for
+it to come back**: the utterance starts into a device that is not listening yet.
+`The app can speak` arrived as `can speak`, every time.
+
+So a throwaway `.` is queued first and the real sentence goes in a second
+behind it. Two things about that are load bearing, and both were found by ear —
+nothing here can measure a missing word:
+
+**It is not awaited.** Waiting for the warm-up's `end` and then speaking looks
+obviously right and is the one shape that cannot work: the device sleeps the
+moment the queue empties, so the sentence after the wait pays the wake-up cost
+again. The two have to be in the queue *together*.
+
+**It needs duration, not merely existence.** An empty string woke the device and
+recovered most of a word — `can speak` became `app can speak` with half the *a*
+— because nothing is playing *while* it wakes. A `.` is rendered as a pause
+rather than spoken: audio with a length, and nothing in it to hear.
+
+**And it runs on every call.** Per-page was wrong (switching voices brought the
+delay straight back) and per-voice was wrong too — the device sleeps between one
+sentence and the next, so a warm-up remembered from earlier says nothing about
+whether it is awake *now*. There is no state in that code as a result.
+
+Three other explanations were tried by ear and are dead: a silent primer at
+`volume: 0.01`, a lead-in of commas inside the real sentence, and not calling
+`cancel()` on an empty queue. The last is kept anyway — cancelling nothing is
+work with no purpose — but it fixed nothing.
+
+**The cost is that second, on every `speak()`, before any sound.** It is the
+honest price of a device that will not stay awake, and it is a setting rather
+than a constant because the number belongs to the machine:
+`config.tts.prime` — `{ text: '.', gap: 1000 }`. `text: ''` keeps the wake
+without the pause, `gap: 0` skips the wait.
+
 ## the text is never part of the command
 
 `powershell -Command "$s.Speak('" + text + "')"` is the obvious way to write the

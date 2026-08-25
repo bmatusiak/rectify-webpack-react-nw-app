@@ -45,12 +45,56 @@ async function plugin(imports, register, config) {
     //speak() takes the count it started under and gives up when it changes.
     var generation = 0;
 
+    //CANCELLING NOTHING IS NOT FREE. `speak()` cancels before it queues, so that
+    //a second caller supersedes the first rather than talking over it -- but that
+    //made every call do `cancel(); speak()` back to back, including the calls with
+    //an empty queue and nothing to supersede. Doing no work is cheaper and cannot
+    //affect the timing of what comes next.
+    var quiet = function () { return !(synth && (synth.speaking || synth.pending)); };
+
+    //---- waking the audio device ---------------------------------------------
+    //
+    //CHROMIUM PUTS THE AUDIO DEVICE TO SLEEP when nothing is playing, and does
+    //not wait for it to come back: the first utterance starts into a device that
+    //is not listening yet, so its opening word is simply gone. "The app can
+    //speak" arrived as "can speak", every first time.
+    //
+    //IT IS EVERY CALL, not the first one. Per-page was wrong -- switching voices
+    //brought it straight back -- and per-voice was wrong too: the device sleeps
+    //between one sentence and the next, so a warm-up remembered from earlier has
+    //nothing to do with whether it is awake now. There is no state to keep, which
+    //is why there is no flag here. And it is not the cancel above: taking that
+    //away changed nothing.
+    //
+    //SO A THROWAWAY UTTERANCE GOES FIRST, and two things about it are load
+    //bearing, both found by ear because nothing here can measure a missing word:
+    //
+    //  IT IS NOT AWAITED. Waiting for its `end` and then speaking looks obviously
+    //  right and is obviously wrong -- the device goes back to sleep the moment
+    //  the queue empties, so the real sentence pays the wake-up cost again. The
+    //  two have to be in the queue TOGETHER, which is what the gap below is for:
+    //  long enough that the device is up, short enough that it has not yet slept.
+    //
+    //  IT NEEDS DURATION, not merely existence. An empty string woke the device
+    //  and recovered most of a word -- "can speak" became "app can speak" with
+    //  half the a -- because there is nothing playing WHILE it wakes. A `.` is
+    //  rendered as a pause rather than spoken: audio with a length, and nothing
+    //  in it to hear.
+    //
+    //THE NUMBERS ARE THIS MACHINE'S, not this code's, which is why they are
+    //settings: `config.tts.prime`. A second of gap is what it took here, and it
+    //is paid on every call -- `prime.text: ''` keeps the wake without the pause,
+    //`prime.gap: 0` skips the wait, and neither needs this file opened.
+    var prime = config.prime || {};
+    var PRIMER = prime.text === undefined ? '.' : prime.text;
+    var PRIMER_GAP = prime.gap === undefined ? 1000 : prime.gap;
+
     //ASKED ONCE AND REMEMBERED. The waiting itself is ./speech.js's, where a
     //fake can be made to answer late -- in a window that has been open a minute
     //the first getVoices() already answers, so believing it and waiting for it
     //look exactly alike, and a sabotage that deleted the waiting passed every
     //test in this app.
-    var VOICE_WAIT = config.voiceWait || 3000;
+    var VOICE_WAIT = config.voiceWait || 5000;
     var loaded = null;
 
     function voices() {
@@ -166,6 +210,31 @@ async function plugin(imports, register, config) {
         var parts = speech.chunk(text, opts.max);
         var spoken = 0;
 
+        //ONCE PER CALL, AND BEFORE THE LOOP RATHER THAN INSIDE IT. The device is
+        //awake for the whole paragraph once it is awake, so waking it per
+        //sentence would pay the gap again on every full stop -- and the sentences
+        //after the first are queued behind one that is already playing, which is
+        //the state this is trying to reach. See the comment on PRIMER above for
+        //why it is not awaited and why it has a length.
+        if (PRIMER || PRIMER_GAP) {
+            //QUEUED AND NOT AWAITED, so it is parked in `inFlight` by hand: a
+            //throwaway utterance may never fire `end` at all -- which would be a
+            //hang if this used say() -- and an unreferenced one can be collected
+            //mid-wake, which is the bug that Set exists for.
+            var wake = new Utterance(PRIMER);
+            var parked = { utter: wake, settle: function () { } };
+
+            inFlight.add(parked);
+            wake.addEventListener('end', function () { inFlight.delete(parked); });
+            wake.addEventListener('error', function () { inFlight.delete(parked); });
+
+            synth.speak(wake);
+
+            //a beat, so the first sentence is in the queue BEHIND the wake rather
+            //than after it has finished and the device has gone back to sleep
+            if (PRIMER_GAP) await new Promise(function (r) { setTimeout(r, PRIMER_GAP); });
+        }
+
         for (var at = 0; at < parts.length; at++) {
             if (mine !== generation) break;
 
@@ -234,7 +303,10 @@ async function plugin(imports, register, config) {
         var waiting = Array.from(inFlight);
         inFlight.clear();
 
-        if (synth) synth.cancel();
+        //ONLY WHEN THERE IS SOMETHING TO CANCEL -- see `quiet` above. A cancel
+        //with an empty queue changes nothing except the timing of what comes
+        //next, and what comes next is usually the very sentence being asked for.
+        if (synth && !quiet()) synth.cancel();
         waiting.forEach(function (entry) { entry.settle(); });
     }
 
@@ -277,7 +349,11 @@ async function plugin(imports, register, config) {
 
             //whether this page has been touched, which is what decides if it may
             //speak for itself at all -- see the `not-allowed` comment in speak()
-            get touched() { return touched(); }
+            get touched() { return touched(); },
+
+            //what the wake-up costs, so a caller drawing a Speak button knows the
+            //first sound is a beat away rather than immediate
+            get warmup() { return PRIMER_GAP; }
         }),
         onDestroy: self.unload
     });

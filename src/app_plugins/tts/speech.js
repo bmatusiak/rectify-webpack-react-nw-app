@@ -54,13 +54,33 @@ module.exports.chunk = function chunk(text, max) {
 //the string and starts a statement. The text goes in the ENVIRONMENT on windows
 //and after a bare `--` everywhere else, so there is no parser between the app
 //and the synthesizer that could mistake it for an instruction.
+//THE FIRST SECOND IS EATEN BY THE AUDIO DEVICE OPENING.
+//
+//Heard rather than reasoned about: the first thing the app said lost a word or
+//two off the front, every time, and everything after it was clean. The device is
+//opened lazily on the first Speak, and the synthesizer does not wait for it --
+//it starts talking into a sink that is not listening yet.
+//
+//SO SOMETHING SILENT GOES FIRST, and it has to be in THIS process. Every call
+//spawns a fresh powershell, so a warm-up done anywhere else warms nothing that
+//is about to speak: the device this process is going to use is the one that has
+//to be open. `SetOutputToDefaultAudioDevice` asks for it explicitly and the
+//silent utterance is what actually makes it happen -- asking alone still lost
+//the first word.
+//
+//NOT WHEN WRITING TO A FILE. There is no device to open, and a primer would put
+//a space at the front of the wav somebody asked for.
 var POWERSHELL = [
     'Add-Type -AssemblyName System.Speech',
     '$s = New-Object System.Speech.Synthesis.SpeechSynthesizer',
     'if ($env:TTS_VOICE) { $s.SelectVoice($env:TTS_VOICE) }',
     '$s.Rate = [int]$env:TTS_RATE',
-    '$s.Volume = [int]$env:TTS_VOLUME',
     'if ($env:TTS_FILE) { $s.SetOutputToWaveFile($env:TTS_FILE) }',
+    //a word rather than a space, and at the slowest rate, for the same reason the
+    //page's primer is stretched: what is being covered is about a second of the
+    //device opening, and a warm-up shorter than the gap is swallowed by it
+    'else { $s.SetOutputToDefaultAudioDevice(); $s.Volume = 0; $s.Rate = -10; $s.Speak("ok"); $s.Rate = [int]$env:TTS_RATE }',
+    '$s.Volume = [int]$env:TTS_VOLUME',
     '$s.Speak($env:TTS_TEXT)',
     '$s.Dispose()'
 ].join('; ');
