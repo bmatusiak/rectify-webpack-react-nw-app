@@ -5,6 +5,9 @@ Everything `npm` runs. None of it ships; all of it is plain node.
 | file | script | what it does |
 |---|---|---|
 | `nw.js` | `npm start` | finds the nw binary and launches the app, waits until it is up |
+| `stop.js` | `npm run stop` | ask it to quit, signal it if that cannot be reached, and wait until the pid is gone |
+| `restart.js` | `npm run restart` | that, then `nw.js` again with whatever flags you passed |
+| `running.js` | — | is the app up, and which pid -- shared by all three |
 | `log.js` | `npm run log` | what the running app has been saying, minus chromium's noise |
 | `test.js` | `npm test` | the whole chain, or one thing |
 | `drive.js` | `npm run drive` | start the real app and check what only it can answer |

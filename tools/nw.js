@@ -114,18 +114,13 @@ const FLAGS = ['--enable-logging=stderr']
 const controlSocket = require('../src/app/core/ipc/endpoint.js')(require('../package.json').name)
 
 const NEWLINE = String.fromCharCode(10)
-const INSTANCE_FILE = path.join(APP, '.nw-instance.json')
+// SHARED WITH ./stop.js AND ./restart.js. Three things asking whether the app is
+// running, three different ways, is how one of them ends up trusting a file the
+// others do not -- ./running.js carries the whole argument.
+const INSTANCE_FILE = require('./running').INSTANCE_FILE
 const LOG_FILE = path.join(APP, 'nw.log')
 
-function runningInstance () {
-  try {
-    const info = JSON.parse(fs.readFileSync(INSTANCE_FILE, 'utf8'))
-    process.kill(info.pid, 0) // does not kill, just asks whether it is there
-    return info
-  } catch (err) {
-    return null // no file, unreadable, or the pid is gone
-  }
-}
+const runningInstance = require('./running').instance
 
 const attach = process.argv.includes('--attach')
 

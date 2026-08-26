@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```sh
 npm start        # nw, development: main off disk, server and window bundled and reloaded
+npm run stop     # close it, and WAIT until it is actually closed
+npm run restart  # that, then start it again -- takes nw.js's flags
 npm run cli      # a terminal talking to a running app
 npm run build    # webpack, production bundles
 npm run dist     # build, then package
@@ -62,7 +64,15 @@ config and carrying on gives the WRONG error -- `core/build` rebuilds with the
 config it loaded at boot, so a constant added to DefinePlugin in the same commit
 that first uses it comes back as `BUILD_ROOTS is not defined`, thrown while the
 server half loads, which reads as a broken bundle rather than a stale config.
-Restart after touching any of the three.
+Restart after touching any of the three -- `npm run restart`, which waits for the
+old process to actually go before launching. Every `main.test.js` is in the same
+boat: it is loaded off disk by that boot, so an edited main-side test is not in
+the app until it restarts.
+
+**Never stop it by image name.** `nw`, `node` and `electron` all belong to more
+than one thing on a developer's machine; `Get-Process nw | Stop-Process` took an
+unrelated project down during this scaffold's own development. `npm run stop`
+signals the pid out of `.nw-instance.json`, which is this app's own.
 
 `npm run drive` takes the same `--build` / `--package` as `npm start`, plus `--shots` to
 keep a screenshot of every page and `--swatches` to check all twenty-eight rather than
