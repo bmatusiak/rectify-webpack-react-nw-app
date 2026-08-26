@@ -15,7 +15,7 @@ var path = require('path');
 //What it carries arrives on the host as `of` and `handedOver`, which is exactly
 //how an app plugin reaches its own main half without core naming it.
 plugin.consumes = ['app', 'appPackage', 'tray', 'ipc', 'window',
-    'dataDir', 'state', 'secret', 'log', 'cron'];
+    'dataDir', 'state', 'secret', 'log', 'cron', 'events'];
 plugin.provides = [];
 async function plugin(imports, register) {
     var { app, appPackage, tray, ipc, window: win } = imports;
@@ -133,7 +133,18 @@ async function plugin(imports, register) {
             //the container exists so an app plugin never has to edit core.
             handedOver: imports.app.host.handedOver ? imports.app.host.handedOver() : [],
 
-            log: { tags: imports.log.tags(), kept: imports.log.all().length }
+            log: { tags: imports.log.tags(), kept: imports.log.all().length },
+
+            //THE DURABLE HALF. `kept` is the word that matters: this half's own
+            //events plugin answers false when there is no main behind it, and
+            //an empty record and one nothing is writing are opposite answers.
+            events: {
+                kept: imports.events.kept,
+                where: imports.events.where,
+                keeping: imports.events.policy.keep,
+                never: imports.events.policy.never,
+                rows: imports.events.all({ limit: 12 })
+            }
         };
     }
 

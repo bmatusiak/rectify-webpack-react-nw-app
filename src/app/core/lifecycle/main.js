@@ -11,7 +11,7 @@ var path = require('path');
 //The window closing and the node half failing to start both land here, which is
 //why the first line of it is a re-entry guard rather than an assertion.
 
-plugin.consumes = ['app'];
+plugin.consumes = ['app', 'log'];
 plugin.provides = ['lifecycle'];
 async function plugin(imports, register) {
     var app = imports.app;
@@ -31,7 +31,11 @@ async function plugin(imports, register) {
             if (shuttingDown) return;//the window closing and a failing server both land here
             shuttingDown = true;
 
-            console.log('shutting down: ' + reason);
+            //SAID TO THE LOG AND NOT ONLY TO THE CONSOLE, because starting and
+            //stopping are the two acts a record of "what happened while I was
+            //away" is useless without -- and until this line they reached
+            //nw.log and nothing else. See ../events, which keeps `app`.
+            imports.log.on('app').info('shutting down: ' + reason);
 
             //every plugin's onDestroy, in reverse: the tray comes off, the
             //server closes, this file goes away
@@ -48,6 +52,13 @@ async function plugin(imports, register) {
         },
 
         publish: function (url) {
+            //THE APP IS UP, AND THIS IS THE MOMENT TO SAY SO: http is listening
+            //and every plugin has registered. Said before the packaged check
+            //below, because a packaged app starting is exactly as worth
+            //recording as a development one -- more so, since nobody is watching
+            //a terminal.
+            imports.log.on('app').good('started' + (url ? ', listening on ' + url : ''));
+
             //a package has no launcher reading this
             if (app.isPackaged) return;
             try {

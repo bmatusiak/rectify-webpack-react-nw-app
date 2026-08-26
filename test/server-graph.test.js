@@ -50,17 +50,35 @@ const APP_PACKAGE = { title: 'Test App', name: 'test-app', version: '9.9.9' };
 //CLAUDE.md has the scar from the last mock host: its `quit` was a no-op, so a
 //test that called quit passed and proved nothing. These are the same files
 //main loads, resolved by the same container, against a real directory.
-async function mainHalf() {
+async function mainHalf(handle) {
     //IN DEPENDENCY-FREE ORDER ON PURPOSE? No -- rectify works the order out of
     //`consumes`. This is the reading order: where things live, then what is
     //kept there.
-    const plugins = ['dataDir', 'log', 'handover', 'state', 'cron', 'secret'].map((one) => {
+    const plugins = ['dataDir', 'log', 'handover', 'state', 'cron', 'secret', 'events'].map((one) => {
         const where = path.join('core', one, 'main.js');
         return wanted.stamp(require(path.join(__dirname, '..', 'src', 'app', where)), where);
     });
 
     //`Plugin` is rectify's own base class, pushed in by all four boots
     plugins.push(rectify.PluginBase);
+
+    //AND THE ONE SERVICE THIS GRAPH IS MISSING. core/events answers an `events`
+    //command on the control socket, so it consumes `ipc` -- and the real ipc
+    //plugin opens a named pipe, which is not a thing to do in a test.
+    //
+    //IT IS THE SAME STAND-IN THE HOST ALREADY CARRIES, exposed as a service so
+    //a main-side plugin can consume it too. Not a new fiction: `handlers` below
+    //is what the tests read to see what the node half answers, and this puts
+    //main's handlers in the same place.
+    function ipcPlugin(_imports, done) {
+        done(null, { ipc: { address: 'test', handle, commands: () => Object.keys(handlers).sort() } });
+    }
+
+    //rectify reads these off the function itself, the same as every plugin file
+    ipcPlugin.consumes = [];
+    ipcPlugin.provides = ['ipc'];
+
+    plugins.push(wanted.stamp(ipcPlugin, 'core/ipc/main.js'));
     plugins.config = Config();
 
     const app = rectify.build(plugins, { appPackage: APP_PACKAGE });
@@ -98,7 +116,7 @@ before(async () => {
     //standing in for it here is what lets the node half be exercised without one.
     const handle = (name, fn) => { handlers[name] = fn; return { remove() {} }; };
 
-    mainish = await mainHalf();
+    mainish = await mainHalf(handle);
 
     loaded = await require(bundle)({
         express,
@@ -114,6 +132,7 @@ before(async () => {
         //whole session.
         dataDir: mainish.services.dataDir,
         log: mainish.services.log,
+        events: mainish.services.events,
         state: mainish.services.state,
         cron: mainish.services.cron,
         secret: mainish.services.secret,

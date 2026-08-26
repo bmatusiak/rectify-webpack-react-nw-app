@@ -191,6 +191,14 @@ function namesThatAreGone (dir, everything, tracked) {
     //committed reads as missing -- which is precisely the state a README is in
     //while the work it documents is being written.
     if (fs.existsSync(path.join(ROOT, name))) return
+
+    //AND BESIDE THE README, which is how a plugin names its own helper --
+    //"plus `keeping.js`, which has no provides". Resolving only from the repo
+    //root made every one of those read as missing until the day it was
+    //committed, so the check fired hardest exactly while somebody was writing
+    //the thing it was complaining about.
+    if (fs.existsSync(path.join(dir, name))) return
+
     if (!gone.includes(name)) gone.push(name)
   })
 

@@ -9,7 +9,7 @@
 //it would empty the log of the app somebody is using, which is the one thing the
 //plugin is for.
 
-plugin.consumes = ['selftest', 'log'];
+plugin.consumes = ['selftest', 'log', 'events'];
 plugin.provides = [];
 function plugin(imports, register) {
     var { describe, it, assert } = imports.selftest;
@@ -125,9 +125,17 @@ function plugin(imports, register) {
             assert.equal(heard.indexOf('after letting go'), -1, 'it kept talking after unsubscribe');
         });
 
-        //THE ONE SEAM A DURABLE RECORD MAY ARRIVE THROUGH. Nothing takes it in
-        //this scaffold, so what is pinned is that it can be taken and given back.
-        it('hands the durable record seam over, and takes it back', function () {
+        //THE ONE SEAM A DURABLE RECORD MAY ARRIVE THROUGH, and ../events takes
+        //it. This test borrows it for two lines and must hand it back to the
+        //plugin that had it -- which is the whole reason `keeper` restores the
+        //previous holder rather than clearing the slot.
+        //
+        //IT USED TO CLEAR IT, and this test was the caller: ../events stopped
+        //recording the moment this ran, for the rest of the app's life. It
+        //showed up as three of that plugin's own tests failing in a full run and
+        //passing alone -- which reads as flakiness rather than as a suite that
+        //switched a service off and walked away.
+        it('hands the durable record seam over, and gives it back to whoever had it', function () {
             var kept = [];
             var stop = log.keeper(function (e) { kept.push(e.text); });
 
@@ -140,6 +148,19 @@ function plugin(imports, register) {
 
             log.add(['probe'], 'not for the record');
             assert.equal(kept.indexOf('not for the record'), -1, 'it kept keeping after being released');
+
+            //AND THE REAL ONE IS BACK. Asking ../events whether it is still
+            //recording is the only way to see this from here, and it is exactly
+            //what was broken: a released slot that answers "nothing is keeping"
+            //looks identical to an app that never had a record.
+            assert.ok(imports.events.kept, 'events is present but no longer recording');
+
+            var mine = 'probe seam handback ' + Date.now();
+            log.on('app').info(mine);
+
+            assert.ok(imports.events.all({ limit: 20 }).filter(function (e) {
+                return e.text === mine;
+            })[0], 'the seam was not handed back -- events is deaf');
         });
     });
 

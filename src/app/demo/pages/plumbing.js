@@ -325,6 +325,60 @@ module.exports = function Plumbing(props) {
                 ) : <p className="text-body-secondary mb-0">nothing yet</p>}
             </Section>
 
+            <Section title="What it has actually done"
+                lead="core/events -- the durable half of the log, fed through the one seam core/log leaves open.">
+
+                <p className="text-body-secondary">
+                    The log holds thousands of lines in memory and answers <em>what is happening</em>.
+                    This holds hundreds on disk and answers <em>what was done</em> &mdash; so it
+                    survives the restart that empties the other one, which is the restart you were
+                    trying to remember.
+                </p>
+
+                {where && where.events ? (
+                    where.events.kept ? (
+                        <>
+                            <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
+                                <Badge variant="success">recording</Badge>
+                                {where.events.keeping.map(function (t) {
+                                    return <Badge key={t} variant="primary">{t}</Badge>;
+                                })}
+                                {where.events.never.slice(0, 4).map(function (t) {
+                                    return <Badge key={t} variant="secondary">not {t}</Badge>;
+                                })}
+                            </div>
+
+                            <p className="text-body-secondary small">
+                                <code>{where.events.where}</code>
+                            </p>
+
+                            {where.events.rows.length ? (
+                                <pre className="mb-0" style={{ maxHeight: '14rem', overflowY: 'auto' }}>
+                                    <code>{where.events.rows.map(function (e) {
+                                        return e.seq + '  [' + e.tags.join(' ') + '] ' + e.text;
+                                    }).join('\n')}</code>
+                                </pre>
+                            ) : <p className="text-body-secondary mb-0">Nothing kept yet.</p>}
+                        </>
+                    ) : (
+                        /* THE HONEST ANSWER WHEN THERE IS NO MAIN HALF BEHIND IT.
+                           An empty record and one nothing is writing look identical
+                           until something says which. */
+                        <Alert variant="warning" className="mb-0">
+                            Nothing is being recorded &mdash; this half has no main behind it, so
+                            <code>events.kept</code> is false. The acts still happen; only the note
+                            is lost.
+                        </Alert>
+                    )
+                ) : <p className="text-body-secondary mb-0">asking...</p>}
+
+                <p className="text-body-secondary small mt-3 mb-0">
+                    Press <strong>Send a credential</strong> above and look here: the same line is in
+                    both, and this one lost more of it. A record kept for ever is redacted harder
+                    than a log read on screen and gone at the next restart.
+                </p>
+            </Section>
+
             <Section title="Carried across the reload"
                 lead="core/handover — the box core carries without looking inside.">
 

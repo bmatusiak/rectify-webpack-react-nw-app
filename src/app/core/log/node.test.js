@@ -93,3 +93,77 @@ test('it can be asked whether it would change anything', () => {
     assert.equal(looksLike.looksSecret('ghp_' + 'A'.repeat(36)), true);
     assert.equal(looksLike.looksSecret('GET /window.js 200'), false);
 });
+
+//---- and the blunter rules, for something kept for ever --------------------
+//
+//`redact(text)` IS THE LOG'S AND STAYS NARROW. These are what anything that
+//WRITES TEXT DOWN asks for by name -- see core/events, which is on disk for
+//ever, gets copied into backups, and is the first thing attached to a bug
+//report. The cost of being wrong is different in each direction, which is why
+//there are two profiles rather than one widened list.
+
+test('a durable record loses anything long and random', () => {
+    const hash = '4f2a1b9c8d3e5f6a7b8c9d0e1f2a3b4c5d6e7f80';
+    const line = 'built commit ' + hash;
+
+    //THE LOG KEEPS IT, and must: a stream of a machine's output with every
+    //commit hash blanked is not worth reading.
+    assert.equal(looksLike.redact(line), line);
+
+    //the record does not, because a sentence an app composed about its own act
+    //never needs a forty-character run of random to make sense
+    assert.equal(looksLike.redact(line, 'durable').indexOf(hash), -1);
+});
+
+//THE CASE THIS EXISTS FOR. Starting a sign-in writes an authorize URL into a
+//line that an allowlist would keep, so without this the record would put one on
+//disk -- the exact thing the live log stays in memory to avoid, arriving through
+//the door the allowlist opened.
+test('a durable record keeps the host of a url and drops the rest', () => {
+    const out = looksLike.redact('runner1 is waiting -- open https://claude.ai/oauth/authorize?code=s3cret',
+        'durable');
+
+    assert.ok(out.indexOf('claude.ai') > 0, 'it lost which host, which is the useful part: ' + out);
+    assert.equal(out.indexOf('oauth'), -1, out);
+    assert.equal(out.indexOf('s3cret'), -1, out);
+});
+
+//WHOLE URLS, NOT JUST THEIR QUERY. The secret in a sign-in link is in the path
+//as often as in the parameters, and a rule that keeps "the safe half" is a rule
+//somebody has to be right about every time.
+test('a url with its secret in the path loses it too', () => {
+    const out = looksLike.redact('open https://example.com/invite/abc123def456 now', 'durable');
+    assert.equal(out.indexOf('abc123def456'), -1, out);
+});
+
+//THE NARROW RULES RUN FIRST IN BOTH PROFILES, so a named credential keeps its
+//name. Running the blunt ones first would swallow the value before the rule that
+//knows what it is could label it, and `[redacted]` alone says less than
+//`token=[redacted]`.
+test('a named credential keeps its name in the durable profile too', () => {
+    const out = looksLike.redact('token=hunter2xxxxxxxxxxxxxxxxxxxxxxxxx was set', 'durable');
+
+    assert.ok(out.indexOf('token=') === 0, out);
+    assert.ok(out.indexOf('[redacted]') > 0, out);
+});
+
+test('an unknown profile is the narrow one, not a wider one', () => {
+    const hash = '4f2a1b9c8d3e5f6a7b8c9d0e1f2a3b4c5d6e7f80';
+
+    //A TYPO MUST NOT SILENTLY WIDEN OR NARROW ANYTHING. Falling back to the log's
+    //rules is the safe direction for a reader: it keeps a record readable, and
+    //the caller that wanted `durable` is the one place that names it.
+    assert.equal(looksLike.redact(hash, 'durrable'), hash);
+    assert.equal(looksLike.redact(hash), hash);
+});
+
+//A REDACTION THAT FIRES ON NOTHING teaches a reader to distrust the ones that
+//fire on something. This came back as `http://localhost:8080/[redacted]` in the
+//app's own "started, listening on ..." line, which announced a secret where
+//there was not one.
+test('a url with nothing after the slash is left alone', () => {
+    ['http://localhost:8080/', 'https://example.com/', 'http://127.0.0.1:62561/'].forEach((url) => {
+        const line = 'started, listening on ' + url;
+        assert.equal(looksLike.redact(line, 'durable'), line, url + ' was redacted for nothing');
+    });
+});

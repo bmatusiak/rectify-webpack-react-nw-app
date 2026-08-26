@@ -4,7 +4,7 @@
 //reach it — a `require('webpack')` in an unreachable function is still bundled,
 //and dragging webpack into a packaged app is exactly what this avoids.
 
-plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge', 'dataDir', 'log', 'handover', 'state', 'cron', 'secret'];
+plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge', 'dataDir', 'log', 'handover', 'state', 'cron', 'secret', 'events'];
 plugin.provides = ['build'];
 async function plugin(imports, register) {
     var { app, http, io, window: win, tray, ipc, lifecycle, handover } = imports;
@@ -47,6 +47,12 @@ async function plugin(imports, register) {
         //kept since the app started, rather than one that empties on every
         //save -- see ../log/main.js.
         log: imports.log,
+
+        //AND THE DURABLE HALF OF IT, for the same reason as the log itself: a
+        //record that restarted with this half would answer "what happened while
+        //I was away" with "I do not know" -- see ../events.
+        events: imports.events,
+
         state: imports.state,
         cron: imports.cron,
         secret: imports.secret,

@@ -4,7 +4,7 @@ Quitting, crashing, and telling the launcher we are here.
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | `lifecycle` | `app` |
+| `main.js` | `lifecycle` | `app`, `log` |
 
 ```
 lifecycle.shutdown(reason)   the only way out

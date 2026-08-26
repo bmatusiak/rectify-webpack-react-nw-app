@@ -176,8 +176,21 @@ async function plugin(imports, register, config) {
             //credentials end up living, which is a decision that deserves its
             //own plugin and its own argument.
             keeper: function (fn) {
+                //PUTTING IT BACK MEANS PUTTING BACK WHOEVER HAD IT, not
+                //clearing it. One slot is still right -- two durable records is
+                //two half-records -- but a caller that borrows the seam and
+                //hands it back must not leave the app with none.
+                //
+                //IT CLEARED IT, AND ./main.test.js WAS THE CALLER. That test
+                //borrows the slot to prove the seam works, released it to null,
+                //and ../events stopped recording for the rest of the run --
+                //visible only as three of its own tests failing in a FULL run
+                //and passing alone, which reads as a flaky test rather than as
+                //a suite that switched a service off.
+                var was = keep;
                 keep = fn;
-                return function () { if (keep === fn) keep = null; };
+
+                return function () { if (keep === fn) keep = was; };
             }
         }
     });
