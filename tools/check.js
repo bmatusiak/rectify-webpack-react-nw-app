@@ -130,9 +130,15 @@ function offDisk () {
 
       const here = path.join(dir, entry.name)
 
-      //A PARKED FOLDER IS STILL CHECKED, and that is deliberate: `_example` is
-      //what somebody copies to start a plugin, and the underscore that keeps it
-      //from loading also keeps every other check off it.
+      //A PARKED FOLDER IS STILL CHECKED, and that is deliberate. An underscore
+      //takes a folder out of every discovery site -- both disk walks and the
+      //one require.context -- so it is also out of the readme audit, the
+      //per-plugin test rule and its own suites. Nothing else looks at it at all.
+      //
+      //WHICH MAKES "DOES IT STILL COMPILE" THE ONLY QUESTION LEFT that can be
+      //asked about something parked, so this asks it. src/app/example was parked
+      //for exactly this reason and had rotted in two ways nothing could see; it
+      //is live now, and whatever gets parked next will not be.
       ;['main.js', 'cli.js', 'main.test.js', 'cli.test.js', 'node.test.js', 'sabotage.js']
         .forEach((name) => {
           const file = path.join(here, name)

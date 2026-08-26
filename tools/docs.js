@@ -45,6 +45,24 @@ function readmes (dir, out) {
 }
 
 function read (file) { return fs.readFileSync(file, 'utf8') }
+
+// WHAT GIT IS TRACKING AND THE WORKING TREE STILL HAS.
+//
+// GIT KNOWS ABOUT A FILE THAT IS NO LONGER THERE whenever a rename or a delete
+// has not been staged yet -- an ordinary state to be in rather than a broken
+// one. Both callers used to hand `read` whatever git listed and die on an
+// ENOENT naming a path somebody was in the middle of moving, which reads as the
+// tool being broken rather than as work in progress. Renaming src/app/_example
+// to src/app/example was enough to do it.
+//
+// FILTERED HERE RATHER THAN INSIDE `read`, which must keep throwing: a missing
+// file is a real failure everywhere else in this tool, and a `read` that
+// answered '' for one would turn every such bug into a silently empty check.
+function stillThere (pattern) {
+  return cp.execSync('git ls-files ' + pattern, { cwd: ROOT }).toString()
+    .split(/\r?\n/).filter(Boolean)
+    .filter((file) => fs.existsSync(path.join(ROOT, file)))
+}
 //named from its own root, so a plugin in the second tree reads `mcp` rather
 //than `../app_plugins/mcp`
 function relative (dir) {
@@ -242,7 +260,7 @@ function counted () {
     { count: swatches, of: 'swatches', is: 'swatch folders plus default' }
   ]
 
-  cp.execSync('git ls-files "*.md"', { cwd: ROOT }).toString().split(/\r?\n/).filter(Boolean)
+  stillThere('"*.md"')
     .forEach(file => {
       const text = read(path.join(ROOT, file))
 
@@ -274,7 +292,7 @@ function main () {
   let code = ''
   let everything = ''
 
-  cp.execSync('git ls-files src tools test', { cwd: ROOT }).toString().split(/\r?\n/).filter(Boolean)
+  stillThere('src tools test')
     .forEach(file => {
       if (!/\.(js|mjs|json|scss|html)$/.test(file)) return
       const text = read(path.join(ROOT, file))

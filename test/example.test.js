@@ -5,24 +5,35 @@ const fs = require('node:fs');
 
 //THE TEMPLATE HAS TO STILL BE TRUE.
 //
-//`src/app/_example/` is where somebody starts a plugin: copy the folder, take
-//the underscore off, delete what you do not need. The underscore is also why
-//nothing else checks it -- every discovery site skips a folder starting with
-//one, so it is invisible to the boots, to the readme audit and to the
-//per-plugin test rule.
+//`src/app/example/` is where somebody starts a plugin: copy the folder, rename
+//it, delete what you do not need.
 //
-//WHICH MAKES IT THE ONE THING IN THIS REPO THAT CAN ROT WITHOUT ANYTHING GOING
-//RED, and a rotten template is worse than none: somebody starts from it, gets a
-//service that no longer exists, and concludes the scaffold is broken. `settings`
-//became `preferences` and `storage` became `webStorage` in one afternoon -- a
-//template written the day before would have been wrong by teatime.
+//IT USED TO BE `_example`, PARKED, and that was the mistake this file was
+//written to paper over. Every discovery site skips a folder starting with `_`,
+//so a parked template is invisible to the boots, to the readme audit and to the
+//per-plugin test rule -- the one thing in this repo that could rot with nothing
+//going red. This file checked the one kind of rot it could see from outside: a
+//service that had been renamed.
 //
-//IT IS CHECKED AS TEXT rather than by requiring it. window.js is JSX, which node
-//cannot parse, and the interesting question is not whether it runs -- it is
-//whether every name it reaches for is still a name this app has.
+//IT COULD NOT SEE THE OTHER TWO. The template had no test beside it and no
+//README table, so taking the underscore off -- the thing it exists to invite --
+//turned `plugin-scan` and the readme audit red before anybody had written a
+//line. And its `server.js` read a `state` document at setup, which the stand-in
+//host in ./server-graph.test.js could not answer, because that host had drifted
+//six services behind what `core/build` really hands over. Un-parking the folder
+//took nine assertions down with it. Both had been true for a whole session.
+//
+//SO IT IS LIVE NOW, and the app itself is the check: an unresolvable service
+//stops the boot, a missing test fails `plugin-scan`, a wrong table fails the
+//readme audit, and its own two suites run in the real app.
+//
+//WHAT IS LEFT FOR THIS FILE IS THE PART THAT NEEDS NO APP. Reading the source
+//as text answers in a millisecond and names the file and the service, rather
+//than failing somewhere inside a boot -- and it is the only way to ask about
+//window.js at all, which is JSX that node cannot parse.
 
 const SRC = path.join(__dirname, '..', 'src');
-const EXAMPLE = path.join(SRC, 'app', '_example');
+const EXAMPLE = path.join(SRC, 'app', 'example');
 const ROOTS = require('../src/roots');
 
 const CONTEXTS = ['main', 'server', 'window', 'cli'];
@@ -74,7 +85,7 @@ const files = fs.existsSync(EXAMPLE)
     : [];
 
 test('there is a template to start a plugin from', () => {
-    assert.ok(fs.existsSync(EXAMPLE), 'src/app/_example is gone');
+    assert.ok(fs.existsSync(EXAMPLE), 'src/app/example is gone');
     assert.ok(files.length > 0, 'the template has no context files in it');
     assert.ok(fs.existsSync(path.join(EXAMPLE, 'README.md')), 'the template has no README');
 });
@@ -91,7 +102,7 @@ test('every service the template asks for still exists', () => {
         const source = fs.readFileSync(path.join(EXAMPLE, name), 'utf8');
 
         (listed(source, 'consumes') || []).forEach((wanted) => {
-            if (!known.has(wanted)) missing.push('_example/' + name + ' wants ' + wanted);
+            if (!known.has(wanted)) missing.push('example/' + name + ' wants ' + wanted);
         });
     });
 
@@ -110,10 +121,16 @@ test('the template is shaped like a plugin', () => {
     });
 });
 
-//AND IT MUST NOT LOAD. The underscore is the whole of "this is a template", so
-//if the folder is ever renamed without being finished, every boot picks it up.
-test('the template is parked, and every discovery site skips it', () => {
-    assert.equal(path.basename(EXAMPLE)[0], '_', 'the template folder lost its underscore');
+//AND IT MUST LOAD, which is the opposite of what this test used to say.
+//
+//PARKING IT AGAIN IS THE REGRESSION NOW. An underscore would take it back out of
+//every discovery site, and with it the readme audit, the per-plugin test rule
+//and its own two suites -- every check that noticed anything wrong with it. The
+//folder would look exactly the same and nothing would be watching it, which is
+//the state it was in when a stale stand-in host went unnoticed for a session.
+test('the template is live, and the bundles really pick it up', () => {
+    assert.notEqual(path.basename(EXAMPLE)[0], '_',
+        'the template is parked again, and nothing checks a parked template');
 
     //the same regex the bundles hand to require.context, read out of the source
     //rather than restated -- test/plugin-scan.test.js does this the long way
@@ -123,5 +140,12 @@ test('the template is parked, and every discovery site skips it', () => {
     assert.ok(hit, 'no require.context in src/window.js');
 
     const pattern = eval(hit[2]); // eslint-disable-line no-eval
-    assert.ok(!pattern.test('./app/_example/window.js'), 'the bundles would load the template');
+
+    assert.ok(pattern.test('./app/example/window.js'),
+        'the bundles would not load the template');
+
+    //and an underscore is still what parks a folder, which is the mechanism
+    //this one stopped using rather than one that stopped existing
+    assert.ok(!pattern.test('./app/_example/window.js'),
+        'a parked folder is no longer skipped, so parking anything is broken');
 });

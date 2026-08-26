@@ -10,6 +10,10 @@ const webpack = require('webpack');
 const { Server } = require('socket.io');
 const { io: connect } = require('socket.io-client');
 
+const rectify = require('@bmatusiak/rectify');
+const wanted = require('../src/target.js');
+const Config = require('../src/config.js');
+
 //builds the real server entry and runs it against a real express + socket.io,
 //which is the half nothing else exercises outside nw. the window half needs a
 //dom, so it is covered by the app itself, not from here.
@@ -17,7 +21,58 @@ const { io: connect } = require('socket.io-client');
 const serverConfig = require('../webpack.config.js')({}, { mode: 'development' })
     .find((c) => c.name == 'server');
 
-let server, ioServer, loaded, url, router;
+let server, ioServer, loaded, url, router, mainish;
+
+//THE APP THIS PRETENDS TO BE. `name` is what ../src/app/core/dataDir/main.js
+//derives its directory from, so this run keeps its things under `test-app`
+//rather than in the real app's -- isolation by the mechanism being tested,
+//rather than by a switch put there for the test.
+const APP_PACKAGE = { title: 'Test App', name: 'test-app', version: '9.9.9' };
+
+//---- the half of the host that comes from main ----------------------------
+//
+//THE REAL PLUGINS, BUILT, NOT STOOD IN FOR -- and the difference is the whole
+//reason this exists. ../src/app/core/build/main.js hands the server half
+//fourteen things; the object below used to carry eight, and the six missing
+//ones were exactly those that live in main: dataDir, log, state, cron, secret
+//and what handover is carrying.
+//
+//NOTHING NOTICED, BECAUSE NOTHING TOUCHED THEM AT SETUP. A server plugin that
+//uses `state` inside a socket handler works either way -- the refusal only
+//fires when the handler runs, which is never, here. The one that reads a
+//document while it is being set up cannot start at all, and takes the graph
+//down with it. src/app/example/server.js does exactly that, on line 36, which
+//is how this was found: the template broke nine assertions in this file by
+//being un-parked and doing the thing it is there to demonstrate.
+//
+//SO A STAND-IN WOULD HAVE BEEN THE WRONG FIX. A hand-written `state` that
+//answers plausibly is a second opinion about where this app keeps things, and
+//CLAUDE.md has the scar from the last mock host: its `quit` was a no-op, so a
+//test that called quit passed and proved nothing. These are the same files
+//main loads, resolved by the same container, against a real directory.
+async function mainHalf() {
+    //IN DEPENDENCY-FREE ORDER ON PURPOSE? No -- rectify works the order out of
+    //`consumes`. This is the reading order: where things live, then what is
+    //kept there.
+    const plugins = ['dataDir', 'log', 'handover', 'state', 'cron', 'secret'].map((one) => {
+        const where = path.join('core', one, 'main.js');
+        return wanted.stamp(require(path.join(__dirname, '..', 'src', 'app', where)), where);
+    });
+
+    //`Plugin` is rectify's own base class, pushed in by all four boots
+    plugins.push(rectify.PluginBase);
+    plugins.config = Config();
+
+    const app = rectify.build(plugins, { appPackage: APP_PACKAGE });
+    app.on('error', (err) => { throw err; });
+
+    //THE APP AND NOT JUST ITS SERVICES, because ../src/app/core/cron/main.js
+    //owns an interval -- one beat for the whole app -- and a live timer keeps
+    //node's event loop open. Returning the services alone ran every assertion
+    //in this file correctly and then hung for ever with nothing printed, which
+    //reads exactly like a test that is stuck rather than one that finished.
+    return { app: await app.start(), services: app.services };
+}
 
 //whatever the node half answers on the control socket, kept so the tests can
 //call it the way the cli would
@@ -43,12 +98,27 @@ before(async () => {
     //standing in for it here is what lets the node half be exercised without one.
     const handle = (name, fn) => { handlers[name] = fn; return { remove() {} }; };
 
+    mainish = await mainHalf();
+
     loaded = await require(bundle)({
         express,
         router,
         httpServer: server,
         io: ioServer,
-        appPackage: { title: 'Test App', name: 'test-app', version: '9.9.9' },
+        appPackage: APP_PACKAGE,
+
+        //WHAT MAIN OWNS, HANDED OVER THE SAME WAY core/build HANDS IT OVER --
+        //see that file's own list, which this has to keep up with. A service
+        //here that is missing there is a graph testing something the app does
+        //not do; one there that is missing here is the drift that hid for a
+        //whole session.
+        dataDir: mainish.services.dataDir,
+        log: mainish.services.log,
+        state: mainish.services.state,
+        cron: mainish.services.cron,
+        secret: mainish.services.secret,
+        of: mainish.services.handover.get,
+        handedOver: mainish.services.handover.names,
         window: {
             url: 'http://127.0.0.1:0/',
             isOpen: false,
@@ -67,9 +137,20 @@ before(async () => {
     url = 'http://127.0.0.1:' + server.address().port;
 }, { timeout: 120000 });
 
-after(() => {
+after(async () => {
     try { ioServer.close(); } catch (e) { /* already gone */ }
     try { server.close(); } catch (e) { /* already gone */ }
+
+    //AND THE CLOCK, or this file passes and never returns
+    try { await mainish.app.destroy(); } catch (e) { /* never started */ }
+
+    //WHAT THIS RUN KEPT, TAKEN BACK. dataDir puts it under the app's `name`,
+    //so it is `test-app` and never the real one -- the check below says so out
+    //loud rather than trusting that, because this is a recursive delete.
+    try {
+        const kept = mainish.services.dataDir.path;
+        if (path.basename(kept) === APP_PACKAGE.name) fs.rmSync(kept, { recursive: true, force: true });
+    } catch (e) { /* nothing was written, or it is in use */ }
 });
 
 test('the plugin graph resolves on the server side', () => {

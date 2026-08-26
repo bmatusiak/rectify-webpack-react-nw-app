@@ -196,7 +196,7 @@ module.exports = function Plumbing(props) {
                 ) : (
                     <p className="text-body-secondary mb-0">
                         Nothing is scheduled. A plugin describes a job with <code>cron.add</code> and
-                        supplies the work with <code>cron.does</code> — see <code>src/app/_example</code>.
+                        supplies the work with <code>cron.does</code> — see <code>src/app/example</code>.
                     </p>
                 )}
             </Section>
