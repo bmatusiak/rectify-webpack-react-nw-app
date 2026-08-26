@@ -31,6 +31,9 @@ const ROOT = shared.ROOT
 const SHOTS = path.join(ROOT, 'shots')
 
 const OPTIONS = ['--shots', '--swatches', '--selftest']
+
+// WHICH PAGE A SWATCH IS JUDGED ON. See swatches() for why it is pinned.
+const MEASURE_ON = 'Cheatsheet'
 const passthrough = process.argv.slice(2).filter(a => OPTIONS.indexOf(a) < 0)
 const wantShots = process.argv.includes('--shots')
 const everySwatch = process.argv.includes('--swatches')
@@ -236,6 +239,26 @@ async function swatches (ipc) {
   const all = await ipc.call('read', { selector: '.navbar select option' }).catch(() => null)
   const names = ((all && all.items) || []).map(o => o.text).filter(Boolean)
   if (!names.length) return
+
+  // ON A PAGE CHOSEN ON PURPOSE, rather than on whichever one the loop above
+  // happened to end on.
+  //
+  // `readable` skips a group that matches nothing, so this pass only measured
+  // what the last page happened to contain -- and adding a page to the end of
+  // the sidebar silently changed what every swatch was checked for. Measured:
+  // the run ended on Graph, which has inline code and alerts, until a plugin
+  // registered a page after it that has neither, and six checks disappeared
+  // without a word. 122 became 121 and nothing said which two groups had
+  // stopped being looked at.
+  //
+  // Cheatsheet is the richest page in the demo -- every component, every
+  // variant -- so it is the one worth measuring a swatch against. Falling back
+  // to whatever is open keeps this working for an app that deleted the demo.
+  const landed = await ipc.call('click', { selector: '.app-sidebar .nav-pills .nav-link', text: MEASURE_ON })
+    .catch(() => ({ error: 'no ' + MEASURE_ON + ' page' }))
+
+  if (landed.error) note('  - swatches measured on whatever was open: ' + landed.error)
+  else await settled(ipc)
 
   // one plain, one dark design, one that restyles everything
   const chosen = everySwatch ? names : names.filter(n => ['default', 'darkly', 'sketchy'].indexOf(n) >= 0)
