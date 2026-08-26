@@ -6,6 +6,24 @@ How the nw window and main talk to each other, in **every** build.
 |---|---|---|
 | `main.js` | `bridge` | `app` |
 
+```
+bridge.attached   nw handed main a window
+bridge.connected  the page has a socket on it
+bridge.trouble    what the page is saying went wrong, or null
+```
+
+**`attached` and `connected` are different questions**, and telling them apart is
+most of a diagnosis: a window whose plugins all threw is attached and not
+connected.
+
+**`trouble` is one line of DOM reading in a transport plugin, and it is here
+because this is the only half that can answer it.**
+[`overlay.js`](../../../overlay.js) draws a red box when something fails
+underneath the ui, and both ways it is raised take out whatever would otherwise
+read it — a failed server reload takes `remote/server.js`, a window plugin
+throwing takes `remote/window.js`. This works in both, because `current.win` is
+nw's own handle and needs nothing inside the page to be alive.
+
 Plus two files with no `provides`:
 
 - **`wire.js`** — the message protocol, in one file so both ends run the same

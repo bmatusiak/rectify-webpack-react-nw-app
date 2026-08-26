@@ -48,6 +48,26 @@ function plugin(imports, register) {
             assert.ok(io.transports >= 1, 'io is not a fan-out');
             assert.ok(io.engine.clientsCount >= 1, 'the fan-out cannot see the window');
         });
+
+        //MAIN CAN READ THE PAGE, and this is the only half that can -- see the
+        //README. It is one line of DOM reading in a transport plugin because
+        //everything else that could read it dies in the cases worth reading it.
+        it('can say whether the page is showing trouble', function () {
+            assert.equal(bridge.attached, true, 'main has no window attached');
+
+            //null, NOT false: there is nothing to report, which is different
+            //from "there is no window to ask"
+            assert.equal(bridge.trouble, null,
+                'the app is showing an overlay: ' + bridge.trouble);
+        });
+
+        //ATTACHED AND CONNECTED ARE DIFFERENT QUESTIONS, and telling them apart
+        //is most of a diagnosis: a window whose plugins all threw is attached
+        //and not connected.
+        it('tells having a window from the page talking on it', function () {
+            assert.equal(typeof bridge.attached, 'boolean');
+            assert.equal(typeof bridge.connected, 'boolean');
+        });
     });
 
     register();

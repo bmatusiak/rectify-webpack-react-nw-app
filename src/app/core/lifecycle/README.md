@@ -4,7 +4,39 @@ Quitting, crashing, and telling the launcher we are here.
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | `lifecycle` | `app`, `log` |
+| `main.js` | `lifecycle` | `app`, `log`, `ipc`, `bridge` |
+
+```sh
+node src/cli.js health     # what this app is, and whether it is up
+```
+
+## `health` is main's answer, and that is the whole of it
+
+```json
+{ "title": "...", "packaged": false, "pid": 32028,
+  "window": { "attached": true, "connected": true, "trouble": null },
+  "ok": true }
+```
+
+Every other way to ask the app about itself goes through a half that is **gone
+in exactly the cases worth asking about**:
+
+| asked | answered by | missing when |
+|---|---|---|
+| `hello` | `src/app/demo/server.js` | the node half failed to load — and it is the demo, which the scaffold promises you can delete |
+| `read` | `src/app/remote/server.js` + `remote/window.js` | either half is down |
+
+Sabotage either and `npm run drive` used to die on `unknown command: hello` or
+`no answer to "read"`, from a line that looks like it is about the DOM.
+
+**Main is loaded once, off disk, and never reloads.** It answers when the node
+half failed to load and when every window plugin threw. `trouble` is read
+through [`bridge`](../bridge/), which holds the page's real `Window` object —
+see there for why nothing else can.
+
+**It carries `packaged` too**, and that is not padding: `tools/drive.js` needs it
+to refuse driving a source tree when it was asked for a package, and it was
+getting that from the demo.
 
 ```
 lifecycle.shutdown(reason)   the only way out

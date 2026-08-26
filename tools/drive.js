@@ -95,9 +95,12 @@ async function main () {
     // about the packaged build it had been asked to test. A pass that is about
     // something else is worse than a failure.
     //
-    // The app answers this about itself -- `hello` carries `packaged` -- so
-    // nothing here has to guess from the flags it was given.
-    const info = await ipc.call('hello')
+    // The app answers this about itself, and `health` is MAIN's answer -- see
+    // src/app/core/lifecycle/main.js. This asked `hello` until now, which is
+    // registered by src/app/demo/server.js: a core tool depending on the one
+    // folder the scaffold promises you can delete, and answered by the half
+    // that is missing in every case worth diagnosing.
+    const info = await ipc.call('health')
     if (!!info.packaged !== packaged) {
       console.log(NEWLINE + 'you asked to drive ' + (packaged ? 'a packaged build' : 'the source tree') +
         ', and the app already running is ' + (info.packaged ? 'packaged' : 'running from source') + '.')
@@ -106,50 +109,57 @@ async function main () {
     }
   }
 
+  // IS THE APP FACE DOWN, BEFORE ANYTHING ELSE IS MEASURED.
+  //
+  // src/overlay.js draws a red box over the page when something fails
+  // underneath the ui, and nothing looked for it -- so a run could open twelve
+  // pages behind that box and report a hundred and forty green checks about an
+  // app that never came up. A picture is not a check.
+  //
+  // ASKED OF MAIN, WHICH IS THE ONLY HALF THAT CAN ANSWER. A check that read
+  // the DOM through `read` was written first and measured against both ways the
+  // overlay is raised: a failed server reload takes remote/SERVER.js with it,
+  // and a window plugin throwing takes remote/WINDOW.js -- so `read` has no
+  // handler in one and no responder in the other, and drive died on a stack
+  // trace both times. main is loaded once, off disk, and survives both.
+  const state = await ipc.call('health').catch(() => null)
+  const trouble = state && state.window ? state.window.trouble : null
+
+  check('the app is not showing an error overlay', !trouble,
+    trouble ? trouble.split(NEWLINE)[0] : 'nothing on top of the page')
+
+  // AND IT STOPS HERE IF IT IS. Everything after this measures a page that is
+  // still on screen and no longer attached to anything, and answers about that
+  // are worse than no answers -- they are green.
+  if (trouble) {
+    console.log(NEWLINE + trouble)
+    console.log(NEWLINE + 'the app is showing an error overlay, so there is nothing worth measuring.')
+    return finish(wasRunning, ipc)
+  }
+
   // "up" from tools/nw.js means the server is listening, which is earlier than
   // the window having loaded and opened its socket. Driving needs the second
   // one, so wait for it rather than assuming the first implies it.
   const views = await shared.waitForView(ipc)
-  check('a view connects', views.views.length > 0, views.connected + ' connected')
+
+  // AND WHEN IT DOES NOT, SAY WHAT MAIN KNOWS.
+  //
+  // `0 connected` is a symptom and not a diagnosis. `views` is answered by
+  // src/app/remote/server.js -- the NODE half -- so a node half that failed to
+  // load answers nothing and the count is zero whether or not there is a
+  // window. Main is loaded once and off disk, and it can still see the window,
+  // which is exactly the fact that tells those two apart.
+  check('a view connects', views.views.length > 0,
+    views.connected + ' connected' +
+    (state && state.window && state.window.attached
+      ? ' -- but main still has a window attached, so the window is not what is missing:'
+        + ' nothing answered `views`, which is what a node half that failed to load looks like.'
+        + ' npm run log has the throw.'
+      : ''))
 
   if (!views.views.length) return finish(wasRunning, ipc)
 
   note('driving ' + (views.views[0].title || 'the window'))
-
-  // ---- THE CHECK THAT IS NOT HERE, AND WHY -------------------------------
-  //
-  // src/overlay.js draws a red box over the page when something fails
-  // underneath the ui, and NOTHING LOOKS FOR IT. A run can open twelve pages
-  // behind that box and report a hundred and forty green checks about an app
-  // that is face down, which is what "a picture is not a check" means.
-  //
-  // A check was written here -- `read` the overlay, fail on it -- and then
-  // MEASURED AGAINST BOTH WAYS THE OVERLAY IS RAISED. It cannot fire for
-  // either:
-  //
-  //   the server half fails to reload   io/window.js raises it, and `read` is
-  //                                     answered by remote/SERVER.js, which
-  //                                     went down with the half that failed.
-  //                                     drive dies on `unknown command: hello`.
-  //
-  //   a window plugin fails to start    window.js raises it, and `read` is
-  //                                     ANSWERED by remote/window.js, which is
-  //                                     a window plugin and never registered.
-  //                                     drive dies on `no answer to "read"`.
-  //
-  // Both end in a stack trace from a line about reading the DOM, which is the
-  // worst available way to learn that the app never came up.
-  //
-  // WHAT WOULD FIX IT is a main-side answer. core/bridge/main.js holds the
-  // page's actual Window object -- `frame === win.window`, measured, and
-  // injected at document-start BEFORE any plugin runs -- so main can read that
-  // overlay when every window plugin is dead and when the whole node half is
-  // gone. Nothing else in the app can.
-  //
-  // It is not here because it is a new ipc command in core rather than a line
-  // in this file, and because the same command should carry `packaged` -- see
-  // the `hello` call above, which is answered by src/app/demo and is the one
-  // thing in the scaffold that makes a core tool depend on the demo.
 
   // WHAT IS ON THE SIDEBAR, read off the app rather than listed here. A page
   // added to src/app/demo/pages is a page this drives, without being told.

@@ -59,12 +59,23 @@ module.exports.clear = function () {
 };
 
 //WHETHER THE APP IS SAYING IT IS BROKEN, for anything that wants to ask rather
-//than draw. tools/drive.js asks this first, because measuring the contrast of
-//twelve pages that are behind a red box is a green run about a face-down app.
-module.exports.showing = function () {
-    if (typeof document == 'undefined') return null;
+//than draw.
+//
+//IT TAKES A DOCUMENT, AND THAT IS THE WHOLE POINT. The window can ask about its
+//own, and MAIN can ask about the window's -- src/app/core/bridge/main.js holds
+//the page's real Window object, injected at document-start before any plugin
+//runs. Main is the only half that can still answer when every window plugin is
+//dead AND when the node half is gone, which is exactly when somebody wants to
+//know.
+//
+//THE ID STAYS IN THIS FILE. A caller that reached for `getElementById` itself
+//would be a second place that knows what the overlay is called, and the two
+//would drift the first time it was renamed.
+module.exports.showing = function (doc) {
+    var where = doc || (typeof document == 'undefined' ? null : document);
+    if (!where) return null;
 
-    var pre = document.getElementById(ID);
+    var pre = where.getElementById(ID);
     return pre ? pre.textContent : null;
 };
 

@@ -11,10 +11,16 @@ var path = require('path');
 //The window closing and the node half failing to start both land here, which is
 //why the first line of it is a re-entry guard rather than an assertion.
 
-plugin.consumes = ['app', 'log'];
+//`window` IS NOT IN THIS LIST, and cannot be: ../window consumes this one to
+//quit, so asking it back is a cycle -- rectify said so by resolving fourteen
+//services and stopping. What that field wanted is answered by ../bridge, which
+//knows whether nw handed main a window, and knows it without the page being
+//alive.
+plugin.consumes = ['app', 'log', 'ipc', 'bridge'];
 plugin.provides = ['lifecycle'];
 async function plugin(imports, register) {
     var app = imports.app;
+    var ipc = imports.ipc;
 
     //tools/nw.js reads this to say "already running" instead of starting a
     //second one. nw.js is single instance so the second launch is handed to us,
@@ -80,9 +86,58 @@ async function plugin(imports, register) {
         console.error('unhandled rejection', e && e.stack || e);
     });
 
+    //---- IS THIS APP UP, AND WHICH APP IS IT -----------------------------
+    //
+    //ANSWERED BY MAIN, WHICH IS THE WHOLE VALUE. Every other way to ask the app
+    //about itself goes through a half that is gone in exactly the cases worth
+    //asking about: `hello` is answered by src/app/demo/server.js, and `read` by
+    //src/app/remote -- one in the node half, one in the window. Sabotage either
+    //and `npm run drive` dies on `unknown command: hello` or `no answer to
+    //"read"`, from a line that looks like it is about the DOM.
+    //
+    //main is loaded once, off disk, and never reloads. It answers when the node
+    //half failed to load and when every window plugin threw.
+    //
+    //IT ALSO CARRIES `packaged`, and that is not padding. tools/drive.js needs
+    //it to refuse driving a source tree when it was asked for a package -- and
+    //it was getting it from the DEMO, which the scaffold promises is one folder
+    //you can delete. A core tool depending on the example app is the kind of
+    //coupling nothing goes red about.
+    var health = ipc.handle('health', function () {
+        var trouble = imports.bridge.trouble;
+
+        return {
+            //what it is
+            title: app.appPackage && app.appPackage.title,
+            name: app.appPackage && app.appPackage.name,
+            version: app.appPackage && app.appPackage.version,
+            packaged: !!app.isPackaged,
+            pid: process.pid,
+
+            //and how it is
+            window: {
+                //ATTACHED, NOT OPEN -- see ../bridge. A window whose plugins all
+                //threw is attached and has no socket, and that pair is most of a
+                //diagnosis on its own.
+                attached: !!imports.bridge.attached,
+                connected: !!imports.bridge.connected,
+
+                //THE TEXT, NOT A BOOLEAN. "Something failed" sends somebody
+                //looking; the first line of the message usually ends the search.
+                trouble: trouble || null
+            },
+
+            //ONE WORD FOR THE ANSWER EVERYONE ACTUALLY WANTS. A caller that has
+            //to work this out from three fields will work it out differently in
+            //each place that asks.
+            ok: !trouble
+        };
+    });
+
     await register(null, {
         lifecycle: lifecycle,
         onDestroy: function () {
+            health.remove();
             try { fs.unlinkSync(INSTANCE_FILE); } catch (e) { /* never written, or already gone */ }
         }
     });

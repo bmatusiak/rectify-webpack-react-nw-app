@@ -18,6 +18,8 @@ var wire = require('./wire');
 //should have to know which build they are in. It is a small shim over ./wire,
 //not an implementation of socket.io -- what is here is what the app uses.
 
+var showError = require('../../../overlay');
+
 plugin.consumes = ['app'];
 plugin.provides = ['bridge'];
 async function plugin(imports, register) {
@@ -313,6 +315,46 @@ async function plugin(imports, register) {
             //the visible window's page, which is a file with no script in it.
             //everything executable arrives by eval from main.bin.
             page: 'view.html',
+
+            //WHAT THE PAGE IS SAYING WENT WRONG, ASKED FROM MAIN.
+            //
+            //THIS IS THE ONLY HALF THAT CAN ANSWER IT, and that is why one line
+            //of DOM reading lives in a transport plugin. ../../../overlay.js
+            //draws a red box when something fails underneath the ui, and both
+            //ways it is raised take out whatever would otherwise read it:
+            //
+            //  a failed server reload   ../io/window.js raises it, and `read`
+            //                           is answered by ../../remote/server.js,
+            //                           which went down with the half that failed
+            //
+            //  a window plugin throwing ../../../window.js raises it, and `read`
+            //                           is ANSWERED by ../../remote/window.js,
+            //                           itself a window plugin that never ran
+            //
+            //Both were measured by sabotaging each half and reading what
+            //`npm run drive` actually said: a stack trace from a line about
+            //reading the DOM, which is the worst way to learn the app never came
+            //up. This works in both, because `current.win` is nw's own handle on
+            //the window and needs nothing inside the page to be alive.
+            get trouble() {
+                try {
+                    var frame = current && current.win && current.win.window;
+                    return frame ? showError.showing(frame.document) : null;
+                } catch (e) {
+                    //A WINDOW THAT CANNOT BE ASKED IS NOT A WORKING ONE, but it
+                    //is not this plugin's business to decide what that means --
+                    //null is "nothing to report", and the caller has `open` from
+                    //../window to tell that from "there is no window".
+                    return null;
+                }
+            },
+
+            //WHETHER MAIN HAS A WINDOW AT ALL, which is a different question
+            //from `connected` above: that one is about the page having a socket,
+            //this one is about nw having handed us a window to inject into. A
+            //window whose plugins all threw is attached and not connected, and
+            //telling those apart is most of a diagnosis.
+            get attached() { return !!(current && current.win); },
 
             //THE WINDOW HALF, FOR ANYONE ELSE WHO HAS TO HAND IT OUT. This
             //window gets it by eval and needs no url -- but a BROWSER viewer in
