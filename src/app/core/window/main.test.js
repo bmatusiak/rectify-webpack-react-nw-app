@@ -14,7 +14,7 @@ var path = require('path');
 //came back. The flag that answers "is there a frame to take" is set by nw's own
 //`minimize` event, so the only way to test the answer is to cause the event.
 
-plugin.consumes = ['selftest', 'app', 'window'];
+plugin.consumes = ['selftest', 'app', 'window', 'bridge'];
 plugin.provides = [];
 function plugin(imports, register) {
     var { describe, it, assert } = imports.selftest;
@@ -100,6 +100,53 @@ function plugin(imports, register) {
             var shot = await win.capture({ format: 'png' });
             assert.ok(!shot.skipped, 'still skipping after the window was restored: ' + shot.why);
             assert.ok(shot.buffer && shot.buffer.length > 0, 'no picture came back');
+        });
+    });
+
+    //---- what the page is made of -----------------------------------------
+    //
+    //THERE IS NO DOCUMENT IN HERE. main is nw's node side, so a test cannot put
+    //a probe on the page and look for it -- the first version of this did
+    //exactly that and could not have run. What it CAN do is ask both halves of
+    //the seam and compare: ../bridge hands over the page as it is, and this
+    //plugin is what scrubs it.
+
+    describe('the markup', function () {
+
+        //A CLASS THAT MATCHES NO RULE IS INVISIBLE IN A PICTURE AND OBVIOUS
+        //HERE, which is the whole reason this exists beside `capture`.
+        it('reads the page from main, without anything in it being alive', function () {
+            var page = win.markup();
+
+            assert.ok(page, 'nothing came back');
+            assert.ok(page.indexOf('<html') >= 0 || page.indexOf('<HTML') >= 0, 'that is not a document');
+            assert.ok(page.length > 1000, 'only ' + page.length + ' characters of page');
+        });
+
+        //SCRUBBED ON THE WAY OUT, with the same rules ../events uses for a
+        //record kept for ever -- because this is written to a file that gets
+        //attached to bug reports. Asked as "is it the raw page put through
+        //them", which is the one claim this plugin makes about the text.
+        it('is the raw page with the durable rules run over it', function () {
+            var raw = imports.bridge.markup();
+            var looksLike = require('../log/looks-like');
+
+            assert.ok(raw, 'the bridge handed nothing over');
+            assert.equal(win.markup(), looksLike.redact(raw, 'durable'),
+                'the markup is not being scrubbed on the way out');
+        });
+
+        //AND IT DOES NOT PRETEND TO BE MORE THAN THAT. Redaction catches what
+        //has a shape; a short plain secret on the page is in the file. Pinned so
+        //nobody later reads the scrub as a guarantee -- ./README.md says the
+        //same in words, and demo/pages/plumbing.js really does draw an opened
+        //secret on screen.
+        it('does not catch a secret that has no shape', function () {
+            var looksLike = require('../log/looks-like');
+            var plain = 'a-token-worth-keeping';
+
+            assert.equal(looksLike.redact(plain, 'durable'), plain,
+                'the rules are wider than the README says, which is worth knowing either way');
         });
     });
 

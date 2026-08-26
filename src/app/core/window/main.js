@@ -1,10 +1,15 @@
+var fs = require('node:fs');
+var path = require('node:path');
+
+var looksLike = require('../log/looks-like');
+
 //THE WINDOW IS NOT THE APP, and everything awkward in this file follows from
 //that. Closing it hides it, quitting goes through ../lifecycle, and the handle
 //is held here rather than in the reloadable half -- because a save rebuilds
 //that half, and a window rebuilt with it is a window that blinks out of
 //existence while somebody is reading it.
 
-plugin.consumes = ['app', 'http', 'lifecycle', 'bridge'];
+plugin.consumes = ['app', 'http', 'lifecycle', 'bridge', 'ipc'];
 plugin.provides = ['window'];
 async function plugin(imports, register, config) {
     var { app, http, lifecycle, bridge } = imports;
@@ -200,6 +205,46 @@ async function plugin(imports, register, config) {
         return gone;
     }
 
+    function markup() {
+        var page = bridge.markup();
+        if (!page) return null;
+
+        return looksLike.redact(page, 'durable');
+    }
+
+    //---- and one command, answered here rather than in the node half ------
+    //
+    //`capture` IS REGISTERED BY ./server.js AND DIES WITH IT. That is fine for a
+    //photograph -- a window worth photographing is usually one that is drawing.
+    //The markup is wanted in the opposite case: the page that failed to render,
+    //where the node half may be exactly what failed. So this one is main's.
+    //
+    //IT WRITES A FILE RATHER THAN ANSWERING WITH THE PAGE. A document is tens of
+    //kilobytes and the control socket is a line-delimited pipe carrying every
+    //other command; the path is the useful answer anyway.
+    var markupCommand = imports.ipc.handle('markup', function (data) {
+        var page = bridge.attached ? markup() : null;
+
+        if (!page) return { skipped: true, why: 'there is no window to read' };
+
+        //BESIDE THE SCREENSHOTS, NOT IN THE PROJECT ROOT.
+        //
+        //It defaulted to the root, and the first file it wrote there had this
+        //app's own demo secret in it -- one `git add -A` from being committed.
+        //`shots/` is already where captures of the screen go and is already
+        //ignored by git, which is the same decision made once rather than twice.
+        var where = (data && data.path) || path.join(app.root, 'shots', 'markup.html');
+
+        try {
+            fs.mkdirSync(path.dirname(where), { recursive: true });
+            fs.writeFileSync(where, page);
+        } catch (e) {
+            return { skipped: true, why: 'it could not be written: ' + ((e && e.message) || e) };
+        }
+
+        return { path: where, bytes: page.length, redacted: page.indexOf('[redacted]') >= 0 };
+    });
+
     await register(null, {
         window: {
             get isOpen() { return !!win; },
@@ -238,6 +283,33 @@ async function plugin(imports, register, config) {
             //window nothing can see leaves the callback unanswered forever
             //rather than erroring -- the timeout turns that hang into a
             //sentence somebody can act on.
+            //WHAT THE PAGE IS MADE OF, SCRUBBED ON THE WAY OUT.
+            //
+            //`capture` PHOTOGRAPHS AND THIS READS, and the pair is the point: a
+            //class that matches no rule is invisible in the picture and obvious
+            //here; a value drawn from the wrong field is the other way round.
+            //
+            //SCRUBBED, WHICH THE APP THIS CAME FROM DOES NOT DO. Its own header
+            //says so plainly -- "this is the one thing in the app that copies
+            //the whole screen to a file, and it scrubs nothing" -- and explains
+            //that what saves it is React setting `value` as a property while
+            //`outerHTML` serialises attributes. That is a property of React and
+            //not a rule anybody enforces, and it says nothing at all about text
+            //that is simply ON the page.
+            //
+            //IT SAYS NOTHING AT ALL ABOUT THIS APP. demo/pages/plumbing.js draws
+            //an opened secret in a badge -- visible text, not an attribute -- so
+            //the luck that covers a form field does not cover us. The `durable`
+            //rules from ../log/looks-like.js run over it, the same ones
+            //../events uses for a record kept for ever, and for the same reason:
+            //this is written to a file that gets attached to bug reports.
+            //
+            //AND THE REST IS STILL THE CALLER'S PROBLEM. Redaction catches what
+            //has a shape. A short, plain, secret string on the screen is in the
+            //file, and ./README.md says so rather than letting a scrub imply
+            //otherwise.
+            markup: markup,
+
             capture: function (options) {
                 options = options || {};
                 var format = options.format == 'jpeg' ? 'jpeg' : 'png';

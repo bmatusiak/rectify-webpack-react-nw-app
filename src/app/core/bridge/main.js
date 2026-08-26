@@ -349,6 +349,34 @@ async function plugin(imports, register) {
                 }
             },
 
+            //WHAT THE PAGE IS MADE OF, AT ONE MOMENT.
+            //
+            //A CLASS THAT MATCHES NO RULE IS INVISIBLE IN A PICTURE AND OBVIOUS
+            //IN THE MARKUP, and a value drawn from the wrong field is the other
+            //way round -- so a screenshot and this answer different halves of
+            //one question. css has no undefined-name error, which makes a
+            //misspelt class the quietest failure available here.
+            //
+            //FROM MAIN, LIKE `trouble`, and for the same reason: the page worth
+            //looking at is usually the one that failed to render, and every
+            //other way to read the dom is answered by a half that is gone by
+            //then. `capture` is registered by ../window/server.js and dies with
+            //the node half; this does not.
+            //
+            //IT IS NOT SCRUBBED HERE. What comes back is what is on the screen,
+            //and deciding what may be written to a file is the caller's -- see
+            //../window/main.js, which is where it becomes one.
+            markup: function () {
+                try {
+                    var frame = current && current.win && current.win.window;
+                    var doc = frame && frame.document;
+
+                    return doc && doc.documentElement ? doc.documentElement.outerHTML : null;
+                } catch (e) {
+                    return null;
+                }
+            },
+
             //WHETHER MAIN HAS A WINDOW AT ALL, which is a different question
             //from `connected` above: that one is about the page having a socket,
             //this one is about nw having handed us a window to inject into. A

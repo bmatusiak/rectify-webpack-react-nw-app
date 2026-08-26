@@ -4,7 +4,50 @@ The nw.js window. It is a view onto a server that outlives it.
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | `window` | `app`, `http`, `lifecycle`, `bridge` |
+| `main.js` | `window` | `app`, `http`, `lifecycle`, `bridge`, `ipc` |
+
+```sh
+node src/cli.js capture    # a picture of the window
+node src/cli.js markup     # what the page is made of
+```
+
+## the picture and the markup answer different halves of one question
+
+**A class that matches no rule is invisible in the picture and obvious in the
+markup**; a value drawn from the wrong field is the other way round. CSS has no
+undefined-name error, which makes a misspelt class the quietest failure
+available.
+
+**`markup` is answered by main and `capture` is not**, and that is deliberate.
+`capture`'s handler is in [`server.js`](server.js) and dies with the node half —
+fine for a photograph, since a window worth photographing is usually drawing.
+The markup is wanted in the opposite case: the page that failed to render, where
+the node half may be exactly what failed. Main is loaded once, off disk, and
+reads the page through [`bridge`](../bridge/).
+
+## it copies the screen to a file, and the scrub is not a guarantee
+
+The [`durable`](../log/looks-like.js) rules run over it on the way out — the same
+ones [`events`](../events/) uses for a record kept for ever, and for the same
+reason: this ends up attached to bug reports.
+
+**Redaction catches what has a shape.** A github token goes; a long random run
+goes; the tail of a URL goes. **A short, plain secret on the page does not.**
+
+That is not hypothetical here. [`demo/pages/plumbing.js`](../../demo/pages/) draws
+an *opened* secret in a badge — visible text, not an attribute — and
+`a-token-worth-keeping` survives the scrub because nothing about it looks like a
+credential. Measured, on a real capture.
+
+The app this came from does not scrub at all, and its own header is honest about
+why that has been survivable: React sets `value` as a **property** while
+`outerHTML` serialises **attributes**, so a typed-in value never reaches the
+file. That is a property of React rather than a rule anybody enforces, it stops
+being true for an uncontrolled input, and it says nothing whatever about text
+that is simply *on* the page.
+
+**So look at the file before sharing it.** The cli says so on every run rather
+than leaving it here.
 | `server.js` | `window` | `app`, `ipc`, `Plugin` |
 | `cli.js` | — | `cli`, `ipc` |
 

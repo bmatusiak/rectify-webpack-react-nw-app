@@ -12,6 +12,32 @@ plugin.provides = [];
 async function plugin(imports, register) {
     var { cli, ipc } = imports;
 
+    //THE OTHER HALF OF THE SAME QUESTION. A class that matches no rule is
+    //invisible in the picture and obvious here; a value drawn from the wrong
+    //field is the other way round.
+    //
+    //ANSWERED BY MAIN, unlike `capture` -- see ../window/main.js. The page worth
+    //reading is usually the one that failed to render, and the node half may be
+    //what failed.
+    cli.command('markup', {
+        help: 'save what the page is made of   [path]',
+        args: ['path'],
+        run: async function (data) {
+            var out = await ipc.call('markup', data.path ? { path: path.resolve(data.path) } : {}, 20000);
+
+            if (out.skipped) return console.log('nothing was read: ' + out.why);
+
+            console.log(out.path);
+            console.log('  ' + Math.round(out.bytes / 1024) + ' kb'
+                + (out.redacted ? ', and something in it was redacted' : ''));
+
+            //SAID EVERY TIME, NOT ONCE IN A README. This is a copy of the screen,
+            //and redaction only catches what has a shape -- see core/window's
+            //README. A short, plain secret on the page is in that file.
+            console.log('  it holds whatever was on the screen; look before sharing it');
+        }
+    });
+
     cli.command('capture', {
         help: 'save a picture of the window   [path] [png|jpeg]',
         args: ['path', 'format'],
