@@ -71,10 +71,15 @@ the app *it* was ported from, with no two agreeing — one rule taught separatel
 in three places. What that cost was **a github token the logger did not redact at
 all**, sitting in a log somebody was reading.
 
-**When [`core/secret`](../secret/) is ported, this file moves there** and `log`
-consumes it. That plugin is where a secret is kept, so it is where *what one
-looks like* belongs. Until then this is the one copy, and adding a second
-anywhere is that bug starting again.
+**It lives here, and it stays here.** The app this came from keeps it in a
+`secret` plugin — the thing that *seals* credentials on disk — which made sense
+there because that app has credentials to keep. This scaffold has none, and
+sealing presumes a threat model a scaffold has no basis to pick.
+
+What is generic is not the keeping, it is the **knowing**: anything that writes
+text down needs to recognise a credential in it, whether or not it has any of
+its own. Either way there is one copy, and adding a second anywhere is that bug
+starting again.
 
 **Narrow on purpose, and that is the hard part.** The blunt rules — anything long
 and random, the tail of every url — would redact commit hashes, base64 and ids,

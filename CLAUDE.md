@@ -305,6 +305,27 @@ regex to `require.context`. Which means:
 
 ## What goes in a plugin, and what does not
 
+**Two questions decide whether something belongs in `core/` at all**, and a
+plugin has to pass both. They are the filter for anything arriving from
+another app, and both have been failed here.
+
+**Is it a mechanism, or is it logic?** `secret` seals a value; deciding WHAT to
+seal is an app's business. `cron` runs things on a timer; deciding what to run
+is not. `state` keeps documents; what goes in them is not. The mechanism is
+generic and the thing built on it almost never is -- and the two arrive in one
+folder unless somebody separates them.
+
+**Does it work everywhere, or say honestly what it did?** A plugin may do less
+on a platform it cannot do more on -- `secret` seals with DPAPI on windows and
+falls back to file permissions elsewhere, and reports which of the two happened
+so a caller cannot assume the stronger one. What is not acceptable is a `core/`
+plugin that only works on one platform and refuses on the rest.
+
+`app_plugins/stt` failed both and was deleted the same day it was written:
+windows-only with nothing to degrade to, wrapped around a speech engine that
+was the whole feature. Nothing else broke when it went, which is the one good
+thing about failing the second test loudly.
+
 **A service is one idea.** Do not register something under a second name because that is
 how it happens to arrive. `appPackage` used to be registered by `io` -- in the window it
 comes over the socket, so it was convenient -- and the effect was that wanting the app's

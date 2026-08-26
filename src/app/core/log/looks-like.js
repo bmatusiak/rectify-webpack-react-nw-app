@@ -8,10 +8,19 @@
 //what it cost was a github token that the logger did not redact at all, sitting
 //in a log somebody was reading.
 //
-//THIS FILE MOVES WHEN core/secret ARRIVES. That plugin is the eventual home --
-//it is where a secret is kept, so it is where "what one looks like" belongs, and
-//../log will consume it rather than carry it. Until then this is the one copy,
-//and adding a second anywhere is the bug above starting again.
+//IT LIVES WITH THE LOG, because KNOWING and KEEPING are two jobs. The app this
+//came from files it under `secret` -- the thing that seals a value on disk -- and
+//that is a reasonable home too. But recognising a credential in text is needed by
+//anything that writes text down, whether or not it has any credentials of its
+//own, and this scaffold writes text down long before it keeps anything.
+//
+//IF A `secret` PLUGIN ARRIVES it consumes this rather than carrying a copy. The
+//sealing is generic on its own account -- what an app DOES with credentials is
+//not, and that is the line between a mechanism worth having and somebody else's
+//logic.
+//
+//Either way there is ONE copy, and adding a second anywhere is the bug above
+//starting again.
 //
 //NARROW ON PURPOSE, AND THAT IS THE HARD PART. The blunt rules -- anything long
 //and random, the tail of every url -- would redact commit hashes, base64 payloads
