@@ -15,7 +15,7 @@
 //each page is waited for twice: until it is the one on screen, and then until
 //it stops changing. Asserting in between measures a page that is half built.
 
-plugin.consumes = ['selftest', 'app'];
+plugin.consumes = ['selftest', 'app', 'io'];
 plugin.provides = [];
 function plugin(imports, register) {
     var { describe, it, assert } = imports.selftest;
@@ -179,6 +179,56 @@ function plugin(imports, register) {
             var root = document.getElementById('root');
             assert.ok(root, 'no #root');
             assert.ok(root.children.length > 0, 'react unmounted everything, which is what a page throwing does');
+        });
+
+        //THE PLUMBING PAGE IS THE FIRST THING IN THIS SCAFFOLD THAT USES the
+        //core plugins added for it -- dataDir, state, secret, log and cron. It
+        //reaches all five over the socket, because none of them exist in a
+        //window, and that round trip is the thing worth pinning: if any of them
+        //stops answering, the page draws its fallbacks and looks fine.
+        it('the plumbing page gets real answers from the node half', async function () {
+            var out = await new Promise(function (resolve) {
+                imports.io.emit('demo:plumbing', {}, resolve);
+            });
+
+            assert.ok(out, 'the node half said nothing at all');
+
+            //A PATH, NOT A DESCRIPTION OF ONE. The page shows these, so an empty
+            //string here is a screenshot teaching somebody the wrong folder.
+            assert.ok(out.dataDir && out.dataDir.path.length > 0, 'no data directory');
+            assert.ok(out.dataDir.from.length > 0, 'it does not say which name it came from');
+
+            assert.ok(out.state && out.state.where.indexOf(out.dataDir.path) === 0,
+                'state is not under the data directory: ' + (out.state && out.state.where));
+            assert.ok(out.secret && out.secret.where.indexOf(out.dataDir.path) === 0,
+                'secrets are not under the data directory');
+
+            assert.ok(out.cron && out.cron.beat > 0, 'the clock has no beat');
+            assert.ok(Array.isArray(out.cron.jobs), 'the jobs are not a list');
+            assert.ok(Array.isArray(out.handedOver), 'handover is not answering');
+            assert.ok(out.log && typeof out.log.kept === 'number', 'the log is not answering');
+        });
+
+        //THE REDACTION, END TO END. A token-shaped string really goes into the
+        //app's own log and what comes back is what everything else would see --
+        //which is the one claim in core/log that is worth checking from outside
+        //the plugin that makes it.
+        it('a credential sent to the log does not come back', async function () {
+            var token = 'ghp_' + new Array(37).join('B');
+
+            var out = await new Promise(function (resolve) {
+                imports.io.emit('demo:said', { say: 'probe cloning with ' + token }, resolve);
+            });
+
+            assert.ok(out && out.lines, 'the log said nothing');
+
+            var mine = out.lines.filter(function (one) {
+                return one.text.indexOf('probe cloning with') >= 0;
+            }).pop();
+
+            assert.ok(mine, 'the line never arrived');
+            assert.equal(mine.text.indexOf(token), -1, 'the token came back: ' + mine.text);
+            assert.ok(mine.text.indexOf('[redacted]') >= 0, mine.text);
         });
     });
 

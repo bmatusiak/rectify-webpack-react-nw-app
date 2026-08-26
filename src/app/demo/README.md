@@ -5,7 +5,7 @@ The example app. **Delete this folder and the app is the scaffold again.**
 | file | provides | consumes |
 |---|---|---|
 | `window.js` | — | `app`, `react`, `theme`, `appPackage`, `io`, `preferences`, `session`, `editor`, `markdown`, `xterm`, `litegraph`, `ext`, `banner`, `pages` |
-| `server.js` | — | `app`, `appPackage`, `tray`, `ipc`, `window` |
+| `server.js` | — | `app`, `appPackage`, `tray`, `ipc`, `window`, `dataDir`, `state`, `secret`, `log`, `cron` |
 | `cli.js` | — | `cli`, `ipc` |
 
 Provides nothing, in all three contexts. It exists to use what everything else
@@ -46,6 +46,7 @@ Seven are about the pieces:
 | **Data** | the service graph of both halves, searchable, sortable, paged |
 | **Overlays** | modals that return a value, an offcanvas from any of the four edges, toasts, tooltips, popovers, dropdowns that change the page |
 | **Disclosure** | tabs, accordions, collapse, and a carousel that runs itself |
+| **Plumbing** | what the node half keeps and where: the real `dataDir`, a document written and read back, a secret sealed and shown as ciphertext, the tagged log with a credential redacted in front of you, and the jobs the clock is turning |
 | **Layouts** | hero, features, stats, pricing and album. The pricing choice is remembered |
 
 Five are whole pages out of `bootstrap-5.3.8-examples`, each rebuilt so that

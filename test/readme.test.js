@@ -46,9 +46,15 @@ function declared(file, which) {
     const at = source.indexOf('plugin.' + which + ' = [');
     if (at < 0) return null;
     const close = source.indexOf(']', at);
-    const m = [null, source.slice(source.indexOf('[', at) + 1, close)];
-    if (!m) return null;
-    return m[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+    const inside = source.slice(source.indexOf('[', at) + 1, close);
+
+    //ONLY THE QUOTED NAMES, because a comment inside the list is legal js and
+    //splitting on commas turned one into a service called
+    //`//THE PLUGIN PAGE IS WHAT USES THESE` -- which then failed as a mismatch
+    //against the README, pointing at the wrong thing entirely.
+    return (inside.match(/'[^']*'|"[^"]*"/g) || [])
+        .map((one) => one.slice(1, -1).trim())
+        .filter(Boolean);
 }
 
 //one row: | `main.js` | `a`, `b` | `c` |  ->  ['main.js', ['a','b'], ['c']]

@@ -23,5 +23,10 @@ module.exports = [
     { id: 'editor', label: 'Editor', icon: 'file-earmark-code', Page: require('./editor') },
     { id: 'markdown', label: 'Markdown', icon: 'markdown', Page: require('./markdown') },
     { id: 'terminal', label: 'Terminal', icon: 'terminal', Page: require('./terminal') },
-    { id: 'graph', label: 'Graph', icon: 'diagram-3', Page: require('./graph') }
+    { id: 'graph', label: 'Graph', icon: 'diagram-3', Page: require('./graph') },
+
+    //what the node half keeps, and where -- core/dataDir, state, secret, log,
+    //cron and handover, all asked for over the socket because none of them are
+    //reachable from the page
+    { id: 'plumbing', label: 'Plumbing', icon: 'diagram-2', Page: require('./plumbing') }
 ];

@@ -7,7 +7,15 @@ var path = require('path');
 //hides the window somebody is looking at. A demo that cannot break is a demo
 //that cannot tell you the app is broken.
 
-plugin.consumes = ['app', 'appPackage', 'tray', 'ipc', 'window'];
+//THE PLUMBING PAGE IS WHAT USES THE LAST FIVE, and it is the first thing in the
+//scaffold that does. They live on the node side, so the page cannot reach them
+//itself -- it asks over the socket, the same way the System page asks for a pid.
+//
+//`handover` IS NOT AMONG THEM, and that is its own point: it has no server half.
+//What it carries arrives on the host as `of` and `handedOver`, which is exactly
+//how an app plugin reaches its own main half without core naming it.
+plugin.consumes = ['app', 'appPackage', 'tray', 'ipc', 'window',
+    'dataDir', 'state', 'secret', 'log', 'cron'];;
 plugin.provides = [];
 async function plugin(imports, register) {
     var { app, appPackage, tray, ipc, window: win } = imports;
@@ -83,6 +91,32 @@ async function plugin(imports, register) {
         return { file: file, missing: false, total: all.length, lines: all.slice(-(count || 200)) };
     }
 
+    //WHERE EVERYTHING THE NODE HALF KEEPS ACTUALLY LIVES, and what is in it.
+    //The paths are the app's real ones, not a description of them -- this page
+    //exists to be poked at, and a screenshot of invented paths would teach
+    //somebody the wrong folder.
+    function plumbing() {
+        var kept = [];
+        var secrets = [];
+
+        try { kept = imports.state.names(); } catch (e) { /* nothing kept yet */ }
+        try { secrets = imports.secret.names(); } catch (e) { /* nor sealed */ }
+
+        return {
+            dataDir: { path: imports.dataDir.path, from: imports.dataDir.from },
+            state: { where: imports.state.where, names: kept },
+            secret: { where: imports.secret.where, can: imports.secret.can, names: secrets },
+            cron: { beat: imports.cron.BEAT, jobs: imports.cron.list() },
+
+            //WHAT CORE IS CARRYING WITHOUT KNOWING WHAT IT IS. Empty is the
+            //honest answer in this scaffold, and showing it empty is the point:
+            //the container exists so an app plugin never has to edit core.
+            handedOver: imports.app.host.handedOver ? imports.app.host.handedOver() : [],
+
+            log: { tags: imports.log.tags(), kept: imports.log.all().length }
+        };
+    }
+
     //named rather than inline, so teardown can remove this one and leave the
     //io plugin's own connection handler where it is
     function onConnection(socket) {
@@ -90,6 +124,79 @@ async function plugin(imports, register) {
         socket.on('demo:services', function (data, ack) { if (ack) ack(services()); });
         socket.on('demo:graph', function (data, ack) { if (ack) ack(graph()); });
         socket.on('demo:log', function (data, ack) { if (ack) ack(log(data && data.count)); });
+
+        //---- the plumbing page ----------------------------------------
+        socket.on('demo:plumbing', function (data, ack) { if (ack) ack(plumbing()); });
+
+        socket.on('demo:kept', function (data, ack) {
+            if (!ack) return;
+
+            var doc = imports.state.doc('demo-notes');
+
+            if (data && data.write !== undefined) doc.write({ note: String(data.write) });
+            if (data && data.forget) doc.forget();
+
+            ack({ note: doc.read({ note: '' }).note, path: doc.path });
+        });
+
+        socket.on('demo:sealed', function (data, ack) {
+            if (!ack) return;
+
+            try {
+                if (data && data.forget) {
+                    imports.secret.forget('demo');
+                    return ack({ kept: false });
+                }
+
+                if (data && data.keep !== undefined) imports.secret.keep('demo', String(data.keep));
+
+                var names = imports.secret.names();
+                var kept = names.indexOf('demo') >= 0;
+
+                //WHAT IS ON DISK, READ BACK AS BYTES. The whole claim of
+                //core/secret is that this is not the value, so the page shows
+                //it rather than asserting it.
+                var onDisk = '';
+                if (kept) {
+                    onDisk = require('node:fs')
+                        .readFileSync(imports.secret.where + require('node:path').sep + 'demo.sealed', 'utf8')
+                        .slice(0, 60);
+                }
+
+                ack({
+                    kept: kept,
+                    can: imports.secret.can,
+                    sealed: kept && imports.secret.sealed('demo'),
+                    onDisk: onDisk,
+                    value: kept ? imports.secret.read('demo', '') : ''
+                });
+            } catch (e) {
+                ack({ error: (e && e.message) || String(e) });
+            }
+        });
+
+        socket.on('demo:said', function (data, ack) {
+            if (!ack) return;
+
+            if (data && data.say) imports.log.on('demo', 'plumbing').info(String(data.say));
+            ack({ lines: imports.log.since(Number((data && data.since) || 0)), tags: imports.log.tags() });
+        });
+
+        socket.on('demo:jobs', function (data, ack) {
+            if (!ack) return;
+
+            try {
+                if (data && data.start) imports.cron.start(data.start);
+                if (data && data.stop) imports.cron.stop(data.stop);
+                if (data && data.fire) return imports.cron.fire(data.fire)
+                    .then(function () { ack({ jobs: imports.cron.list() }); },
+                        function () { ack({ jobs: imports.cron.list() }); });
+
+                ack({ jobs: imports.cron.list() });
+            } catch (e) {
+                ack({ error: (e && e.message) || String(e) });
+            }
+        });
 
         socket.on('demo:hide', function (data, ack) { win.hide(); if (ack) ack({ ok: true }); });
         socket.on('demo:browser', function (data, ack) { win.openInBrowser(); if (ack) ack({ ok: true }); });
