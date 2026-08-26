@@ -29,6 +29,7 @@ var pkg = require('../package.json');
 var Config = require('./config');
 var gather = require('./gather');
 var serve = require('./serve');
+var profile = require('./profile');
 
 //the same folder scan src/main.js does off disk, done by webpack at build time.
 //
@@ -70,6 +71,10 @@ boot(plugins, {
     //"app": { "serve": true }, or --serve / --no-serve on the command
     //line, which wins. The tray can flip it while the app is running.
     serve: serve(pkg, nw.App.argv),
+    //WHICH SET OF DATA THIS RUN WORKS ON: null for the app's own, or a name
+    //from "app": { "profile" } or --profile=x. ./app/core/dataDir roots
+    //itself on it, and everything that keeps anything roots under that.
+    profile: profile(pkg, nw.App.argv),
     appPackage: {
         title: pkg.title || pkg.name,
         name: pkg.name,

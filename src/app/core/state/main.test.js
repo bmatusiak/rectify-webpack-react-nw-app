@@ -158,6 +158,196 @@ function plugin(imports, register) {
         });
     });
 
+    //THE SECOND DRAWER: the one that is about whatever the app has open.
+    //
+    //EVERY TEST HERE PUTS THE APP BACK. `follow` is one slot on the real
+    //service, so a suite that claims it and walks away leaves the running app
+    //believing a namespace is open that this test invented -- and the next
+    //thing to write something would put it there.
+    describe('the drawer for whatever is open', function () {
+
+        function following(name, fn) {
+            var undo = state.follow(function () { return name; });
+
+            try { return fn(); } finally {
+                //THE SWEEP MUST NOT THROW. One of these tests follows a
+                //namespace called `../escape` on purpose, and asking that for
+                //its directory is the refusal being tested -- thrown from a
+                //`finally`, it replaces the test's own result with a confusing
+                //one about cleaning up.
+                var dir = null;
+                try { dir = state.here.where; } catch (e) { /* not a name, so no directory */ }
+
+                swept(dir);
+                undo();
+            }
+        }
+
+        //THE DIRECTORY GOES TOO, NOT ONLY THE DOCUMENT.
+        //
+        //`forget()` unlinks a file and leaves the folder it was in, which is
+        //right -- a namespace with nothing in it is still a namespace. It is
+        //wrong for a suite: these run against the app's REAL data directory, and
+        //forty empty `probe-<pid>` folders had already collected in it before
+        //anybody looked. A run that leaves litter in the thing it is testing is
+        //a run that changed the app somebody is using.
+        function swept(dir) {
+            if (!dir || dir.indexOf('probe-') < 0) return;//never anything real
+            try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* gone already */ }
+        }
+
+        //NOTHING IS OPEN UNLESS SOMETHING SAYS SO. The scaffold itself never
+        //calls `follow`, so this is the state a plugin finds by default -- and
+        //it has to be a refusal rather than the app's own drawer.
+        it('refuses when nothing is following, rather than falling through', function () {
+            assert.equal(state.here.open, false);
+            assert.equal(state.here.where, null);
+
+            var refused = null;
+            try { state.here.doc('anything'); } catch (e) { refused = e.message; }
+
+            assert.ok(refused, 'it handed back a document with nowhere to put it');
+            assert.ok(refused.indexOf('state.doc') > 0,
+                'the refusal does not say where the other drawer is: ' + refused);
+        });
+
+        it('keeps a namespace apart from the drawer the app owns', function () {
+            var name = 'probe-' + process.pid;
+
+            following(name, function () {
+                assert.equal(state.here.open, true);
+                assert.equal(state.here.name, name);
+
+                try {
+                    state.here.doc('kept').write({ which: 'namespaced' });
+                    state.doc('kept').write({ which: 'the app' });
+
+                    //THE POINT OF THE WHOLE THING. Same document name, two
+                    //drawers, and neither answers the other's value.
+                    assert.equal(state.here.doc('kept').read({}).which, 'namespaced');
+                    assert.equal(state.doc('kept').read({}).which, 'the app');
+
+                    assert.ok(state.here.doc('kept').path !== state.doc('kept').path);
+                } finally {
+                    try { state.here.doc('kept').forget(); } catch (e) { /* never written */ }
+                    state.doc('kept').forget();
+                }
+            });
+        });
+
+        //RESOLVED ON EVERY CALL, WHICH IS WHAT MAKES A SWITCH AUTOMATIC. If the
+        //answer were read once at setup, the first namespace would keep
+        //answering after the app moved to the second -- and nothing would say.
+        it('follows a switch with nothing subscribing and nothing reloading', function () {
+            var open = 'probe-one-' + process.pid;
+            var undo = state.follow(function () { return open; });
+
+            try {
+                state.here.doc('where').write({ was: 'one' });
+
+                open = 'probe-two-' + process.pid;
+
+                //the same expression, a different drawer, no reload
+                assert.equal(state.here.doc('where').read({ was: 'nothing' }).was, 'nothing');
+                assert.equal(state.here.name, open);
+
+                state.here.doc('where').write({ was: 'two' });
+
+                open = 'probe-one-' + process.pid;
+                assert.equal(state.here.doc('where').read({}).was, 'one');
+            } finally {
+                try {
+                    open = 'probe-one-' + process.pid; state.here.doc('where').forget();
+                    open = 'probe-two-' + process.pid; state.here.doc('where').forget();
+                } catch (e) { /* never written */ }
+
+                open = 'probe-one-' + process.pid; swept(state.here.where);
+                open = 'probe-two-' + process.pid; swept(state.here.where);
+                undo();
+            }
+        });
+
+        //A DOCUMENT HELD ACROSS A SWITCH FOLLOWS IT, which is the half of
+        //"resolved on every call" that the test above cannot see: it asks for a
+        //fresh document each time, so it would pass against a document that
+        //remembered where it was. Its own sabotage found that -- closing the
+        //namespace over the document survived, because nothing here held one.
+        it('a document held across a switch follows it', function () {
+            var open = 'probe-held-one-' + process.pid;
+            var undo = state.follow(function () { return open; });
+
+            //asked for ONCE, before the switch
+            var held = state.here.doc('held');
+
+            try {
+                held.write({ was: 'one' });
+
+                open = 'probe-held-two-' + process.pid;
+
+                //the same object, and it must be about where we are NOW
+                assert.equal(held.read({ was: 'nothing' }).was, 'nothing',
+                    'the document is still answering about the namespace before last');
+
+                held.write({ was: 'two' });
+                assert.equal(state.here.doc('held').read({}).was, 'two');
+
+                open = 'probe-held-one-' + process.pid;
+                assert.equal(held.read({}).was, 'one');
+            } finally {
+                try {
+                    open = 'probe-held-one-' + process.pid; held.forget();
+                    open = 'probe-held-two-' + process.pid; held.forget();
+                } catch (e) { /* never written */ }
+
+                open = 'probe-held-one-' + process.pid; swept(state.here.where);
+                open = 'probe-held-two-' + process.pid; swept(state.here.where);
+                undo();
+            }
+        });
+
+        //A NAMESPACE THAT CANNOT BE DETERMINED IS NOT AN ABSENT ONE, but both
+        //mean there is nowhere to put anything -- and falling through to the
+        //app's drawer would be the contamination this exists to stop.
+        it('a follower that throws is nowhere, not the drawer the app owns', function () {
+            var undo = state.follow(function () { throw new Error('no idea'); });
+
+            try {
+                assert.equal(state.here.open, false);
+
+                var refused = null;
+                try { state.here.doc('anything'); } catch (e) { refused = e.message; }
+                assert.ok(refused, 'it answered a drawer for a namespace it could not name');
+            } finally { undo(); }
+        });
+
+        //ONE SLOT, NOT A LIST. Two things claiming to know where we are is the
+        //disagreement the whole idea is against.
+        it('the second follower replaces the first', function () {
+            var one = state.follow(function () { return 'probe-first'; });
+            var two = state.follow(function () { return 'probe-second'; });
+
+            try {
+                assert.equal(state.here.name, 'probe-second');
+
+                //and the FIRST one's undo must not take the second one off
+                one();
+                assert.equal(state.here.name, 'probe-second');
+            } finally { two(); }
+
+            assert.equal(state.here.open, false);
+        });
+
+        it('a namespace with a path in it is refused, and says to slug it', function () {
+            following('../escape', function () {
+                var refused = null;
+                try { state.here.doc('anything'); } catch (e) { refused = e.message; }
+
+                assert.ok(refused, 'a namespace called ../escape was accepted');
+                assert.ok(refused.indexOf('slug') > 0, refused);
+            });
+        });
+    });
+
     register();
 }
 module.exports = plugin;

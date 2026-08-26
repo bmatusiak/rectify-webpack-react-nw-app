@@ -15,7 +15,7 @@ var path = require('path');
 //What it carries arrives on the host as `of` and `handedOver`, which is exactly
 //how an app plugin reaches its own main half without core naming it.
 plugin.consumes = ['app', 'appPackage', 'tray', 'ipc', 'window',
-    'dataDir', 'state', 'secret', 'log', 'cron'];;
+    'dataDir', 'state', 'secret', 'log', 'cron'];
 plugin.provides = [];
 async function plugin(imports, register) {
     var { app, appPackage, tray, ipc, window: win } = imports;
@@ -103,8 +103,28 @@ async function plugin(imports, register) {
         try { secrets = imports.secret.names(); } catch (e) { /* nor sealed */ }
 
         return {
-            dataDir: { path: imports.dataDir.path, from: imports.dataDir.from },
-            state: { where: imports.state.where, names: kept },
+            dataDir: {
+                path: imports.dataDir.path,
+                from: imports.dataDir.from,
+                profile: imports.dataDir.profile,
+                root: imports.dataDir.root,
+                profiles: imports.dataDir.profiles()
+            },
+
+            state: {
+                where: imports.state.where,
+                names: kept,
+
+                //THE SECOND DRAWER, WHICH THE DEMO ITSELF OPENS AND CLOSES.
+                //Nothing else in this scaffold calls `state.follow`, so what is
+                //open here is whatever the Plumbing page last asked for.
+                here: {
+                    open: imports.state.here.open,
+                    name: imports.state.here.name,
+                    where: imports.state.here.where,
+                    names: imports.state.here.names()
+                }
+            },
             secret: { where: imports.secret.where, can: imports.secret.can, names: secrets },
             cron: { beat: imports.cron.BEAT, jobs: imports.cron.list() },
 
@@ -117,6 +137,19 @@ async function plugin(imports, register) {
         };
     }
 
+    //---- the demo is the app, so the demo is what knows where it is --------
+    //
+    //`state` NEVER LEARNS WHAT A NAMESPACE IS. It takes a function that answers
+    //"which one now", and this is that function -- see ../core/state. A real app
+    //would answer from whatever it calls a workspace; the demo answers from a
+    //variable two buttons set, which is the same shape and fits on a page.
+    //
+    //ONE SLOT FOR THE WHOLE APP, so claiming it is a decision rather than a
+    //detail: nothing else here follows, and a second plugin that did would take
+    //this one's place.
+    var working = null;
+    var unfollow = imports.state.follow(function () { return working; });
+
     //named rather than inline, so teardown can remove this one and leave the
     //io plugin's own connection handler where it is
     function onConnection(socket) {
@@ -127,6 +160,47 @@ async function plugin(imports, register) {
 
         //---- the plumbing page ----------------------------------------
         socket.on('demo:plumbing', function (data, ack) { if (ack) ack(plumbing()); });
+
+        //TWO DRAWERS, SHOWN BY WRITING THE SAME DOCUMENT NAME INTO BOTH. The
+        //page puts a note in whichever namespace is open and another in the
+        //app's own, and neither answers the other -- which is the whole of what
+        //`here` is for, and is easier to believe on screen than in a README.
+        socket.on('demo:namespace', function (data, ack) {
+            if (!ack) return;
+
+            var said = data || {};
+
+            //null CLOSES IT, and closing is a real state rather than a missing
+            //one: with nothing open, `here` refuses instead of falling back.
+            if (said.open !== undefined) working = said.open ? String(said.open) : null;
+
+            var failed = null;
+
+            try {
+                if (said.note !== undefined) imports.state.here.doc('demo-here').write({ note: String(said.note) });
+                if (said.forget) imports.state.here.doc('demo-here').forget();
+            } catch (e) {
+                //THE REFUSAL IS THE INTERESTING ANSWER, not an error to swallow:
+                //writing with nowhere to put it is exactly what a person will
+                //try first, and the sentence it comes back with is the lesson.
+                failed = e.message;
+            }
+
+            var note = null;
+            try { note = imports.state.here.doc('demo-here').read({ note: '' }).note; }
+            catch (e) { /* nothing is open, which the page already knows */ }
+
+            ack({
+                open: imports.state.here.open,
+                name: imports.state.here.name,
+                where: imports.state.here.where,
+                note: note,
+                failed: failed,
+
+                //the app's own, under the same document name, to stand beside it
+                appNote: imports.state.doc('demo-here').read({ note: '' }).note
+            });
+        });
 
         socket.on('demo:kept', function (data, ack) {
             if (!ack) return;
@@ -236,6 +310,12 @@ async function plugin(imports, register) {
         //this half is rebuilt on every save, so everything it put anywhere
         //comes back off first
         onDestroy: function () {
+            //THE CLAIM ON `state.follow` GOES BACK, or a reloaded server half
+            //leaves the old one still answering "which namespace" -- from a
+            //closure over a variable nothing can reach any more.
+            unfollow();
+            working = null;
+
             host.io.off('connection', onConnection);
             answered.remove();
             item.remove();

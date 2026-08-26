@@ -7,6 +7,8 @@
 | `main.js` | `state` | `dataDir` |
 | `server.js` | `state` | `app` |
 
+Plus `names.js`, which has no `provides`: what may become a file or a folder.
+
 ```js
 var kept = state.doc('viewer');
 
@@ -19,6 +21,80 @@ kept.forget();                 //stop existing, rather than become {}
 state.where     the directory
 state.names()   what documents are kept
 ```
+
+```js
+state.here.doc('tasks')   //the same, but about whatever the app has open
+state.here.open           //is there one at all
+state.here.name           //which, or null
+state.here.where          //its directory, or null
+
+state.follow(fn)          //the app says which namespace -> the undo
+state.slug(anything)      //a name a namespace may be called
+```
+
+## two drawers, and which one a thing goes in is the whole design
+
+| | |
+|---|---|
+| `state.doc(x)` | true whatever the app has open — its settings, the list of namespaces, **which one is open** |
+| `state.here.doc(x)` | about the one that is open, and out of view when a different one is |
+
+**Folding them together is not untidiness, it is contamination**: point the app
+at a second workspace and the first one's things are still there, answering,
+about something that is not in front of you.
+
+**`here` is nothing when nothing is open** — not a default drawer. A window about
+nowhere must not be shown the contents of somewhere, and a write with nowhere to
+go is *refused*, because "saved" and "there was nowhere to save it" are different
+answers. Ask `state.here.open` first if a caller can be in either position.
+
+## the app says where it is, and core never learns what a namespace is
+
+```js
+var undo = state.follow(function () { return whicheverIsOpen; });
+```
+
+**This cannot consume the plugin that knows.** *Which* namespace is open is
+itself a thing to keep, and one that must survive the switch — so it belongs in
+the app's own drawer, which is here. A plugin keeping it in `state` while `state`
+asked that plugin where we are would leave the two waiting on each other.
+
+So the direction is inverted: the app hands its answer in. Same shape as
+[`log`](../log/)'s `keeper`, which is the other place core takes a policy from
+outside rather than naming it.
+
+**One slot, not a list.** Two things claiming to know where we are is the
+disagreement this whole idea is against, so a second `follow` replaces the first.
+
+**Resolved on every call**, which is what makes a switch automatic: nothing
+subscribes, nothing reloads, and there is no moment where one part of the app is
+still answering about the namespace before last.
+
+## a namespace is a name, not a path
+
+It becomes a directory that everything the namespace keeps then lives inside, so
+it is refused rather than sanitised — a whole drawer escaping is worse than one
+document doing it.
+
+An app whose namespaces are folders calls `state.slug(path)` first, which is a
+readable part **and a sum over the whole string**. Two folders both called
+`website` on different disks is the ordinary case, and a slug of the last part
+alone would put both in one drawer — the contamination this exists to stop,
+arriving through the door meant to prevent it.
+
+`slug` is exposed rather than kept private because the alternative is every such
+app writing its own, and two of them would disagree about the hash — which shows
+up as a namespace losing everything it had, the day somebody refactored.
+
+## and it is not a profile
+
+| | changes | decided | what survives it |
+|---|---|---|---|
+| [**profile**](../dataDir/) | the **root** | once, at boot | nothing |
+| **namespace** | a **drawer** | at runtime, repeatedly | the app's own drawer |
+
+`--profile=test` is *leave my real data alone*. A namespace is *I have three of
+these open*. Neither is expressible as the other.
 
 ## the pair, and which half you want
 
@@ -67,17 +143,21 @@ Letters, digits and dashes. Quietly turning `../../etc/passwd` into `etcpasswd`
 would write a file somewhere surprising and say nothing; a name that is not a
 name is a caller bug, and it should be one at the call that made it.
 
-## what it deliberately does not have
+## why the second drawer is here, when it was not going to be
 
-**No scopes.** The app this came from has a second drawer — state about whichever
-workspace is currently open — and a rule that folding the two together is not
-untidiness but **contamination**: point the app at a second workspace and the
-first one's tasks are still there, answering, about things that are not in front
-of you.
+This README used to say **no scopes**, on the grounds that a scaffold with no
+concept of a workspace would be shipping a hole — a second drawer with nothing
+to put in it, and an app that needed one could add it on top.
 
-That is a real and hard-won lesson about a concept this scaffold does not have.
-Shipping an empty second drawer would be shipping a hole. An app that needs one
-adds it on top of this.
+**The hole was in the other direction.** `state`, [`secret`](../secret/), and
+everything else that keeps anything all root under [`dataDir`](../dataDir/), so
+an app adding namespacing "on top of this" would have had to add it to each of
+them separately. Four plugins, four notions of *where am I*, and nothing holding
+them in step — which is the same argument that put the directory itself in one
+plugin rather than in the three that wanted it.
+
+So core carries the mechanism and knows nothing about what a namespace *is*.
+`follow` is the whole of the app's side of it.
 
 ## it does not work out where it lives
 

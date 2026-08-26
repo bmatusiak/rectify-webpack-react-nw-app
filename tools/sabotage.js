@@ -119,9 +119,39 @@ function settled(what) {
     console.error('  gave up waiting for ' + what + ' to rebuild')
 }
 
+// SOME FILES THE APP ONLY READS ONCE, AND WAITING FOR THEM IS WAITING FOR
+// NOTHING.
+//
+// `settled` waits for a bundle's mtime to move, which is right for anything
+// webpack rebuilds. It is meaningless for the two other kinds:
+//
+//   a main.js plugin   read off disk by the boot and never again, so the
+//                      running app is still holding the copy from before the
+//                      edit. Four core/state sabotages "survived" against an
+//                      app that had never seen them.
+//   a window.js file   measured: NOTHING on disk changes when the window bundle
+//                      rebuilds -- webpack-dev-server serves it from memory and
+//                      only dist/server.js is ever written.
+//
+// So an entry may say `restart: true` and get the one event that covers both:
+// the app started again, with whatever is on disk now. It costs about four
+// seconds, which is why it is asked for by name rather than always done.
+function restarted () {
+  const out = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'restart.js')], {
+    cwd: ROOT, encoding: 'utf8', timeout: 120000
+  })
+
+  // NOT FATAL, AND NOT SILENT. A restart that failed means the check is about
+  // to run against whatever is or is not there, and the result is worth
+  // distrusting rather than believing -- so say so and let it run.
+  if (out.status !== 0) {
+    console.error('  the app did not restart, so this result is about an app that may not have the change')
+  }
+}
+
 // Runs the command with the file broken and puts it back whatever happens.
 // Answers true when the check NOTICED, which is the outcome being looked for.
-function tried(target, find, replace, command, wait, loud, limit) {
+function tried(target, find, replace, command, wait, loud, limit, restart) {
     limit = limit || 90000
     let hung = false
 
@@ -160,6 +190,7 @@ function tried(target, find, replace, command, wait, loud, limit) {
         noting(target, backup, () => {
             fs.writeFileSync(target, broken)
             settled(wait)
+            if (restart) restarted()
 
             //A CHECK THAT HANGS IS NOT A CHECK THAT PASSED, and it must not
             //take the run with it. A sabotage can easily produce a promise that
@@ -180,6 +211,11 @@ function tried(target, find, replace, command, wait, loud, limit) {
         restore()
         signals.forEach((signal) => process.removeListener(signal, bail))
         settled(wait)
+
+        //AND AGAIN AFTERWARDS, or every later entry runs against an app still
+        //holding the broken copy -- which reports them all as caught, by the
+        //sabotage before them.
+        if (restart) restarted()
     }
 
     return { caught: status !== 0, hung: hung }
@@ -251,7 +287,7 @@ function registry(only) {
             let outcome
             try {
                 outcome = tried(target, entry.find, entry.replace,
-                    ['node', 'tools/test.js', check], entry.wait, false, entry.limit)
+                    ['node', 'tools/test.js', check], entry.wait, false, entry.limit, entry.restart)
             } catch (e) {
                 console.log('  ✖ ' + one.name + '  ' + entry.what)
                 console.log('      ' + String(e.message).split('\n').join('\n      '))

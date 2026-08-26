@@ -23,6 +23,8 @@ module.exports = function Plumbing(props) {
     var [secret, setSecret] = useState(null);
     var [said, setSaid] = useState({ lines: [], tags: [] });
     var [jobs, setJobs] = useState([]);
+    var [ns, setNs] = useState(null);
+    var [inHere, setInHere] = useState('');
 
     var ask = useCallback(function (what, data) {
         return new Promise(function (resolve) { io.emit(what, data || {}, resolve); });
@@ -33,6 +35,7 @@ module.exports = function Plumbing(props) {
         setKept(await ask('demo:kept'));
         setSecret(await ask('demo:sealed'));
         setJobs((await ask('demo:jobs')).jobs || []);
+        setNs(await ask('demo:namespace'));
     }, [ask]);
 
     useEffect(function () { refresh(); }, [refresh]);
@@ -72,6 +75,19 @@ module.exports = function Plumbing(props) {
                     <Table small responsive head={['what', 'where']}>
                         <tr><td className="fw-semibold">dataDir</td><td><code>{where.dataDir.path}</code></td></tr>
                         <tr><td className="fw-semibold">derived from</td><td><code>{where.dataDir.from}</code></td></tr>
+                        <tr>
+                            <td className="fw-semibold">profile</td>
+                            <td>{where.dataDir.profile
+                                ? <><code>{where.dataDir.profile}</code>{' '}
+                                    <span className="text-body-secondary">
+                                        &mdash; the app&rsquo;s own is <code>{where.dataDir.root}</code></span></>
+                                : <span className="text-body-secondary">
+                                    none, so this is the app&rsquo;s own directory
+                                    {where.dataDir.profiles.length
+                                        ? <> &mdash; others that exist: {where.dataDir.profiles.join(', ')}</>
+                                        : null}
+                                </span>}</td>
+                        </tr>
                         <tr><td className="fw-semibold">state</td><td><code>{where.state.where}</code></td></tr>
                         <tr><td className="fw-semibold">secret</td><td><code>{where.secret.where}</code></td></tr>
                     </Table>
@@ -116,6 +132,84 @@ module.exports = function Plumbing(props) {
                             : <>Nothing kept, so reading it answers the fallback — which is not the same as an empty document.</>}
                     </p>
                 ) : null}
+            </Section>
+
+            <Section title="Kept apart from everything else kept"
+                lead="core/state's second drawer -- the one about whatever the app has open.">
+
+                <p className="text-body-secondary">
+                    A <strong>profile</strong> moves the root: everything above moves with it,
+                    decided once at boot. A <strong>namespace</strong> moves one drawer while the
+                    app runs, and the things that must survive the switch stay where they are.
+                    Neither is expressible as the other.
+                </p>
+
+                <div className="d-flex flex-wrap gap-2 mb-3">
+                    {['alpha', 'beta'].map(function (one) {
+                        return (
+                            <Button key={one} icon="folder2-open"
+                                variant={ns && ns.name === one ? 'primary' : 'secondary'}
+                                outline={!(ns && ns.name === one)}
+                                onClick={async function () { setNs(await ask('demo:namespace', { open: one })); }}>
+                                Work on {one}
+                            </Button>
+                        );
+                    })}
+
+                    <Button outline variant="secondary" icon="x-lg"
+                        disabled={!(ns && ns.open)}
+                        onClick={async function () { setNs(await ask('demo:namespace', { open: null })); }}>
+                        Close it
+                    </Button>
+                </div>
+
+                <div className="row g-3 align-items-end">
+                    <div className="col-sm-8">
+                        <Input id="plumbing-here" label="A note about whatever is open"
+                            value={inHere} onChange={function (e) { setInHere(e.target.value); }}
+                            placeholder={(ns && ns.note) || 'nothing kept in this one'} />
+                    </div>
+                    <div className="col-sm-4">
+                        <Button variant="primary" icon="save" onClick={async function () {
+                            var out = await ask('demo:namespace', { note: inHere });
+
+                            setNs(out);
+                            if (toast && out.failed) toast(out.failed, 'warning', 'exclamation-triangle');
+                        }}>Keep it here</Button>
+                    </div>
+                </div>
+
+                {/* THE REFUSAL IS THE LESSON, so it is shown rather than swallowed.
+                    Writing with nowhere to put it is the first thing anybody tries. */}
+                {ns && ns.failed
+                    ? <Alert variant="warning" className="mt-3 mb-0">{ns.failed}</Alert>
+                    : null}
+
+                {ns ? (
+                    <Table small responsive className="mt-3" head={['drawer', 'holding', 'where']}>
+                        <tr>
+                            <td className="fw-semibold">
+                                state.here <Badge variant={ns.open ? 'primary' : 'secondary'}>
+                                    {ns.open ? ns.name : 'nothing open'}</Badge>
+                            </td>
+                            <td>{ns.note ? <code>{ns.note}</code> : <span className="text-body-secondary">&mdash;</span>}</td>
+                            <td>{ns.where
+                                ? <code>{ns.where}</code>
+                                : <span className="text-body-secondary">nowhere, which is not the same as empty</span>}</td>
+                        </tr>
+                        <tr>
+                            <td className="fw-semibold">state.doc</td>
+                            <td>{ns.appNote ? <code>{ns.appNote}</code> : <span className="text-body-secondary">&mdash;</span>}</td>
+                            <td className="text-body-secondary">the app&rsquo;s own, whatever is open</td>
+                        </tr>
+                    </Table>
+                ) : null}
+
+                <p className="text-body-secondary small mt-3 mb-0">
+                    Both rows are the same document name. Switch between <code>alpha</code> and
+                    <code>beta</code> and the top row changes while the bottom one does not &mdash;
+                    which is the whole of it.
+                </p>
             </Section>
 
             <Section title="Kept so the file is not enough"

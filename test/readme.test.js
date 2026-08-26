@@ -16,20 +16,35 @@ const path = require('path');
 const ROOTS = require('../src/roots').map((name) => path.join(__dirname, '..', 'src', name));
 const CONTEXTS = ['main', 'server', 'window', 'cli'];
 
-//the same two levels the boots walk
+//A FOLDER THIS WALK IGNORES MUST NOT BE TOUCHED ON DISK FIRST.
+//
+//This used to `statSync` every entry and check the name afterwards, which made
+//it fail intermittently in a way that read like a bug in this file: node runs
+//test FILES concurrently, and plugin-scan.test.js proves the underscore rule by
+//creating `src/app/_parked`, asserting, and removing it. This walk could list
+//src/app while it existed and stat it after it was gone -- `ENOENT: stat
+//.../src/app/_parked`, thrown from a line about READMEs, in a run where nobody
+//had edited anything.
+//
+//`withFileTypes` ANSWERS THE TYPE FROM THE LISTING ITSELF, so there is no second
+//syscall to lose the race with -- and the name is checked before anything else,
+//so a parked folder is skipped without the disk being asked about it at all.
+//requires.test.js carries the same scar and the long version of the story.
 function plugins() {
     const found = [];
-    for (const root of ROOTS) for (const name of fs.readdirSync(root)) {
-        const dir = path.join(root, name);
-        if (!fs.statSync(dir).isDirectory()) continue;
+    for (const root of ROOTS) for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        const name = entry.name;
         if (name.charAt(0) == '_' || name.charAt(0) == '.' || name == 'vendor') continue;
+        if (!entry.isDirectory()) continue;
 
+        const dir = path.join(root, name);
         if (contexts(dir).length) { found.push(dir); continue; }
 
-        for (const inner of fs.readdirSync(dir)) {
-            const sub = path.join(dir, inner);
-            if (!fs.statSync(sub).isDirectory()) continue;
-            if (inner.charAt(0) == '_' || inner.charAt(0) == '.' || inner == 'vendor') continue;
+        for (const inner of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (inner.name.charAt(0) == '_' || inner.name.charAt(0) == '.' || inner.name == 'vendor') continue;
+            if (!inner.isDirectory()) continue;
+
+            const sub = path.join(dir, inner.name);
             if (contexts(sub).length) found.push(sub);
         }
     }

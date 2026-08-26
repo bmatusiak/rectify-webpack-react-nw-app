@@ -30,7 +30,31 @@ async function plugin(imports, register) {
         state: {
             doc: noAnswer,
             names: noAnswer,
-            get where() { return noAnswer(); }
+            get where() { return noAnswer(); },
+
+            //`follow` REFUSES RATHER THAN ACCEPTING AND FORGETTING, which is the
+            //tempting one: taking the function and dropping it would let a
+            //plugin register its answer and never be asked, so every namespaced
+            //write would land in a drawer nobody chose and nothing would say so.
+            follow: noAnswer,
+
+            //`slug` IS THE ONE THING THAT STILL WORKS, because it is arithmetic
+            //rather than a drawer -- a caller that only wants a folder name from
+            //a path has asked a question this half can answer honestly.
+            slug: require('./names').slug,
+
+            here: {
+                doc: noAnswer,
+                names: noAnswer,
+
+                //FALSE, NOT A REFUSAL. "Is a namespace open" has a true answer
+                //here and it is no -- this half has no way to be in one. A
+                //caller asking before it decides gets to decide, which is the
+                //whole point of the question existing.
+                get open() { return false; },
+                get name() { return null; },
+                get where() { return null; }
+            }
         }
     });
 }

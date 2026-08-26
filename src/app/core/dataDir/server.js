@@ -25,14 +25,21 @@ async function plugin(imports, register) {
 
     //THE WHOLE SURFACE, NOT JUST `at`.
     //
-    //./main.js publishes `path`, `from`, `at` and `ensure`. A stand-in narrower
-    //than the thing it stands in for answers `undefined` where it meant to
-    //refuse -- `path.join(undefined, 'x')` throws a TypeError about an argument,
-    //from a line that looks like it is about a file, and the sentence below
-    //never gets said.
+    //./main.js publishes `path`, `from`, `profile`, `root`, `profiles`, `at`
+    //and `ensure`. A stand-in narrower than the thing it stands in for answers
+    //`undefined` where it meant to refuse -- `path.join(undefined, 'x')` throws
+    //a TypeError about an argument, from a line that looks like it is about a
+    //file, and the sentence below never gets said.
     //
-    //GETTERS, because `path` and `from` are values on the real one and have to
-    //stay values here. Reading either throws what calling `at()` throws.
+    //GETTERS, because `path`, `from`, `profile` and `root` are values on the
+    //real one and have to stay values here. Reading any of them throws what
+    //calling `at()` throws.
+    //
+    //`profile` REFUSES RATHER THAN ANSWERING null, and it is the one that would
+    //be tempting to soften: null is a real answer on the main side, meaning the
+    //app's own directory. Saying it here would tell a caller "no profile" when
+    //the truth is "this half cannot know", and those are different enough that
+    //one of them belongs in a screen and the other in a bug report.
     function noAnswer() {
         throw new Error(
             'This process has no data directory -- there is no main half behind it, and the one ' +
@@ -44,8 +51,11 @@ async function plugin(imports, register) {
         dataDir: {
             at: noAnswer,
             ensure: noAnswer,
+            profiles: noAnswer,
             get path() { return noAnswer(); },
-            get from() { return noAnswer(); }
+            get from() { return noAnswer(); },
+            get profile() { return noAnswer(); },
+            get root() { return noAnswer(); }
         }
     });
 }

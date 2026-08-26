@@ -15,9 +15,62 @@ dataDir.ensure(...parts)  the same, and the directory exists afterwards
 ```
 
 ```
+dataDir.profile         which set of data this run works on, or null
+dataDir.root            the app's directory whatever profile is on
+dataDir.profiles()      what sets of data exist
+```
+
+```
 windows     %LOCALAPPDATA%\<name>\
 elsewhere   ~/.config/<name>/
 ```
+
+## a profile gives a run its own world
+
+```sh
+npm start -- --profile=test    # leave my real data alone
+npm start -- --no-profile      # the app's own, whatever the manifest says
+```
+
+`"app": { "profile": "demo" }` in `package.json` is the other way to say it, and
+the flag wins — the same shape as [`serve`](../../../serve.js), for the same
+reason. [`src/profile.js`](../../../profile.js) decides it.
+
+**Everything follows without one plugin knowing the feature exists**, because
+[`state`](../state/), [`secret`](../secret/) and anything else that keeps
+something all root under this. Moving this moves them.
+
+| | |
+|---|---|
+| no profile | `%LOCALAPPDATA%\<name>\` — exactly where it always was |
+| `--profile=test` | `%LOCALAPPDATA%\<name>\.profiles\test\` |
+
+**The default does not move**, which is the difference between a feature and a
+migration: adding profiles relocated nothing that was already on disk.
+
+The container is dot-prefixed so it cannot collide with a drawer an app asks for
+by name — `dataDir.at('profiles')` is a perfectly reasonable thing to want.
+
+**A name that is not a name stops the launch.** [`serve`](../../../serve.js)
+complains and falls back, because the cost of getting that wrong is a port
+nobody wanted. Here the cost is that the run which *asked* to be kept apart
+writes into the real data instead — so a mistyped `--profile` refuses rather
+than quietly becoming *no profile*.
+
+## a profile is not a namespace
+
+They get confused because both are "keeping things apart", and building one when
+you wanted the other is expensive to undo.
+
+| | changes | decided | what survives it |
+|---|---|---|---|
+| **profile** | the **root** | once, at boot | nothing — that is the point |
+| **namespace** | a **drawer** | at runtime, repeatedly | the list of them, and which is open |
+
+A process cannot be halfway between two data directories, which is why a profile
+is settled before anything opens. A namespace has to be switchable while the app
+runs, and the things that must survive the switch cannot live inside it — see
+[`state`](../state/)'s `here`.
 
 ## renaming the app moves its data, silently
 
