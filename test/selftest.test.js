@@ -49,12 +49,22 @@ test('the plugins, tested inside the app', { timeout: TIMEOUT }, async (t) => {
 
     const wasRunning = await ipc.running();
 
-    if (!wasRunning) {
-        assert.ok(selftest.start([]), 'the app did not start');
+    if (!wasRunning) assert.ok(selftest.start([]), 'the app did not start');
 
-        const views = await selftest.waitForView(ipc);
-        assert.ok(views.views.length > 0, 'the window never connected');
-    }
+    //WAITED FOR WHETHER OR NOT WE STARTED IT, and that is the change.
+    //
+    //It waited only when it had started the app, on the reasoning that an app
+    //somebody else started is already up. It is not: a restart takes seconds to
+    //put a window back, and asking in that gap found no window connected.
+    //
+    //THAT USED TO BE A SKIP AND IS NOW A FAILURE -- see core/selftest/main.js,
+    //where "no window is connected" stopped being reported as a fact about how
+    //the app was started. Which is right, and makes waiting here necessary
+    //rather than polite: without it, `tools/test.js core/remember/window`
+    //against an app that is still opening its window reports a hard failure
+    //about nothing at all.
+    const views = await selftest.waitForView(ipc);
+    assert.ok(views.views.length > 0, 'the window never connected');
 
     const out = await ipc.call('selftest', {
         contexts: CONTEXTS.length ? CONTEXTS.filter((c) => c !== 'cli') : null,

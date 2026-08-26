@@ -46,34 +46,30 @@ module.exports = [
         replace: '            return true;\n        }'
     },
 
-    //---- and one that is NOT here, which is the finding ---------------------
+    //---- and the one that needed the tool to grow a verb ------------------
     //
     //`window.js` builds the service on `preferences`, and swapping that for
-    //`session` is the fault worth catching: the body would ask for a store its
-    //consumes list never took, get undefined, and every write would quietly
-    //return false -- an app that works all day and has forgotten everything by
-    //morning. ./window.test.js DOES catch it. It is not in the list because
-    //../../../../tools/sabotage.js cannot sequence it, and that is a tooling
-    //gap rather than a hole in the test.
+    //`session` is the fault worth catching: the body asks for a store its
+    //consumes list never took, gets undefined, and every write quietly returns
+    //false. An app that works all day and has forgotten everything by morning.
     //
-    //MEASURED, THREE WAYS:
+    //IT WAS LEFT OUT, WITH THE MEASUREMENTS, because nothing could sequence it.
+    //Every other in-app sabotage here waits on a bundle's mtime, and there is no
+    //such file for a window: measured directly, NOTHING on disk changes when the
+    //window bundle rebuilds -- webpack-dev-server serves it from memory and only
+    //`dist/server.js` is ever written. Waiting on `dist/window.js` spent two
+    //minutes on a file that never appears and then proceeded anyway.
     //
-    //  break it and check at once      the check passes -- the window has not
-    //                                  rebuilt yet, so it tests the old bundle
-    //  break it, wait 8s, check        CAUGHT, on a real assertion
-    //  wait on `dist/window.js`        two minutes of waiting for a file that
-    //                                  never appears, then proceeds anyway
-    //
-    //THERE IS NOTHING ON DISK TO WAIT FOR. Measured directly: touch a window
-    //file, wait four seconds, and not one mtime under dist/ has moved.
-    //webpack-dev-server serves the window bundle out of memory and only
-    //`dist/server.js` is ever written -- so the `wait` that every other in-app
-    //sabotage here relies on has no target in a window, and a fixed sleep is
-    //the thing this repo does not do.
-    //
-    //WHAT WOULD CLOSE IT: ../build/main.js hands the window compiler straight
-    //to devMiddleware and announces nothing, while the server half prints
-    //`server bundle built in Nms`. A `done` hook logging the same for the
-    //window would give the tool an EVENT to wait on -- ../log already answers
-    //`since` -- and every future window-context sabotage would get it for free.
+    //`restart: true` IS THE ANSWER, and it arrived for a different reason: four
+    //core/state sabotages reported as surviving against an app that had never
+    //seen them, because a main.js is read off disk by the boot and never again.
+    //A restart is the one event that covers both.
+    {
+        what: 'the body asks for a store its consumes list never took',
+        file: 'window.js',
+        check: 'core/remember/window',
+        restart: true,
+        find: 'Remembering(imports.preferences,',
+        replace: 'Remembering(imports.session,'
+    }
 ];

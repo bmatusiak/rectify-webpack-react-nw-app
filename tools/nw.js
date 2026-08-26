@@ -8,7 +8,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { spawn } = require('node:child_process')
+const { spawn, execFileSync } = require('node:child_process')
 const net = require('node:net')
 const viewer = require('./log')
 
@@ -335,9 +335,65 @@ function answering () {
 // What this run put in the log, minus chromium talking about itself. The
 // filtering and the unwrapping live in ./log.js, which `npm run log` is, so
 // there is one idea of what a line of this file means rather than two.
+// THE ONE FAILURE THE LOG DESCRIBES AND DOES NOT EXPLAIN.
+//
+// chromium keeps a lock on its user-data directory, and nw picks that directory
+// from the package name -- so a second launch of the SAME app hands off to the
+// first and exits, printing one line:
+//
+//     Opening in existing browser session.
+//
+// Which is correct, and useless, when the first one is wedged. That state is
+// reachable: a boot that dies after nw has the profile but before
+// core/lifecycle writes .nw-instance.json leaves a process holding the lock and
+// answering nothing. `npm run stop` then says "nothing to stop" -- it reads the
+// instance file -- and every launch after that quietly hands off to the corpse.
+//
+// IT COST TWO SESSIONS BEFORE ANYTHING SAID SO. The log said the app was
+// opening; the app was not there; the two facts never met.
+//
+// IT SAYS WHICH PROCESS AND DOES NOT KILL IT. Something has to be running for
+// the lock to be held, and this cannot tell a wedged app from one somebody is
+// using -- `nw`, `node` and `electron` all belong to more than one thing on a
+// developer's machine, and taking the wrong one down is how an unrelated
+// project was lost during this scaffold's own development.
+//
+// THE PROCESS LOOKUP IS ./held.js, WITH A TEST. It parses a process listing, and
+// a listing parsed slightly wrong names the wrong pid -- which somebody is then
+// going to end. That is not a thing to leave unchecked inside a launcher.
+const HANDOFF = 'Opening in existing browser session'
+const held = require('./held')
+
 function explain (from) {
   let fresh = ''
   try { fresh = fs.readFileSync(LOG_FILE, 'utf8').slice(from) } catch (err) { return }
+
+  if (fresh.indexOf(HANDOFF) >= 0) {
+    console.error('')
+    console.error('  nw handed this launch to an app that is already holding the profile directory,')
+    console.error('  and then exited -- that is what "' + HANDOFF + '" means.')
+    console.error('')
+    console.error('  There is no .nw-instance.json, so that app is not answering its control socket:')
+    console.error('  it is wedged rather than running, and npm run stop cannot see it.')
+
+    const mine = held()
+
+    if (mine.length) {
+      console.error('')
+      console.error('  nw processes started out of this project: ' + mine.map(one => one.pid).join(', '))
+      console.error('  look at one before ending it, and end only that pid:')
+      console.error('')
+      console.error('    ' + held.howToCheck(mine[0].pid))
+      console.error('    ' + held.howToEnd(mine[0].pid))
+    } else {
+      console.error('')
+      console.error('  no nw process under this project is visible, so whatever holds the profile')
+      console.error('  is not one of ours -- another checkout of this app, perhaps.')
+    }
+
+    console.error('')
+    return
+  }
 
   const found = viewer.lines(fresh)
 

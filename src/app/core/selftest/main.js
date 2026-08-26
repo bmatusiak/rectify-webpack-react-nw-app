@@ -62,7 +62,30 @@ async function plugin(imports, register) {
 
     function fromWindow(timeout, only) {
         var socket = page();
-        if (!socket) return Promise.resolve(absent('window', 'no window is connected'));
+
+        //NO WINDOW IS A FAILURE, NOT AN ABSENCE, and that distinction is the
+        //one this file is about.
+        //
+        //`missing` is meant for a fact about how the app was STARTED -- a
+        //packaged build has no test plugins, so 'not asked for' is honest and a
+        //skip is right. A window that is not connected is a fact about the app
+        //being broken NOW, and reporting it the same way meant:
+        //
+        //    node tools/test.js core/remember/window
+        //    ✔ the plugins, tested inside the app
+        //    pass 1, fail 0
+        //
+        //against an app whose window had gone -- zero window suites run, and a
+        //green run saying so. That is the shape this whole file exists to
+        //prevent, arriving through the door left open for the packaged case.
+        //
+        //`stuck` IS ALREADY THE WORD FOR IT: a context that had something to run
+        //and did not. A window that should be there and is not had all of it.
+        if (!socket) {
+            return Promise.resolve(absent('window',
+                'no window is connected, so nothing in it could be run -- '
+                + 'ask `node src/cli.js health` what main can still see', true));
+        }
 
         return new Promise(function (resolve) {
             var timer = setTimeout(function () {
