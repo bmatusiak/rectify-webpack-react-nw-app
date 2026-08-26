@@ -4,10 +4,10 @@
 //reach it — a `require('webpack')` in an unreachable function is still bundled,
 //and dragging webpack into a packaged app is exactly what this avoids.
 
-plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge', 'dataDir', 'log'];
+plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge', 'dataDir', 'log', 'handover'];
 plugin.provides = ['build'];
 async function plugin(imports, register) {
-    var { app, http, io, window: win, tray, ipc, lifecycle } = imports;
+    var { app, http, io, window: win, tray, ipc, lifecycle, handover } = imports;
 
     //what the node half is handed. the window and the tray are passed as
     //controllers rather than objects, because they outlive the bundle.
@@ -47,6 +47,15 @@ async function plugin(imports, register) {
         //kept since the app started, rather than one that empties on every
         //save -- see ../log/main.js.
         log: imports.log,
+
+        //EVERYTHING ELSE, WITHOUT THIS FILE LEARNING ITS NAME. The list above
+        //is core naming core, which is fine -- but an app plugin with something
+        //to keep across a reload must not have to add itself to it. Core would
+        //learn that an app service exists, and the plugin would stop being
+        //liftable. See ../handover/main.js: plugins put their own things in and
+        //this carries the box without opening it.
+        of: handover.get,
+        handedOver: handover.names,
 
         window: {
             get url() { return http.url; },
