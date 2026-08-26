@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```sh
 npm start        # nw, development: main off disk, server and window bundled and reloaded
+npm run check    # does it compile, nothing else -- 3s, needs no app
 npm run stop     # close it, and WAIT until it is actually closed
 npm run restart  # that, then start it again -- takes nw.js's flags
 npm run cli      # a terminal talking to a running app
@@ -84,6 +85,7 @@ Measured on this machine, warm, with the app already running:
 
 | command | takes | the line that says it is over |
 |---|---|---|
+| `npm run check` | 3s | `compiles, in 3.0s`, or `N problems` |
 | `npm run docs` | under 1s | `nothing to say`, or `N findings` |
 | `npm run drive` | 9s | `N checks passed`, or `N failed, M passed` |
 | `npm test` | 15s | `ℹ fail 0` |
