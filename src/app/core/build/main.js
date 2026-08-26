@@ -213,7 +213,17 @@ async function plugin(imports, register) {
             queue = queue.then(function () {
                 return load().then(function () {
                     if (first) { first.resolve(); first = null; }
-                    else console.log('server half reloaded');
+                    else {
+                        console.log('server half reloaded');
+
+                        //AND SAY IT WORKED, so the window can take the red box
+                        //down. Without this the overlay raised by the FAILED
+                        //reload stays up through the one that fixed it, and
+                        //everything reading it goes on reporting an app that is
+                        //already back -- see ../../../overlay.js, which is worse
+                        //than not reporting at all.
+                        io.emit('server:ok', { at: Date.now() });
+                    }
                 }, function (e) {
                     if (first) { first.reject(e); first = null; return; }
                     //the old half is already torn down, so the app is serving

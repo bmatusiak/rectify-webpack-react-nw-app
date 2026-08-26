@@ -80,6 +80,13 @@ async function plugin(imports, register) {
         showError('the server half failed to reload', e && e.message);
     });
 
+    //AND WHEN IT COMES BACK. The overlay never came down on its own, so the
+    //reload that FIXED the problem left it there saying the app was broken --
+    //which is the failure that makes a check stop being one.
+    socket.on('server:ok', function () {
+        if (showError.clear()) console.log('the server half is back');
+    });
+
     //the handshake payload rides the connection, so it is kept on the
     //connection. ../appPackage/window.js is what hands it out as a service, so
     //that wanting the app's name does not mean consuming a socket.

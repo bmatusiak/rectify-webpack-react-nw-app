@@ -116,6 +116,41 @@ async function main () {
 
   note('driving ' + (views.views[0].title || 'the window'))
 
+  // ---- THE CHECK THAT IS NOT HERE, AND WHY -------------------------------
+  //
+  // src/overlay.js draws a red box over the page when something fails
+  // underneath the ui, and NOTHING LOOKS FOR IT. A run can open twelve pages
+  // behind that box and report a hundred and forty green checks about an app
+  // that is face down, which is what "a picture is not a check" means.
+  //
+  // A check was written here -- `read` the overlay, fail on it -- and then
+  // MEASURED AGAINST BOTH WAYS THE OVERLAY IS RAISED. It cannot fire for
+  // either:
+  //
+  //   the server half fails to reload   io/window.js raises it, and `read` is
+  //                                     answered by remote/SERVER.js, which
+  //                                     went down with the half that failed.
+  //                                     drive dies on `unknown command: hello`.
+  //
+  //   a window plugin fails to start    window.js raises it, and `read` is
+  //                                     ANSWERED by remote/window.js, which is
+  //                                     a window plugin and never registered.
+  //                                     drive dies on `no answer to "read"`.
+  //
+  // Both end in a stack trace from a line about reading the DOM, which is the
+  // worst available way to learn that the app never came up.
+  //
+  // WHAT WOULD FIX IT is a main-side answer. core/bridge/main.js holds the
+  // page's actual Window object -- `frame === win.window`, measured, and
+  // injected at document-start BEFORE any plugin runs -- so main can read that
+  // overlay when every window plugin is dead and when the whole node half is
+  // gone. Nothing else in the app can.
+  //
+  // It is not here because it is a new ipc command in core rather than a line
+  // in this file, and because the same command should carry `packaged` -- see
+  // the `hello` call above, which is answered by src/app/demo and is the one
+  // thing in the scaffold that makes a core tool depend on the demo.
+
   // WHAT IS ON THE SIDEBAR, read off the app rather than listed here. A page
   // added to src/app/demo/pages is a page this drives, without being told.
   // .nav-pills, not .nav-link: the sidebar also carries an "on this page" list
