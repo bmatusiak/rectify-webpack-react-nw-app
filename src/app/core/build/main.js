@@ -4,7 +4,7 @@
 //reach it — a `require('webpack')` in an unreachable function is still bundled,
 //and dragging webpack into a packaged app is exactly what this avoids.
 
-plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge', 'dataDir', 'log', 'handover', 'state', 'cron', 'secret', 'events'];
+plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge', 'dataDir', 'log', 'handover', 'state', 'cron', 'secret', 'events', 'cached'];
 plugin.provides = ['build'];
 async function plugin(imports, register) {
     var { app, http, io, window: win, tray, ipc, lifecycle, handover } = imports;
@@ -54,6 +54,12 @@ async function plugin(imports, register) {
         events: imports.events,
 
         state: imports.state,
+
+        //THE DRAWERS ARE MAIN'S FOR THE SAME REASON THE LOG IS: this half is
+        //rebuilt on every save, so a cache kept there is cold during exactly
+        //the hours somebody is working. See ../cached/main.js.
+        cached: imports.cached,
+
         cron: imports.cron,
         secret: imports.secret,
 

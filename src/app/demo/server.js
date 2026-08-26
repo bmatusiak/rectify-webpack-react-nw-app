@@ -15,7 +15,7 @@ var path = require('path');
 //What it carries arrives on the host as `of` and `handedOver`, which is exactly
 //how an app plugin reaches its own main half without core naming it.
 plugin.consumes = ['app', 'appPackage', 'tray', 'ipc', 'window',
-    'dataDir', 'state', 'secret', 'log', 'cron', 'events'];
+    'dataDir', 'state', 'secret', 'log', 'cron', 'events', 'cached'];
 plugin.provides = [];
 async function plugin(imports, register) {
     var { app, appPackage, tray, ipc, window: win } = imports;
@@ -171,6 +171,48 @@ async function plugin(imports, register) {
 
         //---- the plumbing page ----------------------------------------
         socket.on('demo:plumbing', function (data, ack) { if (ack) ack(plumbing()); });
+
+        //THE THREE DOORS, SHOWN BY ASKING TWICE AND COUNTING. A cache is the
+        //one kind of plumbing whose failure is invisible from outside -- it
+        //answers either way -- so the only demonstration worth anything is one
+        //that counts how often the expensive thing actually ran.
+        socket.on('demo:cached', async function (data, ack) {
+            if (!ack) return;
+
+            var said = data || {};
+            var ran = 0;
+
+            function slow() { ran++; return { worked: 'out', at: new Date().toISOString() }; }
+
+            try {
+                if (said.ask) {
+                    var door = said.door === 'whileFresh' ? 'whileFresh' : 'byContent';
+                    var drawer = imports.cached[door]('demo-' + door);
+
+                    //TWICE, IN ONE CALL. Two presses seconds apart would prove
+                    //the same thing and would also be a window in which somebody
+                    //could have changed something -- this way what is counted is
+                    //only the cache.
+                    await drawer.get(String(said.key || 'a-sha'), slow);
+                    await drawer.get(String(said.key || 'a-sha'), slow);
+                }
+
+                if (said.stale) imports.cached.stale();
+                if (said.forget) imports.cached.forgetEverything();
+            } catch (e) {
+                return ack({ failed: (e && e.message) || String(e) });
+            }
+
+            var stats = imports.cached.stats();
+
+            ack({
+                ran: ran,
+                persists: imports.cached.persists,
+                where: imports.cached.where,
+                hit: stats.hit, miss: stats.miss, share: stats.share, wiped: stats.wiped,
+                drawers: stats.drawers
+            });
+        });
 
         //TWO DRAWERS, SHOWN BY WRITING THE SAME DOCUMENT NAME INTO BOTH. The
         //page puts a note in whichever namespace is open and another in the

@@ -25,6 +25,7 @@ module.exports = function Plumbing(props) {
     var [jobs, setJobs] = useState([]);
     var [ns, setNs] = useState(null);
     var [inHere, setInHere] = useState('');
+    var [cache, setCache] = useState(null);
 
     var ask = useCallback(function (what, data) {
         return new Promise(function (resolve) { io.emit(what, data || {}, resolve); });
@@ -323,6 +324,77 @@ module.exports = function Plumbing(props) {
                         }).join('\n')}</code>
                     </pre>
                 ) : <p className="text-body-secondary mb-0">nothing yet</p>}
+            </Section>
+
+            <Section title="Worked out once"
+                lead="core/cached -- three doors, and which one you take says what your key is made of.">
+
+                <p className="text-body-secondary">
+                    A cache is the one piece of plumbing whose failure is invisible: it answers
+                    either way. So the only demonstration worth anything counts how often the
+                    expensive thing actually ran.
+                </p>
+
+                <div className="d-flex flex-wrap gap-2 mb-3">
+                    <Button variant="primary" icon="hash" onClick={async function () {
+                        setCache(await ask('demo:cached', { ask: true, door: 'byContent' }));
+                    }}>Ask byContent twice</Button>
+
+                    <Button outline variant="secondary" icon="clock" onClick={async function () {
+                        setCache(await ask('demo:cached', { ask: true, door: 'whileFresh' }));
+                    }}>Ask whileFresh twice</Button>
+
+                    <Button outline variant="warning" icon="pencil" onClick={async function () {
+                        setCache(await ask('demo:cached', { stale: true }));
+                        if (toast) toast('something wrote -- clock-keyed answers dropped', 'warning', 'pencil');
+                    }}>Something wrote</Button>
+
+                    <Button outline variant="danger" icon="trash" onClick={async function () {
+                        setCache(await ask('demo:cached', { forget: true }));
+                    }}>Forget the lot</Button>
+                </div>
+
+                {cache ? (
+                    <>
+                        <div className="d-flex flex-wrap gap-2 mb-3">
+                            <Badge variant="primary">hit {cache.hit}</Badge>
+                            <Badge variant="secondary">miss {cache.miss}</Badge>
+                            <Badge variant="secondary">shared {cache.share}</Badge>
+                            {cache.ran !== undefined
+                                ? <Badge variant={cache.ran > 1 ? 'danger' : 'success'}>
+                                    worked out {cache.ran} time{cache.ran === 1 ? '' : 's'} for two asks
+                                </Badge>
+                                : null}
+                        </div>
+
+                        {cache.drawers && cache.drawers.length ? (
+                            <Table small responsive head={['drawer', 'keyed on', 'holding', 'written down']}>
+                                {cache.drawers.map(function (d) {
+                                    return (
+                                        <tr key={d.name + d.kind}>
+                                            <td className="fw-semibold">{d.name}</td>
+                                            <td><code>{d.kind}</code></td>
+                                            <td>{d.size}</td>
+                                            <td>{d.kind === 'byContent'
+                                                ? <Badge variant="primary">yes</Badge>
+                                                : <span className="text-body-secondary">never</span>}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </Table>
+                        ) : <p className="text-body-secondary">No drawers yet.</p>}
+                    </>
+                ) : <p className="text-body-secondary">Press one.</p>}
+
+                <Alert variant="warning" className="d-flex align-items-start gap-2 mt-3 mb-0">
+                    <Icon name="exclamation-triangle" className="mt-1" />
+                    <span>
+                        <strong>A drawer reporting 95% hits is not evidence anything got faster.</strong>
+                        {' '}A board in the app this came from cached correctly and saved nothing: building
+                        the key cost four git processes, and they ran on a hit too. No counter here could
+                        see that &mdash; what catches it is counting what the caller spawns, from outside.
+                    </span>
+                </Alert>
             </Section>
 
             <Section title="What it has actually done"
