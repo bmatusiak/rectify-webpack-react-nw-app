@@ -27,7 +27,7 @@ var makeOverlays = require('./components/overlay');
 var makeDisclosure = require('./components/disclosure');
 var swatches = require('./swatches');
 
-plugin.consumes = ['react', 'settings', 'appPackage'];
+plugin.consumes = ['react', 'preferences', 'appPackage'];
 plugin.provides = ['theme'];
 //`config` here is the third argument rectify passes: src/config.js, keyed by
 //the service name. `imports.settings` is the storage plugin, a different thing.
@@ -51,7 +51,7 @@ async function plugin(imports, register, config) {
     var startingMode = (config.theme && config.theme.mode) ||
         (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
-    var stored = imports.settings('theme', {
+    var stored = imports.preferences('theme', {
         mode: startingMode,
         swatch: (config.theme && config.theme.swatch) || 'default'
     });

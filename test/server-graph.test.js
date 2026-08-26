@@ -105,8 +105,10 @@ test('every plugin is named after the file it came from', () => {
 
 test('the window half is not in this bundle at all', () => {
     const services = loaded.app.services;
-    //react, theme and storage are window.js files, so they are not here to stub
-    for (const name of ['react', 'theme', 'session', 'config'])
+    //react, theme and webStorage are window.js files, so they are not here to
+    //stub. `preferences` and `session` are the browser's two stores -- the node
+    //half keeps its own things in `state`, which IS here.
+    for (const name of ['react', 'theme', 'session', 'preferences'])
         assert.ok(!(name in services), name + ' leaked into the server bundle');
 });
 

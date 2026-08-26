@@ -17,11 +17,11 @@ var ownPages = require('./pages');
 //shows what things are for. Hanging them off the theme instead would make the
 //theme -- which the README calls a slot you are expected to replace -- fail to
 //load if you deleted one of them.
-plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'settings', 'session',
+plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'preferences', 'session',
     'editor', 'markdown', 'xterm', 'litegraph', 'ext', 'banner', 'pages'];
 plugin.provides = [];
 async function plugin(imports, register) {
-    var { react, theme, appPackage, io, settings, session, banner, pages } = imports;
+    var { react, theme, appPackage, io, preferences, session, banner, pages } = imports;
     var { Page, Sidebar, Navbar, Footer, Button, Icon, Toasts } = theme.ui;
 
     //EVERYTHING THIS PAGE NEEDS THAT THE SHELL CANNOT PASS, gathered once. The
@@ -31,7 +31,7 @@ async function plugin(imports, register) {
     //have to know what a page might want -- and every new page would widen a
     //type nobody owns.
     var bag = {
-        theme: theme, io: io, appPackage: appPackage, settings: settings, session: session,
+        theme: theme, io: io, appPackage: appPackage, preferences: preferences, session: session,
         services: imports.app.services, plugins: imports.app.plugins, ext: imports.ext,
         editor: imports.editor, markdown: imports.markdown,
         xterm: imports.xterm, litegraph: imports.litegraph

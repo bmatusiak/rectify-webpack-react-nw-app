@@ -20,7 +20,7 @@ graph**.
 ## why not a list
 
 The Data page already lists these services, sorted and paginated, and a list is a
-perfectly good way to answer *is `settings` there*. It is a bad way to answer
+perfectly good way to answer *is `preferences` there*. It is a bad way to answer
 **what happens if I delete `io`** — that is a question about shape, and from a
 list a reader works shape out by holding it in their head.
 

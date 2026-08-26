@@ -1,6 +1,6 @@
 /**
 
-var typeStore = app.services.settings('test', {
+var typeStore = app.services.preferences('test', {
     testing: 'ok-default'
 })
 
@@ -8,11 +8,25 @@ console.log(typeStore.testing);//'ok-default', and assigning to it saves
 
  */
 
-//NAMED settings, NOT config, and the name is the whole of the reason. Every
-//plugin already receives a `config` as its third setup argument -- its slice of
-//src/config.js -- so a service by that name puts two different things called
-//config in one function, and the one somebody reaches for is whichever they
-//happened to think of. That is a bug nobody reports, because both exist.
+//WHAT LIVES HERE IS THE PERSON'S, AND IT IS DISPOSABLE. Both stores are the
+//browser's -- `sessionStorage` and `localStorage` -- so what is in them belongs
+//to whoever is sitting there, and it is gone when the browser profile is.
+//Renaming the app in package.json is enough to do that: nw picks its profile
+//directory from the name, so a rename is a new profile and an empty store. See
+//../dataDir, which is where that is written down.
+//
+//WHICH IS WHY NOTHING AUTHORITATIVE GOES IN EITHER OF THEM. The app's own
+//things -- what it did, what it was told, anything a person would be upset to
+//lose -- belong to ../state, on disk, on the node side. This is the tab you had
+//open and the swatch you picked.
+//
+//NAMED preferences, NOT settings AND NOT config. Not `config`, because every
+//plugin already receives one as its third setup argument -- its slice of
+//src/config.js -- and two different things called config in one function is a
+//bug nobody reports, because both exist. And not `settings`, which was the name
+//until ../state arrived: `settings` and `state` both read as APP configuration,
+//and the one that silently evaporates when the app is renamed was the one
+//called settings. Somebody would eventually put a credential in it.
 //
 //TWO STORES FROM ONE FACTORY, which is the line between bundling and dogma:
 //they differ only in which browser storage they sit on, and neither can change
@@ -23,7 +37,7 @@ console.log(typeStore.testing);//'ok-default', and assigning to it saves
 //get/set to remember and nothing to serialise by hand.
 
 plugin.consumes = [];
-plugin.provides = ['session', 'settings'];
+plugin.provides = ['session', 'preferences'];
 async function plugin(_imports, register) {
 
     function typeStorage(storageObject) {
@@ -82,7 +96,7 @@ async function plugin(_imports, register) {
 
     await register(null, {
         session: typeStorage(sessionStorage),
-        settings: typeStorage(localStorage),
+        preferences: typeStorage(localStorage),
     });
 }
 module.exports = plugin;

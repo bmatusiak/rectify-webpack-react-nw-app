@@ -303,7 +303,7 @@ handshake payload on the connection, `core/appPackage/window.js` hands it out, a
 `core/appPackage/server.js` takes it off the host. Consumers did not change, which is the
 sign it was the right cut.
 
-**Bundle only what is genuinely one thing.** `core/storage/window.js` provides both
+**Bundle only what is genuinely one thing.** `core/webStorage/window.js` provides both
 `session` and `settings`: two stores from one factory, differing only in which browser
 storage they sit on. Splitting those would be dogma. The test is whether one can change
 without the other -- if it can, it is two plugins.

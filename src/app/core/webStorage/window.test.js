@@ -3,11 +3,11 @@
 //sessionStorage and does not. Both are real browser objects, so this is the
 //only place the difference is a fact rather than an assumption.
 
-plugin.consumes = ['selftest', 'settings', 'session'];
+plugin.consumes = ['selftest', 'preferences', 'session'];
 plugin.provides = [];
 function plugin(imports, register) {
     var { describe, it, assert } = imports.selftest;
-    var { settings, session } = imports;
+    var { preferences, session } = imports;
 
     describe('the stores, against real browser storage', function () {
 
@@ -27,17 +27,17 @@ function plugin(imports, register) {
             assert.equal(session('probe.writes', { count: 0 }).count, 7);
         });
 
-        it('puts settings in localStorage and session in sessionStorage', function () {
-            settings('probe.where', { x: 'local' }).x = 'local';
+        it('puts preferences in localStorage and session in sessionStorage', function () {
+            preferences('probe.where', { x: 'local' }).x = 'local';
             session('probe.where', { x: 'temporary' }).x = 'temporary';
 
             assert.ok(String(localStorage.getItem('probe.where')).indexOf('local') >= 0,
-                'settings did not land in localStorage');
+                'preferences did not land in localStorage');
             assert.ok(String(sessionStorage.getItem('probe.where')).indexOf('temporary') >= 0,
                 'session did not land in sessionStorage');
 
             //and they do not read each other, despite sharing a name
-            assert.equal(settings('probe.where', { x: '' }).x, 'local');
+            assert.equal(preferences('probe.where', { x: '' }).x, 'local');
             assert.equal(session('probe.where', { x: '' }).x, 'temporary');
         });
 

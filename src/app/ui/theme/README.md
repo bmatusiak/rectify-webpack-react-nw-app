@@ -4,11 +4,11 @@ An example kit, not the scaffold's opinion.
 
 | file | provides | consumes |
 |---|---|---|
-| `window.js` | `theme` | `react`, `settings`, `appPackage` |
+| `window.js` | `theme` | `react`, `preferences`, `appPackage` |
 
 ```
 theme.ui             every component, from ./components
-theme.themeSwitcher  flips light/dark, remembered in the settings store
+theme.themeSwitcher  flips light/dark, remembered in the preferences store
 theme.mode           which of the two was asked for
 theme.showing        which of the two the swatch actually painted
 theme.modeLocked     true when the swatch will not honour the mode

@@ -4,7 +4,7 @@ The example app. **Delete this folder and the app is the scaffold again.**
 
 | file | provides | consumes |
 |---|---|---|
-| `window.js` | — | `app`, `react`, `theme`, `appPackage`, `io`, `settings`, `session`, `editor`, `markdown`, `xterm`, `litegraph`, `ext`, `banner`, `pages` |
+| `window.js` | — | `app`, `react`, `theme`, `appPackage`, `io`, `preferences`, `session`, `editor`, `markdown`, `xterm`, `litegraph`, `ext`, `banner`, `pages` |
 | `server.js` | — | `app`, `appPackage`, `tray`, `ipc`, `window` |
 | `cli.js` | — | `cli`, `ipc` |
 
@@ -42,7 +42,7 @@ Seven are about the pieces:
 |---|---|
 | **System** | pid, uptime, memory and round-trip time, live off the socket. Its buttons hide the window, open it in your browser, and add and remove real tray items |
 | **Buttons** | every variant, outline, size and state, each measured against what is behind it |
-| **Forms** | a validated form whose values go into `settings`, so they survive a restart. The panel beside it shows what is stored |
+| **Forms** | a validated form whose values go into `preferences`, so they survive a restart. The panel beside it shows what is stored |
 | **Data** | the service graph of both halves, searchable, sortable, paged |
 | **Overlays** | modals that return a value, an offcanvas from any of the four edges, toasts, tooltips, popovers, dropdowns that change the page |
 | **Disclosure** | tabs, accordions, collapse, and a carousel that runs itself |
@@ -124,4 +124,4 @@ non-zero when nothing is running, so a script can ask.
 `window.test.js` opens **every page in turn**, waiting for each to finish before
 moving on, and fails on anything the console reported. That is what a parse error
 in a page looks like from the outside, and it is what caught the checkout field
-named `save` — see [storage](../core/storage/).
+named `save` — see [storage](../core/webStorage/).

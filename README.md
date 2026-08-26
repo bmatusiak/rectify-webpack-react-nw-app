@@ -53,7 +53,7 @@ source so they cannot quietly stop being true.
 | [devtools](src/app/core/devtools/) | `main` | the two Inspect items |
 | [build](src/app/core/build/) | `main` | webpack, and the reload |
 | [react](src/app/core/react/) | `window` | `createRoot`, once |
-| [storage](src/app/core/storage/) | `window` | the `session` and `settings` stores |
+| [webStorage](src/app/core/webStorage/) | `window` | the `session` and `preferences` stores, both the browser’s |
 | [selftest](src/app/core/selftest/) | all four | running the suites in place |
 
 ### `ui/` — what is on screen
@@ -544,7 +544,7 @@ each written up where it bit:
   one factory because neither can change without the other. The test is whether
   one can; if it can, it is two plugins.
 - **Do not name a service `config`**, and do not name a store field `save` — see
-  [storage](src/app/core/storage/).
+  [storage](src/app/core/webStorage/).
 
 A plugin that provides nothing is normal: [devtools](src/app/core/devtools/),
 [remote](src/app/remote/)'s two outer halves and all of [demo](src/app/demo/) do.

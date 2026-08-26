@@ -5,10 +5,10 @@ var { useState } = React;
 //accessor. reload the window and the values are still here.
 
 module.exports = function Forms(props) {
-    var { theme, settings, toast } = props;
+    var { theme, preferences, toast } = props;
     var { Section, Form, Input, Textarea, Select, Check, Range, InputGroup, Button, Card, Alert, Badge } = theme.ui;
 
-    var saved = settings('demo.profile', {
+    var saved = preferences('demo.profile', {
         name: '', email: '', role: 'developer', about: '', notify: true, level: 50
     });
 
@@ -30,7 +30,7 @@ module.exports = function Forms(props) {
     function save() {
         Object.keys(state).forEach(function (k) { saved[k] = state[k]; });
         setSavedAt(new Date().toLocaleTimeString());
-        toast('saved to the settings store', 'success', 'save');
+        toast('saved to the preferences store', 'success', 'save');
     }
 
     return (
@@ -63,7 +63,7 @@ module.exports = function Forms(props) {
                     </div>
 
                     <div className="col-lg-5">
-                        <Card title="What is stored" subtitle="settings, so it survives a restart">
+                        <Card title="What is stored" subtitle="preferences, so it survives a restart">
                             <pre className="small mb-0">{JSON.stringify({
                                 name: saved.name, email: saved.email, role: saved.role,
                                 about: saved.about, notify: saved.notify, level: saved.level
@@ -71,7 +71,7 @@ module.exports = function Forms(props) {
                         </Card>
 
                         <Alert variant="secondary" className="mt-3" icon="info-circle">
-                            <code>settings</code> is localStorage and <code>session</code> is sessionStorage,
+                            <code>preferences</code> is localStorage and <code>session</code> is sessionStorage,
                             both behind the same accessor. Which page you are on is in the second one.
                         </Alert>
                     </div>

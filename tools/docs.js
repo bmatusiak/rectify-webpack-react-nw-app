@@ -91,7 +91,7 @@ function sources (dir) {
 // out in a bare ``` block and writes its examples in ```js -- so the untagged
 // one is the surface and the tagged ones are illustrations, which name things
 // that are deliberately made up. Taking "the first fence" instead reported
-// `prefs.density` from core/storage, whose first fence is an example.
+// `prefs.density` from core/webStorage, whose first fence is an example.
 function surfaceBlock (text) {
   const fence = text.match(/```[\r\n][\s\S]*?```/)
   return fence ? fence[0] : ''

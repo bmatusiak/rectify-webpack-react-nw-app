@@ -13,11 +13,11 @@ var CATALOGUE = [
 ];
 
 module.exports = function Checkout(props) {
-    var { theme, settings, toast } = props;
+    var { theme, preferences, toast } = props;
     var { Section, Cart, ValidatedForm, Input, Select, Check, Button, Alert, Icon } = theme.ui;
 
     //the form survives a reload, because it is in the store
-    var saved = settings('demo.checkout', {
+    var saved = preferences('demo.checkout', {
         first: '', last: '', email: '', address: '', country: '', state: '', zip: '',
         //NOT `save`. The store's own writer is called that, and its loop skips
         //a default of that name rather than shadowing it -- so `form.save` was

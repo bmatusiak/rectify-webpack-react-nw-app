@@ -4,7 +4,7 @@
 //reach it — a `require('webpack')` in an unreachable function is still bundled,
 //and dragging webpack into a packaged app is exactly what this avoids.
 
-plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge'];
+plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge', 'dataDir'];
 plugin.provides = ['build'];
 async function plugin(imports, register) {
     var { app, http, io, window: win, tray, ipc, lifecycle } = imports;
@@ -34,6 +34,13 @@ async function plugin(imports, register) {
         },
         io: io,
         appPackage: app.appPackage,
+
+        //HANDED OVER WHOLE, not rebuilt. ../dataDir/main.js is the one place
+        //that works out where this app keeps things, and its server half
+        //refuses rather than guessing when there is no main behind it -- see
+        //../dataDir/server.js. Naming it here is core-to-core, which is the
+        //only kind of name this list is allowed to carry.
+        dataDir: imports.dataDir,
 
         window: {
             get url() { return http.url; },
