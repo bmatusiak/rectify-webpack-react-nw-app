@@ -18,10 +18,10 @@ var ownPages = require('./pages');
 //theme -- which the README calls a slot you are expected to replace -- fail to
 //load if you deleted one of them.
 plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'preferences', 'session',
-    'editor', 'markdown', 'xterm', 'litegraph', 'ext', 'banner', 'pages'];
+    'editor', 'markdown', 'xterm', 'litegraph', 'ext', 'banner', 'pages', 'remember'];
 plugin.provides = [];
 async function plugin(imports, register) {
-    var { react, theme, appPackage, io, preferences, session, banner, pages } = imports;
+    var { react, theme, appPackage, io, preferences, session, banner, pages, remember } = imports;
     var { Page, Sidebar, Navbar, Footer, Button, Icon, Toasts } = theme.ui;
 
     //EVERYTHING THIS PAGE NEEDS THAT THE SHELL CANNOT PASS, gathered once. The
@@ -48,8 +48,13 @@ async function plugin(imports, register) {
         });
     });
 
-    //which page you were on survives a reload, because it is in the store
-    var ui = session('demo.ui', { page: pages.list[0].id });
+    //THE OLD KEY IS TAKEN OUT RATHER THAN LEFT TO ROT. The open page lived in
+    //`session` until ../core/remember arrived, and sessionStorage survives a
+    //reload -- so without this the window carries a dead page id around for as
+    //long as it is open, and core/remember's own test cannot tell that apart
+    //from the demo still writing there. Moving a stored value leaves the old
+    //one behind; nothing collects it.
+    try { sessionStorage.removeItem('demo.ui'); } catch (e) { /* no storage, nothing to clean */ }
 
     function Demo() {
         //THE LIST IS THE SERVICE'S, and it can change while the app is open --
@@ -58,7 +63,12 @@ async function plugin(imports, register) {
         //would draw a sidebar that never noticed a page arriving.
         var showing = pages.usePages();
 
-        var [page, setPage] = useState(ui.page);
+        //WHICH PAGE YOU WERE ON SURVIVES A RESTART, not merely a reload. This
+        //was `session`, which dies with the window -- and the window dying is
+        //the case worth surviving: every change to src/main.js needs a restart,
+        //and a packaged app gets one every launch. ../core/remember is the same
+        //shape as useState precisely so this line could stop being one.
+        var [page, setPage] = remember.use('demo.ui', 'page', pages.list[0].id);
         var [mode, setMode] = useState(theme.mode);
         var [swatch, setSwatch] = useState(theme.swatch);
         var [toasts, setToasts] = useState([]);
@@ -112,8 +122,7 @@ async function plugin(imports, register) {
         }, []);
 
         function open(id) {
-            setPage(id);
-            ui.page = id;//the store writes through on assignment
+            setPage(id);//and remembers, because it is remember's setter
         }
 
         function jump(id) {

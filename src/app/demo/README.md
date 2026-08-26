@@ -4,7 +4,7 @@ The example app. **Delete this folder and the app is the scaffold again.**
 
 | file | provides | consumes |
 |---|---|---|
-| `window.js` | — | `app`, `react`, `theme`, `appPackage`, `io`, `preferences`, `session`, `editor`, `markdown`, `xterm`, `litegraph`, `ext`, `banner`, `pages` |
+| `window.js` | — | `app`, `react`, `theme`, `appPackage`, `io`, `preferences`, `session`, `editor`, `markdown`, `xterm`, `litegraph`, `ext`, `banner`, `pages`, `remember` |
 | `server.js` | — | `app`, `appPackage`, `tray`, `ipc`, `window`, `dataDir`, `state`, `secret`, `log`, `cron` |
 | `cli.js` | — | `cli`, `ipc` |
 
