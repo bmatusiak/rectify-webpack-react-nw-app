@@ -74,6 +74,15 @@ const appFree = () => files().filter(name => name !== IN_APP)
   .map(name => path.join(TESTS, name))
   .concat(nodeSuites())
 
+// REQUIRED RATHER THAN RUN, so ./profile-tests.js measures exactly what this
+// runs. Two derivations of "what npm test does" is how a profiler ends up
+// timing a set of files nobody actually runs -- and CommonJS lets a module stop
+// here rather than falling through into the argument handling below.
+if (require.main !== module) {
+  module.exports = { files, suites, nodeSuites, appFree, TESTS, IN_APP, CONTEXTS, NODE }
+  return
+}
+
 function list () {
   console.log('\ncontexts')
   console.log('  ' + NODE.padEnd(20) + describe(NODE))

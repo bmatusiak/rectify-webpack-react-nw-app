@@ -26,7 +26,8 @@
     "sabotage": "node tools/sabotage.js",
     "stop": "node tools/stop.js",
     "restart": "node tools/restart.js",
-    "check": "node tools/check.js"
+    "check": "node tools/check.js",
+    "profile": "node tools/profile-tests.js"
   },
   "browserslist": [
     "chrome >= 120"

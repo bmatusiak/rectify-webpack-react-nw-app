@@ -86,6 +86,8 @@ Measured on this machine, warm, with the app already running:
 | command | takes | the line that says it is over |
 |---|---|---|
 | `npm run check` | 3s | `compiles, in 3.0s`, or `N problems` |
+| `npm test -- node` | 4.6s | the app-free half: 17 files, 213 checks |
+| `npm run profile` | ~45s | what each file costs, and what never finished |
 | `npm run docs` | under 1s | `nothing to say`, or `N findings` |
 | `npm run drive` | 9s | `N checks passed`, or `N failed, M passed` |
 | `npm test` | 15s | `ℹ fail 0` |

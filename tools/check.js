@@ -154,7 +154,18 @@ function offDisk () {
       //COMPILED, NOT RUN. `new vm.Script` parses and throws on a syntax error
       //without executing a line -- which matters, because running main.js here
       //would try to open a window.
-      new vm.Script(source, { filename: file })
+      //
+      //WRAPPED THE WAY NODE WRAPS IT, which this got wrong first and was told
+      //about by its own first run. A CommonJS file is loaded inside a function
+      //-- `(function (exports, require, module, __filename, __dirname) { ... })`
+      //-- so a top-level `return` is legal in one and an Illegal return
+      //statement in the other. Compiling the raw text is not how node parses it,
+      //and a checker that models the loader wrongly reports faults that are not
+      //there, which is the fastest way to get a check ignored.
+      //
+      //The prefix is on line one, so line numbers in a real error still match.
+      new vm.Script('(function (exports, require, module, __filename, __dirname) { ' +
+        source + String.fromCharCode(10) + '});', { filename: file })
     } catch (e) {
       problems.push(path.relative(ROOT, file) + ': ' + ((e && e.message) || e))
       return
