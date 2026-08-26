@@ -4,7 +4,7 @@
 //reach it — a `require('webpack')` in an unreachable function is still bundled,
 //and dragging webpack into a packaged app is exactly what this avoids.
 
-plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge', 'dataDir', 'log', 'handover', 'state'];
+plugin.consumes = ['app', 'http', 'io', 'window', 'tray', 'ipc', 'lifecycle', 'bridge', 'dataDir', 'log', 'handover', 'state', 'cron'];
 plugin.provides = ['build'];
 async function plugin(imports, register) {
     var { app, http, io, window: win, tray, ipc, lifecycle, handover } = imports;
@@ -48,6 +48,7 @@ async function plugin(imports, register) {
         //save -- see ../log/main.js.
         log: imports.log,
         state: imports.state,
+        cron: imports.cron,
 
         //EVERYTHING ELSE, WITHOUT THIS FILE LEARNING ITS NAME. The list above
         //is core naming core, which is fine -- but an app plugin with something
