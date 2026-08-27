@@ -118,8 +118,20 @@ module.exports.redact = function redact(text, how) {
 
     //THE NARROW RULES RUN FIRST IN BOTH CASES, so a named credential keeps its
     //name -- `token=[redacted]` rather than a bare `[redacted]` where a whole
-    //assignment used to be. Running the blunt ones first would swallow the value
-    //before the rule that knows what it is could label it.
+    //assignment used to be.
+    //
+    //THIS USED TO SAY that running the blunt ones first "would swallow the value
+    //before the rule that knows what it is could label it". MEASURED, AND IT IS
+    //NOT SO: reversing the two changes no output at all, because `[redacted]`
+    //itself matches the value group of the named-credential rule, so the name is
+    //put back either way. Its own sabotage found that by being uncatchable.
+    //
+    //IT IS STILL WRITTEN THIS WAY ROUND, and the order stops being free the
+    //moment `HIDDEN` changes. `[redacted]` has no space, quote, comma or
+    //semicolon in it, which is the only reason the second pass re-matches it --
+    //spell it `[ redacted ]` and the blunt rules running first really would eat
+    //the name. So the order is insurance against an edit somewhere else, not
+    //something today's behaviour depends on.
     PATTERNS.concat(how === 'durable' ? DURABLE : []).forEach(function (one) {
         out = out.replace(one.find, function (whole) {
             if (one.to) return one.to.apply(null, arguments);

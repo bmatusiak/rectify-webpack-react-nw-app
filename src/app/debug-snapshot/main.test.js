@@ -140,10 +140,27 @@ function plugin(imports, register) {
                 assert.ok(out.pictureSkipped, 'there is no picture and nothing said why');
                 assert.ok(out.pictureSkipped.indexOf('hidden') >= 0, out.pictureSkipped);
             } finally {
-                //PUT BACK WHATEVER HAPPENS. A suite that leaves the window
-                //hidden takes every check after it down with it, and the app
-                //looks like it crashed.
+                //PUT BACK WHATEVER HAPPENS, AND WAIT UNTIL IT REALLY IS BACK.
+                //
+                //A suite that leaves the window hidden takes every check after
+                //it down with it, and the app looks like it crashed. `show()`
+                //returns before chromium has drawn anything, though -- so
+                //../core/window's own `photographs itself` failed once in a full
+                //run and passed alone, which is the shape of a race and not of a
+                //regression.
+                //
+                //IT WAITS FOR THE CONDITION THE NEXT TEST NEEDS rather than for
+                //a fixed number of milliseconds: a frame that can be
+                //photographed. On a busy machine a sleep long enough today is
+                //too short tomorrow.
                 win.show();
+
+                for (var back = 0; back < 40; back++) {
+                    var shot = await win.capture({ format: 'png' }).catch(function () { return { skipped: true }; });
+                    if (!shot.skipped) break;
+                    await new Promise(function (r) { setTimeout(r, 100); });
+                }
+
                 clean();
             }
         });
