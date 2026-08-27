@@ -2,6 +2,7 @@ var fs = require('fs');
 var net = require('net');
 var crypto = require('crypto');
 var endpoint = require('./endpoint');
+var sameToken = require('./token');
 
 //IT LIVES HERE RATHER THAN IN THE RELOADABLE HALF for the same reason the
 //window and the tray do — a reload would otherwise drop every connected client
@@ -47,13 +48,11 @@ async function plugin(imports, register) {
         console.error('could not write ' + tokenFile + ': ' + (e && e.message));
     }
 
-    //comparing with == leaks how much of the token was right, one character at
-    //a time. over a local socket that is a stretch, but it costs nothing here.
-    function correct(given) {
-        var a = Buffer.from(String(given || ''), 'utf8');
-        var b = Buffer.from(secret, 'utf8');
-        return a.length === b.length && crypto.timingSafeEqual(a, b);
-    }
+    //THE RULE IS IN ./token.js, not here. It was written out inline, and
+    //./node.test.js had a COPY of it -- three tests about code the app does not
+    //run, while the real comparison could have been `return true` with nothing
+    //to notice.
+    function correct(given) { return sameToken(secret, given); }
 
     function handle(name, fn) {
         handlers[name] = fn;

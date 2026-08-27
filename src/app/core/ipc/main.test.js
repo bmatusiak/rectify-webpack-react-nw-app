@@ -103,6 +103,85 @@ function plugin(imports, register) {
         });
     });
 
+    //---- where a call came from ------------------------------------------
+    //
+    //THE FOUNDATION EVERY GUARD IN THIS APP STANDS ON, and until now nothing
+    //tested it. ../may/deciding.js has exactly one path to a yes and this stamp
+    //is what it reads; ../../debug-snapshot, ../http's `serve` and every MCP
+    //tool refuse or ask on the strength of it.
+    //
+    //A BROKEN STAMP BREAKS NOTHING VISIBLY. Nothing crashes, no test fails, no
+    //dialog appears -- every guarded capability simply starts saying yes, which
+    //is the one failure mode a permission system is not allowed to have.
+    describe('where a call came from', function () {
+
+        var probe = 'probe-ipc-from-' + process.pid;
+        var seen = null;
+
+        function watching(fn) {
+            seen = null;
+            var handle = ipc.handle(probe, function (data, from) { seen = from; return 'noted'; });
+
+            return Promise.resolve().then(fn).then(
+                function (out) { handle.remove(); return out; },
+                function (e) { handle.remove(); throw e; });
+        }
+
+        it('tells a handler that the control socket asked', async function () {
+            await watching(async function () {
+                await attempt([
+                    { command: 'auth', data: { token: secret() } },
+                    { id: 2, command: probe }
+                ]);
+            });
+
+            assert.ok(seen, 'the handler was given nothing to say where the call came from');
+            assert.equal(seen.overTheWire, true, 'a call over the socket was not marked as one');
+        });
+
+        //THE STAMP IS A SECOND ARGUMENT AND NOT A FIELD ON THE DATA, and this is
+        //why: the data belongs to whoever sent it. If the stamp lived in there,
+        //`{"overTheWire":false}` would be one line in a json message away from
+        //being a person at the window -- and every guard in the app with it.
+        it('cannot be told otherwise by the caller', async function () {
+            await watching(async function () {
+                await attempt([
+                    { command: 'auth', data: { token: secret() } },
+                    { id: 3, command: probe, data: { overTheWire: false, window: true, trusted: true } }
+                ]);
+            });
+
+            assert.ok(seen, 'the handler was never reached');
+            assert.equal(seen.overTheWire, true,
+                'a caller talked its way out of being over the wire, which is every guard in the app');
+            assert.ok(!seen.trusted, 'a caller claimed the browser had trusted it');
+        });
+
+        //SOMETHING INSIDE THE PROCESS ASKING ITSELF A QUESTION IS NOT A CALLER
+        //TO BE SUSPICIOUS OF. Getting this backwards would be the safe failure
+        //-- everything asks -- but it would make the app unusable by itself.
+        it('says an in-process call did not come over the wire', async function () {
+            await watching(function () { return ipc.invoke(probe, {}); });
+
+            assert.ok(seen, 'the handler was never reached');
+            assert.equal(seen.overTheWire, false, 'the app asking itself was taken for the socket');
+        });
+
+        //AND A CALLER THAT KNOWS BETTER IS BELIEVED. ../bridge hands on what the
+        //page said about the press, and ../may reads it -- so `invoke` passing
+        //its own default over the top would throw that away and a person's press
+        //would stop counting as one.
+        it('passes on what an in-process caller said about itself', async function () {
+            await watching(function () {
+                return ipc.invoke(probe, {}, { window: true, trusted: true });
+            });
+
+            assert.ok(seen, 'the handler was never reached');
+            assert.equal(seen.window, true, 'what the caller said about itself was thrown away');
+            assert.equal(seen.trusted, true);
+        });
+    });
+
     register();
 }
 module.exports = plugin;

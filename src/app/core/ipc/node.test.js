@@ -90,13 +90,13 @@ test('the token does not sit inside the socket it guards', () => {
     assert.notEqual(endpoint.token('x'), endpoint('x'));
 });
 
-//the check the app makes, in the shape it makes it
-function correct(secret, given) {
-    const crypto = require('node:crypto');
-    const a = Buffer.from(String(given || ''), 'utf8');
-    const b = Buffer.from(secret, 'utf8');
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
+//THE CHECK THE APP ACTUALLY MAKES, not a copy of it.
+//
+//This file used to define its own `correct` -- the same three lines, tested
+//three ways, all about code the app does not run. ./main.js could have been
+//`return true` and every test below would still have passed. Its own sabotage
+//would have said so; there was no sabotage.js either.
+const correct = require('./token');
 
 test('a wrong token of the right length is refused', () => {
     const secret = 'a'.repeat(64);
