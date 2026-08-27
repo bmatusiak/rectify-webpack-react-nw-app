@@ -5,12 +5,12 @@ registers, answered over the control socket the app already listens on.
 
 | file | provides | consumes |
 |---|---|---|
-| `server.js` | `mcp` | `ipc`, `appPackage`, `app`, `Plugin` |
+| `server.js` | `mcp` | `ipc`, `appPackage`, `app`, `Plugin`, `may` |
 
 ```
-mcp.tool(name, { title, description, inputSchema, outputSchema, annotations, run })
-mcp.resource(uri, { name, title, description, mimeType, read })
-mcp.template(uriTemplate, { name, description, mimeType, match, read })
+mcp.tool(name, { title, description, inputSchema, outputSchema, annotations, needs, run })
+mcp.resource(uri, { name, title, description, mimeType, needs, read })
+mcp.template(uriTemplate, { name, description, mimeType, needs, match, read })
 mcp.prompt(name, { title, description, arguments, get })
 mcp.offering    what is registered right now
 ```
@@ -68,6 +68,64 @@ gone entirely from a build made with `"canServe": false`.
 
 **It is not a security boundary.** It is a described, schema'd, deliberately
 small subset of the app aimed at a model instead of at a person.
+
+## `needs` — what a model is allowed to do
+
+```js
+mcp.tool('screenshot', { description: '...', needs: 'mcp:screen', run: ... })
+```
+
+That is the whole of it. **No plugin consumes [`may`](../../app/core/may/), calls
+it, or interprets the answer** — the registry does, so the guard cannot be
+forgotten at the call site while the tool still looks guarded in the listing.
+
+**Wanting a guard is enough to get one.** A tool naming a capability nobody
+declared would be *silently ungoverned*, because `may` allows what nothing
+guards — the worst possible reading of a field whose entire purpose is to say
+*ask about this*. So the registry declares it, and takes the declaration back
+when the tool goes. An existing declaration wins: `snapshot` belongs to
+[`debug-snapshot`](../../app/debug-snapshot/) and carries its own sentence for
+the dialog.
+
+**This is the one door the app opens to a model on purpose**, which is what makes
+guarding it mean something. The header above says this adds no new *surface*, and
+that is true of the transport and beside the point for the caller. Anything with
+a shell can already run `node src/cli.js quit`, and `core/may` says plainly that
+it cannot protect against a shell. **A model reaching in over MCP has no shell**
+— it has exactly the tools listed here.
+
+A call arrives over [`ipc`](../../app/core/ipc/), which stamps `overTheWire`, so
+it is never a person: `may` raises the question *in the window* rather than
+refusing outright. That is the shape the whole thing is for — the model gets a
+way to **ask**, and somebody who is actually sitting there answers.
+
+**`needs` does not go on the wire.** It is not a field MCP has, and a client that
+validates what it is sent would be right to reject it. What a model needs to know
+goes in the **description** instead: *"A person at the window is asked before this
+runs."* A guarded tool that looks like any other gets called, waits, and may come
+back refused — which from the model's side is indistinguishable from a broken
+tool.
+
+A refused resource is **not** `-32002`. That code says the uri does not exist,
+which invites a client to stop asking; this one exists and somebody said no, and
+it may be allowed a minute from now.
+
+### what is guarded, and what is deliberately not
+
+[`mcp-example`](../mcp-example/) guards `screenshot` and `read_screen` behind one
+capability — they are one act with two encodings, *what is on the screen, going
+out* — and `app://log` behind another, because the log is not
+[the record](../../app/core/events/): it is everything the app said, including
+whatever a plugin logged before anybody thought about it.
+
+**`click` is not guarded, and that is a decision rather than an oversight.** It
+was, and the guard was redundant: a driven click is untrusted by definition, so
+anything it presses that is worth guarding raises its *own* question. The cost
+was a dialog per click protecting the presses that need no protection, while the
+presses that do were already covered — and a permission people answer constantly
+is one they answer without reading, which makes the guards that matter worth
+less. Clicking is also **visible**; somebody at the window sees the app being
+driven. Reading the screen is the opposite.
 
 ## three details that are not arbitrary
 

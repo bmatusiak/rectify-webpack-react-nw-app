@@ -10,13 +10,122 @@
 //JSON-RPC to tools/mcp.js over a pipe. This half is about what a plugin can
 //register and what comes back out of the four ipc commands.
 
-plugin.consumes = ['selftest', 'mcp', 'ipc', 'app', 'appPackage'];
+plugin.consumes = ['selftest', 'mcp', 'ipc', 'app', 'appPackage', 'may'];
 plugin.provides = [];
 function plugin(imports, register) {
     var { describe, it, assert } = imports.selftest;
     var mcp = imports.mcp;
     var ipc = imports.ipc;
     var app = imports.app;
+    var may = imports.may;
+
+    //---- what a model is allowed to do -------------------------------------
+    //
+    //NOTHING HERE LETS A QUESTION BE RAISED, and that is not squeamishness. An
+    //ask puts a real modal in the real window and holds it for two minutes; one
+    //escaped during this plugin's own development and sat over the app long
+    //enough to fail the next run for a reason that had nothing to do with it.
+    //
+    //So every probe here answers `never` FIRST -- which ../../app/core/may
+    //returns without asking anybody -- and takes it back in a `finally`.
+    var CAP = 'probe-mcp-' + process.pid;
+
+    function refusing(fn) {
+        var said = may.decide(CAP, 'never', { window: true, trusted: true });
+        if (said.refused) throw new Error(said.refused);
+
+        return Promise.resolve().then(fn).then(
+            function (out) { may.forget(CAP, { window: true, trusted: true }); return out; },
+            function (e) { may.forget(CAP, { window: true, trusted: true }); throw e; });
+    }
+
+    describe('what a model is allowed to do', function () {
+
+        //THE HOLE THIS CLOSES. Everything the app offers over MCP was reachable
+        //by anything that connected -- a picture of the screen, the text on it,
+        //the app's own log -- with no question raised and nothing on screen to
+        //notice it by.
+        it('refuses a guarded tool that was answered never, without asking anybody', async function () {
+            var handle = mcp.tool('probe_guarded', {
+                description: 'a probe', needs: CAP,
+                run: function () { return 'it ran, which it should not have'; }
+            });
+
+            try {
+                await refusing(async function () {
+                    var out = await ipc.invoke('mcp:call', { name: 'probe_guarded', arguments: {} });
+
+                    assert.ok(out.result, 'a refusal came back as a protocol error rather than a result');
+                    assert.equal(out.result.isError, true, 'the tool ran anyway');
+                    assert.ok(out.result.content[0].text.indexOf('never') > 0, out.result.content[0].text);
+                });
+            } finally { handle.remove(); }
+        });
+
+        //A RESOURCE IS READ RATHER THAN RUN, AND THAT IS NOT SAFER. `app://log`
+        //is the app's own log, going to a model.
+        it('refuses a guarded resource, and not as though it were missing', async function () {
+            var handle = mcp.resource('probe://guarded', {
+                description: 'a probe', needs: CAP,
+                read: function () { return 'it was read, which it should not have been'; }
+            });
+
+            try {
+                await refusing(async function () {
+                    var out = await ipc.invoke('mcp:read', { uri: 'probe://guarded' });
+
+                    assert.ok(out.refused, 'a guarded resource was read');
+
+                    //NOT `unknown`. Folding a refusal into not-found would tell
+                    //a model to stop asking for something it may be allowed to
+                    //have a minute from now.
+                    assert.ok(!out.unknown, 'a refusal was reported as a uri that does not exist');
+                });
+            } finally { handle.remove(); }
+        });
+
+        //WANTING A GUARD IS ENOUGH TO GET ONE. A tool naming a capability
+        //nobody declared would be silently ungoverned -- `may` allows what
+        //nothing guards -- which is the worst possible reading of a field whose
+        //whole purpose is to say "ask about this".
+        it('declares what a tool says it needs, so needs alone is enough', function () {
+            var name = CAP + '-undeclared';
+            assert.equal(may.asks(name), false, 'something already guards the probe name');
+
+            var handle = mcp.tool('probe_declares', {
+                description: 'a probe', needs: name, run: function () { return 'ran'; }
+            });
+
+            try {
+                assert.equal(may.asks(name), true, 'the tool asked for a guard and did not get one');
+            } finally {
+                handle.remove();
+                assert.equal(may.asks(name), false, 'taking the tool back left the guard behind');
+            }
+        });
+
+        //SAID WHERE A MODEL READS. A guarded tool that looks like any other gets
+        //called, waits while somebody is asked, and may come back refused --
+        //which from the model's side is indistinguishable from a broken tool.
+        it('says in the description that a person will be asked', async function () {
+            var handle = mcp.tool('probe_says', {
+                description: 'a probe.', needs: CAP, run: function () { return 'ran'; }
+            });
+
+            try {
+                var listing = await ipc.invoke('mcp:describe', {});
+                var one = listing.tools.filter(function (t) { return t.name === 'probe_says'; })[0];
+
+                assert.ok(one, 'the tool is not in the listing');
+                assert.ok(one.description.indexOf('person at the window is asked') > 0, one.description);
+
+                //AND `needs` ITSELF DOES NOT GO ON THE WIRE. It is not a field
+                //MCP has, and a client that validates what it is sent would be
+                //right to reject it.
+                assert.equal(one.needs, undefined, 'a field the protocol does not have was sent');
+            } finally { handle.remove(); }
+        });
+    });
 
     describe('mcp, in the running app', function () {
 

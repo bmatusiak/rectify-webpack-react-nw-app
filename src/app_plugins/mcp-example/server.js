@@ -95,6 +95,18 @@ async function plugin(imports, register) {
             }
         },
         annotations: { readOnlyHint: true },
+
+        //A PICTURE OF THE SCREEN, LEAVING THE MACHINE. That is the difference
+        //from `node src/cli.js capture`, which writes a file a person can look
+        //at before deciding to share it -- this hands the same pixels straight
+        //to a model, and there is no step in between where anybody sees what
+        //was on screen.
+        //
+        //IT SHARES ITS CAPABILITY WITH read_screen, because they are one act
+        //with two encodings: what is on the screen, going out. Two names would
+        //mean two dialogs for one decision, and the person answering the second
+        //has already answered it.
+        needs: 'mcp:screen',
         run: async function (args) {
             var shot = await ipc.invoke('capture', {
                 format: args.format === 'jpeg' ? 'jpeg' : 'png',
@@ -134,6 +146,24 @@ async function plugin(imports, register) {
             required: ['target']
         },
         annotations: { destructiveHint: false, openWorldHint: false },
+
+        //NO `needs`, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT.
+        //
+        //IT WAS GUARDED, AND THE GUARD WAS REDUNDANT. A driven click is
+        //untrusted by definition, so anything this presses that is worth
+        //guarding raises its OWN question -- ../../app/core/may is already
+        //standing behind every guarded control, and pressing one from here
+        //reaches exactly the dialog a person would have to answer.
+        //
+        //SO THE COST WAS A DIALOG PER CLICK protecting the presses that need no
+        //protection, while the presses that do were already covered. A
+        //permission people have to answer constantly is one they answer without
+        //reading, which makes the guards that matter worth less.
+        //
+        //THE OTHER HALF OF THE ARGUMENT IS THAT CLICKING IS VISIBLE. Somebody
+        //sitting at the window sees the app being driven. `read_screen` and
+        //`screenshot` are the opposite -- they copy what is on the screen out,
+        //and nothing on the screen moves while it happens.
         run: async function (args) {
             //`invoke` REJECTS rather than answering {error}, which is what the
             //cli relies on -- so nothing is checked here and ../mcp turns the
@@ -160,6 +190,12 @@ async function plugin(imports, register) {
             required: ['selector']
         },
         annotations: { readOnlyHint: true },
+
+        //THE SAME ACT AS `screenshot`, IN TEXT. It is the cheaper of the two to
+        //wave through -- no picture, just words -- and that is exactly why it
+        //should not be: a password field photographs as dots and reads as its
+        //label, but everything else on the page is legible either way.
+        needs: 'mcp:screen',
         run: async function (args) {
             return await ipc.invoke('read', { selector: args.selector });
         }
@@ -187,6 +223,13 @@ async function plugin(imports, register) {
         title: 'The running app log',
         description: 'What the app has been saying, minus chromium noise. The last 200 lines.',
         mimeType: 'text/plain',
+
+        //THE LOG IS NOT THE RECORD, and that is why it is guarded while
+        //app://plugins is not. ../../app/core/events keeps an allowlist and
+        //redacts inside it; nw.log is everything the app said, including
+        //whatever a plugin logged before anybody thought about it. It is the
+        //file this app's own README warns about for the same reason.
+        needs: 'mcp:log',
         read: function () {
             var file = path.join(ROOT, 'nw.log');
             if (!fs.existsSync(file)) return 'nothing has been written to nw.log yet';

@@ -91,6 +91,16 @@ module.exports = function rpc(ask, options) {
                 return error(id, -32002, answer.why || 'Resource not found', { uri: params && params.uri });
             }
 
+            //REFUSED IS NOT NOT-FOUND. -32002 tells a client the uri does not
+            //exist, which invites it to stop asking; this one exists and
+            //somebody said no, and it may be allowed a minute from now.
+            //-32001 is unassigned in the protocol's reserved range, so it is
+            //readable as "this server refused" without pretending to be one of
+            //MCP's own numbers.
+            if (answer.refused) {
+                return error(id, -32001, answer.refused, { uri: params && params.uri });
+            }
+
             return result(id, { contents: answer.contents });
         },
 
