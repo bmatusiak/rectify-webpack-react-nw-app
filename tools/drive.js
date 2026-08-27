@@ -161,6 +161,19 @@ async function main () {
 
   note('driving ' + (views.views[0].title || 'the window'))
 
+  // A GUARDED CONTROL MUST REFUSE THE ONE THING THIS TOOL DOES.
+  //
+  // Everything below drives the app with events it builds itself, and the
+  // browser marks every one of those untrusted -- see fire() in
+  // src/app/remote/window.js. src/app/core/may refuses a press that is not a
+  // person's, so THIS RUN is the adversary that check exists for.
+  //
+  // IT IS A CHECK AND NOT A COMMENT because the alternative is a guard that
+  // looks right in a screenshot. If a driven press ever gets through, the mark
+  // on that control has been promising something the app does not do -- which is
+  // the exact failure the plugin it came from warns about and does not close.
+  await guarded(ipc)
+
   // WHAT IS ON THE SIDEBAR, read off the app rather than listed here. A page
   // added to src/app/demo/pages is a page this drives, without being told.
   // .nav-pills, not .nav-link: the sidebar also carries an "on this page" list
@@ -349,6 +362,112 @@ async function settled (ipc, tries = 12) {
 }
 
 // One selector, every element it matches, and the worst contrast among them.
+// PRESS A GUARDED CONTROL THE WAY EVERYTHING ELSE HERE PRESSES THINGS, and
+// require it to refuse. The demo's Buttons page carries one; if the demo has
+// been deleted there is nothing to press, which is a skip and not a pass.
+// WHAT A `read` FOUND, WHICHEVER SHAPE IT CAME BACK IN.
+//
+// It answers `{ items: [...] }` for several matches and a FLAT `{ text }` for
+// exactly one -- so code that only knows about `items` sees a single match as
+// nothing at all. That is what made the check below report "it said nothing",
+// with the refusal sitting on screen the whole time.
+function saw (out) {
+  if (!out) return []
+  if (out.items && out.items.length) return out.items.map(one => one.text || '')
+  if (typeof out.text === 'string') return [out.text]
+  return []
+}
+
+async function guarded (ipc) {
+  // THE SIDEBAR HAS TO EXIST FIRST, and `waitForView` does not mean it does:
+  // that waits for a socket, which the page opens before react has drawn
+  // anything. Clicking into that gap does not fail -- `click` reports that it
+  // matched nothing and this read it as success, then spent six seconds looking
+  // for a guarded control on a page that had never been opened.
+  let sidebar = null
+
+  for (let tries = 0; tries < 40; tries++) {
+    sidebar = await ipc.call('read', { selector: '.app-sidebar .nav-pills .nav-link' }).catch(() => null)
+    if (sidebar && sidebar.items && sidebar.items.length) break
+    await new Promise(r => setTimeout(r, 150))
+  }
+
+  if (!sidebar || !sidebar.items || !sidebar.items.length) {
+    return skip('a guarded control refuses a driven press', 'the sidebar never drew')
+  }
+
+  if (!sidebar.items.some(item => item.text === 'Buttons')) {
+    // the demo is deletable, and this check is about the demo's own page
+    return skip('a guarded control refuses a driven press', 'no Buttons page to look at')
+  }
+
+  await ipc.call('click', {
+    selector: '.app-sidebar .nav-pills .nav-link', text: 'Buttons'
+  }).catch(() => null)
+
+  // WAITED FOR RATHER THAN SLEPT THROUGH. A fixed pause is right until the
+  // machine is busy, which is the one time a run like this is happening.
+  let marked = []
+
+  for (let tries = 0; tries < 40; tries++) {
+    marked = saw(await ipc.call('read', { selector: '.is-guarded' }).catch(() => null))
+    if (marked.length) break
+    await new Promise(r => setTimeout(r, 150))
+  }
+
+  if (!marked.length) {
+    // WHAT IT WAS LOOKING AT WHEN IT FOUND NOTHING. "nothing is drawn guarded"
+    // is a symptom; the page it was on while deciding that is the diagnosis.
+    const on = saw(await ipc.call('read', { selector: '.app-sidebar .nav-link.active' }).catch(() => null))
+    const where = on.length ? on[0] : 'nowhere it could name'
+
+    return check('a guarded control is marked as one', false,
+      'nothing on the page is drawn guarded, and it was looking at ' + where)
+  }
+
+  check('a guarded control is marked as one', true, marked.length + ' of them')
+
+  // AND LET THE PAGE STOP MOVING BEFORE PRESSING ANYTHING ON IT. The mark being
+  // in the dom is not the same as react having finished with the page it is on,
+  // and a press into that gap did nothing at all -- no refusal, no toast, which
+  // reads exactly like a guard that is not working.
+  await settled(ipc)
+
+  const pressed = await ipc.call('click', { text: 'Write the page to a file' }).catch(e => ({ error: e.message }))
+
+  if (pressed && pressed.error) {
+    return check('a guarded control refuses a driven press', false, pressed.error)
+  }
+
+  // and the same for the answer coming back
+  let said = []
+
+  for (let tries = 0; tries < 30; tries++) {
+    said = saw(await ipc.call('read', { selector: '.toast' }).catch(() => null))
+    if (said.length) break
+    await new Promise(r => setTimeout(r, 150))
+  }
+
+  // THE REFUSAL IS THE PASS. The page says why in a toast, and a prompt must
+  // NOT be up -- one raised for a driven click is one a second driven click
+  // could answer.
+  const text = said.join(' ')
+
+  // MATCHED ON WORDS THAT SURVIVE. `read` truncates anything past sixty
+  // characters, and the first version looked for "untrusted" -- which is the
+  // eleventh word of the refusal and was always cut off. The check saw the
+  // refusal and called it silence.
+  check('a guarded control refuses a driven press', text.indexOf('not a person') >= 0,
+    text ? text.slice(0, 80)
+      : 'it said nothing at all, which is not a refusal -- it pressed '
+        + ((pressed && pressed.clicked && pressed.clicked.text) || JSON.stringify(pressed).slice(0, 60)))
+
+  const asking = saw(await ipc.call('read', { selector: '#may-asking' }).catch(() => null))
+
+  check('and puts no prompt up for one', !asking.length,
+    'a driven press raised a dialog a driven press could answer')
+}
+
 async function readable (ipc, page, selector, what) {
   const found = await ipc.call('read', { selector }).catch(() => null)
   if (!found) return

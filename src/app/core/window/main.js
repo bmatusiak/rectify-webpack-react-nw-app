@@ -9,7 +9,7 @@ var looksLike = require('../log/looks-like');
 //that half, and a window rebuilt with it is a window that blinks out of
 //existence while somebody is reading it.
 
-plugin.consumes = ['app', 'http', 'lifecycle', 'bridge', 'ipc'];
+plugin.consumes = ['app', 'http', 'lifecycle', 'bridge', 'ipc', 'may'];
 plugin.provides = ['window'];
 async function plugin(imports, register, config) {
     var { app, http, lifecycle, bridge } = imports;
@@ -222,7 +222,17 @@ async function plugin(imports, register, config) {
     //IT WRITES A FILE RATHER THAN ANSWERING WITH THE PAGE. A document is tens of
     //kilobytes and the control socket is a line-delimited pipe carrying every
     //other command; the path is the useful answer anyway.
-    var markupCommand = imports.ipc.handle('markup', function (data) {
+    //COPYING THE SCREEN TO A FILE IS SOMEBODY'S DECISION TO MAKE. The scrub
+    //catches what has a shape and nothing else -- see ./README.md -- so what is
+    //really being agreed to is "write whatever is on the screen down".
+    imports.may.declare('markup', {
+        about: 'Write what the page is made of to a file. It holds whatever is on the screen.'
+    });
+
+    var markupCommand = imports.ipc.handle('markup', async function (data, from) {
+        var said = await imports.may('markup', { from: from });
+        if (!said.allowed) return { skipped: true, why: said.why };
+
         var page = bridge.attached ? markup() : null;
 
         if (!page) return { skipped: true, why: 'there is no window to read' };

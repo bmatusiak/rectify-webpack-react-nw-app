@@ -25,9 +25,15 @@ var layout = require('./components/layout');
 var examples = require('./components/examples');
 var makeOverlays = require('./components/overlay');
 var makeDisclosure = require('./components/disclosure');
+var makeGuarded = require('./components/guarded');
 var swatches = require('./swatches');
 
-plugin.consumes = ['react', 'preferences', 'appPackage'];
+//`may` IS CONSUMED HERE AND NOT REACHED FOR BACKWARDS, which the app this idea
+//came from could not do: its guards list lives in a PANE, and a theme that asked
+//for it would be waiting on something waiting on the theme. ../../core/may is
+//core -- it consumes state, log, ipc and bridge, none of which consume a theme --
+//so the dependency runs the way every other one in this app does.
+plugin.consumes = ['react', 'preferences', 'appPackage', 'may'];
 plugin.provides = ['theme'];
 //`config` here is the third argument rectify passes: src/config.js, keyed by
 //the service name. `imports.settings` is the storage plugin, a different thing.
@@ -186,7 +192,20 @@ async function plugin(imports, register, config) {
     var overlays = makeOverlays(bootstrap);
     var disclosure = makeDisclosure(bootstrap);
 
-    $theme.ui = Object.assign({}, ui, form, nav, layout, examples, overlays, disclosure);
+    //GUARDED LAST, SO IT WINS. `Button` and `Input` are replaced by versions
+    //that paint from ../../core/may and act through it -- see ./components/
+    //guarded.js. Assigning them earlier would leave the plain ones in place and
+    //every `guard` prop silently ignored, which is the exact failure this whole
+    //feature is about.
+    var guarded = makeGuarded(imports.may, Object.assign({}, ui, form));
+
+    $theme.ui = Object.assign({}, ui, form, nav, layout, examples, overlays, disclosure, {
+        Button: guarded.Button,
+        Input: guarded.Input
+    });
+
+    //and the hook, for a page drawing something the kit has no component for
+    $theme.useGuarded = guarded.useGuarded;
 
     await register(null, { theme: $theme });
 }

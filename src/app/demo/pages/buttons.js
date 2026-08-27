@@ -21,6 +21,54 @@ module.exports = function Buttons(props) {
 
     return (
         <>
+            <Section title="Guarded" id="guarded"
+                lead="a press that is a person's to make, beside the same control without a guard">
+
+                <p className="text-body-secondary">
+                    The lock and the ring are painted from <code>core/may</code>, and the press goes
+                    through it &mdash; so a control cannot be drawn as guarded without being guarded,
+                    or guarded without saying so. Try the pair below, then drive the same button from
+                    the terminal and watch it refuse.
+                </p>
+
+                <div className="d-flex flex-wrap gap-3 align-items-center mb-3">
+                    <Button variant="primary" guard="markup"
+                        onRefused={function (said) { toast(said.why, 'warning', 'shield-lock'); }}
+                        onClick={function () { toast('allowed, and it would have run', 'success', 'unlock'); }}>
+                        Write the page to a file
+                    </Button>
+
+                    <Button variant="primary"
+                        onClick={function () { toast('no guard, so it just happened', 'secondary'); }}>
+                        The same button, unguarded
+                    </Button>
+                </div>
+
+                <div className="d-flex flex-wrap gap-3 align-items-center mb-3">
+                    <Button outline variant="danger" guard="serve"
+                        onRefused={function (said) { toast(said.why, 'warning', 'shield-lock'); }}
+                        onClick={function () { toast('allowed', 'success', 'unlock'); }}>
+                        Serve to a browser
+                    </Button>
+
+                    <Button outline variant="danger"
+                        onClick={function () { toast('no guard', 'secondary'); }}>
+                        The same, unguarded
+                    </Button>
+                </div>
+
+                <Alert variant="secondary" className="d-flex align-items-start gap-2 mb-0">
+                    <Icon name="info-circle" className="mt-1" />
+                    <span>
+                        <strong>The mark is a shape, not a colour.</strong> Twenty-eight swatches ship
+                        here and five already spend a purple &mdash; <code>vapor</code>&rsquo;s primary
+                        is the exact one there would be to reserve. A dashed ring and a lock are true in
+                        all of them, survive a swatch added later, and are legible in a greyscale
+                        screenshot. <code>--bs-guarded</code> is still the colour&rsquo;s name.
+                    </span>
+                </Alert>
+            </Section>
+
             <Section title="Buttons" lead="every variant, filled and outline"
                 aside={<Badge pill variant="secondary">{count} clicks</Badge>}>
                 <div className="d-flex flex-wrap gap-2 mb-3">

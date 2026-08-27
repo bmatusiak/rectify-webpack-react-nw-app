@@ -53,6 +53,7 @@ module.exports = function Cheatsheet(props) {
                 out[name + '-subtle'] = read('--bs-' + name + '-bg-subtle');
                 out[name + '-emphasis'] = read('--bs-' + name + '-text-emphasis');
             });
+            out.guarded = read('--bs-guarded');
             out.border = read('--bs-border-color');
             out.radius = read('--bs-border-radius');
             out.font = read('--bs-body-font-family').split(',')[0];
@@ -91,6 +92,27 @@ module.exports = function Cheatsheet(props) {
                             </tr>
                         );
                     })}
+
+                    {/* NOT ONE OF BOOTSTRAP'S, AND THAT IS WHY IT IS SHOWN HERE.
+                        `--bs-guarded` is this app's own token, and a row that
+                        reads it off the page proves it resolves in whatever
+                        swatch is on rather than asserting that it does. It has
+                        no subtle or emphasis pair because it is never a fill --
+                        see ui/theme/index.scss. */}
+                    <tr>
+                        <td style={{ width: '3rem' }}>
+                            <span className="d-inline-block rounded is-guarded"
+                                style={{
+                                    width: '2rem', height: '1.4rem',
+                                    background: 'transparent',
+                                    border: '1px solid var(--bs-border-color)'
+                                }} />
+                        </td>
+                        <td className="fw-semibold">guarded</td>
+                        <td><code>{values.guarded || '-'}</code></td>
+                        <td className="text-body-secondary">&mdash;</td>
+                        <td className="text-body-secondary">a ring and a lock, never a fill</td>
+                    </tr>
                 </Table>
             </Section>
 

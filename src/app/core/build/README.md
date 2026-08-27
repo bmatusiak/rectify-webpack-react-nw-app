@@ -4,7 +4,7 @@ How the app's two other halves get in front of you.
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | `build` | `app`, `http`, `io`, `window`, `tray`, `ipc`, `lifecycle`, `bridge`, `dataDir`, `log`, `handover`, `state`, `cron`, `secret`, `events`, `cached`, `archive` |
+| `main.js` | `build` | `app`, `http`, `io`, `window`, `tray`, `ipc`, `lifecycle`, `bridge`, `dataDir`, `log`, `handover`, `state`, `cron`, `secret`, `events`, `cached`, `archive`, `may` |
 
 ```
 build.ready()   resolves once the node half is loaded and answering

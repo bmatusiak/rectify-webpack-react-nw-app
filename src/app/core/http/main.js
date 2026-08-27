@@ -12,7 +12,7 @@ var express = require('express');
 //viewer may join. That is what makes turning it off safe enough to be a tray
 //item somebody can click by accident.
 
-plugin.consumes = ['app', 'ipc'];
+plugin.consumes = ['app', 'ipc', 'may'];
 plugin.provides = ['http'];
 async function plugin(imports, register) {
     var app = imports.app;
@@ -241,10 +241,39 @@ async function plugin(imports, register) {
     //It exists to be USED -- turning the viewer on from a script, or off again
     //afterwards -- and because a control that can only be reached by clicking a
     //native menu item is a control nothing can check.
-    var answered = ipc && ipc.handle('serve', async function (data) {
-        if (data && typeof data.on != 'undefined') await api.setServing(!!data.on);
+    //OPENING A PORT IS SOMEBODY'S DECISION TO MAKE, so the code says so and a
+    //person answers -- see ../may.
+    imports.may.declare('serve', {
+        about: 'Let a browser be a client of this app, on a port on this machine.'
+    });
+
+    var answered = ipc && ipc.handle('serve', async function (data, from) {
+        if (data && typeof data.on != 'undefined') {
+            //ONLY TURNING IT ON IS ASKED ABOUT. Turning it off needs nobody's
+            //permission: a refusal that stopped somebody closing a port would be
+            //a guard working against the thing it is for.
+            if (data.on) {
+                var said = await imports.may('serve', { from: from });
+
+                if (!said.allowed) {
+                    return {
+                        refused: said.why,
+                        serving: api.serving, listening: api.listening,
+                        url: api.url, host: api.host, port: api.port
+                    };
+                }
+            }
+
+            await api.setServing(!!data.on);
+        }
+
         return { serving: api.serving, listening: api.listening, url: api.url, host: api.host, port: api.port };
     });
+
+    //THE TRAY IS NOT ASKED, AND THAT IS NOT AN OVERSIGHT. It calls
+    //`api.setServing` directly, and a native menu item is a person at the
+    //machine by construction -- nothing that drives this app can reach one.
+    //The flag is the same: `npm start -- --serve` is somebody typing it.
 
     await register(null, {
         http: api,

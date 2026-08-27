@@ -26,7 +26,7 @@ module.exports = function () {
         //several tags, and one kept tag on a heartbeat is how a record fills up
         //with weather and the acts scroll out of it.
         events: {
-            keep: ['app', 'cron', 'demo', 'example'],
+            keep: ['app', 'cron', 'demo', 'example', 'may'],
             never: ['connection', 'connect', 'disconnect', 'data', 'tick', 'ping', 'probe', 'out'],
             most: 2000
         },

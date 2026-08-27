@@ -276,3 +276,46 @@ code, pre, input, textarea {
     user-select: text;
     -webkit-user-select: text;
 }
+
+//---- a control whose press is somebody's to make --------------------------
+//
+//THE MARK IS A SHAPE, NOT A HUE, and that is forced by what this app ships.
+//Twenty-eight swatches, none of them ours, and FIVE ALREADY SPEND A PURPLE:
+//cosmo and materia on `info`, pulse on `primary`, simplex on `danger`, and
+//vapor's `primary` is #6f42c1 -- the exact colour there would be to reserve.
+//Measured, not assumed.
+//
+//So a dashed ring and a lock say it. True in all twenty-eight by construction,
+//survives a swatch added later, survives colour-blindness, and legible in the
+//greyscale of a screenshot -- which matters, because `npm run drive --shots`
+//writes pngs that end up in bug reports.
+//
+//THE COLOUR IS STILL NAMED. `--bs-guarded` is one token for the ring and the
+//glyph, and because a ring is not a field of colour it does not collide with a
+//swatch that also spends purple. That is what makes one value enough for all of
+//them, with no per-swatch table to keep in step.
+:root {
+    --bs-guarded: #6f42c1;
+}
+
+//AN OUTLINE RATHER THAN A BOX-SHADOW, because outline takes the token directly
+//and needs no second alpha value -- and because it sits outside the border, so
+//it does not move anything or eat a pixel of the control it is marking.
+.is-guarded {
+    outline: 2px dashed var(--bs-guarded);
+    outline-offset: 2px;
+}
+
+//THE RING HAS TO SURVIVE FOCUS. Bootstrap draws its own focus ring with
+//box-shadow, which would otherwise sit under this and read as one fuzzy edge.
+.is-guarded:focus,
+.is-guarded:focus-visible {
+    outline: 2px dashed var(--bs-guarded);
+    outline-offset: 3px;
+}
+
+//and the lock itself, so the glyph is the token's colour on an outline button
+//and stays legible on a filled one
+.btn.is-guarded > .bi-lock-fill {
+    opacity: .9;
+}

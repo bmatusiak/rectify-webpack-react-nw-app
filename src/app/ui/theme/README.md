@@ -4,7 +4,7 @@ An example kit, not the scaffold's opinion.
 
 | file | provides | consumes |
 |---|---|---|
-| `window.js` | `theme` | `react`, `preferences`, `appPackage` |
+| `window.js` | `theme` | `react`, `preferences`, `appPackage`, `may` |
 
 ```
 theme.ui             every component, from ./components

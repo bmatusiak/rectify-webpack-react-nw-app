@@ -69,10 +69,41 @@ async function plugin(imports, register) {
 //of the three that respects what is on top.
 function locate(data) {
     if (data.selector) {
-        var el = null;
-        try { el = document.querySelector(data.selector); }
-        catch (e) { el = null; }//not valid css, so it was probably meant as text
-        if (el) return { el: el, found: 'selector' };
+        var all = [];
+        try { all = [].slice.call(document.querySelectorAll(data.selector)); }
+        catch (e) { all = []; }//not valid css, so it was probably meant as text
+
+        //BOTH TOGETHER MEAN "THE ONE UNDER HERE THAT READS THIS", and until now
+        //the text was simply ignored: a selector was resolved with
+        //querySelector, which is the FIRST match, and `text` never consulted.
+        //
+        //IT WAS NOT A THEORETICAL GAP. tools/drive.js pins its swatch pass to
+        //one page with exactly this call -- `{ selector: '.app-sidebar
+        //.nav-pills .nav-link', text: 'Cheatsheet' }` -- so every swatch was
+        //measured on whichever page happened to be first in the sidebar, and the
+        //pin that was put there to stop the numbers moving had never held.
+        if (all.length && data.text) {
+            var wanted = String(data.text).trim().toLowerCase();
+
+            var exact = all.filter(function (one) {
+                return String(one.textContent || '').trim().toLowerCase() === wanted;
+            });
+
+            var loose = exact.length ? exact : all.filter(function (one) {
+                return String(one.textContent || '').trim().toLowerCase().indexOf(wanted) >= 0;
+            });
+
+            //REFUSED RATHER THAN FALLING BACK TO THE FIRST MATCH. Falling back
+            //is what made this invisible: something was always clicked, so it
+            //always looked as though it had worked.
+            if (!loose.length) {
+                throw new Error('nothing under "' + data.selector + '" reads "' + data.text + '"');
+            }
+
+            return { el: loose[0], found: 'selector and text' };
+        }
+
+        if (all.length) return { el: all[0], found: 'selector' };
 
         var byText = text(data.selector);
         if (byText) return { el: byText, found: 'text' };

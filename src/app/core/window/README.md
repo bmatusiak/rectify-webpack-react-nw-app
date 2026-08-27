@@ -4,7 +4,7 @@ The nw.js window. It is a view onto a server that outlives it.
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | `window` | `app`, `http`, `lifecycle`, `bridge`, `ipc` |
+| `main.js` | `window` | `app`, `http`, `lifecycle`, `bridge`, `ipc`, `may` |
 
 ```sh
 node src/cli.js capture    # a picture of the window

@@ -84,7 +84,19 @@ async function plugin(imports, register) {
         if (!fn) return reply({ id: msg.id, ok: false, error: 'unknown command: ' + msg.command });
 
         try {
-            var result = await fn(msg.data || {});
+            //WHERE THIS CAME FROM, HANDED TO THE HANDLER.
+            //
+            //A handler used to be given the data and nothing else, so nothing
+            //in the app could tell a model over the control socket from the app
+            //asking itself a question -- and `may` cannot exist without that
+            //distinction. See ../may/deciding.js, which has exactly one path to
+            //a yes and this is what it reads.
+            //
+            //A SECOND ARGUMENT RATHER THAN A FIELD ON THE DATA. The data
+            //belongs to whoever sent it, so a stamp inside it is a stamp the
+            //sender can write -- `{ overTheWire: false }` would be one line in
+            //a json message away from being a person.
+            var result = await fn(msg.data || {}, { overTheWire: true, socket: socket });
             reply({ id: msg.id, ok: true, result: result === undefined ? null : result });
         } catch (e) {
             reply({ id: msg.id, ok: false, error: (e && e.message) || String(e) });
@@ -160,10 +172,16 @@ async function plugin(imports, register) {
             //the cli reach these over the wire; something in this process has
             //no wire to reach them by, and opening a connection to ourselves to
             //ask ourselves a question would be a strange way to do it.
-            invoke: function (name, data) {
+            //`from` SAYS THIS DID NOT COME OVER THE WIRE, which is the whole
+            //difference between this and ./dispatch. Something inside the
+            //process asking itself a question is not a caller to be suspicious
+            //of -- and a handler that guards a capability needs to know which
+            //of the two it is talking to.
+            invoke: function (name, data, from) {
                 var fn = handlers[name];
                 if (!fn) return Promise.reject(new Error('no handler for ' + name));
-                return Promise.resolve(fn(data || {}));
+
+                return Promise.resolve(fn(data || {}, from || { overTheWire: false }));
             }
         }),
         onDestroy: self.unload

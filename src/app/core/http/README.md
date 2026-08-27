@@ -4,7 +4,7 @@ One express app, one server, and **two separate facts about it**.
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | `http` | `app`, `ipc` |
+| `main.js` | `http` | `app`, `ipc`, `may` |
 | `cli.js` | — | `cli`, `ipc` |
 
 ```
