@@ -191,6 +191,12 @@ async function plugin(imports, register) {
             say.good(name + ' is ' + answer);
         }
 
+        //AND EVERY PAGE IS TOLD. The window keeps a mirror so a control can be
+        //painted without waiting -- a mirror nobody updates is a screen showing
+        //an answer that is no longer the answer, which on this particular screen
+        //is worse than showing nothing.
+        tell();
+
         return { decided: answer };
     }
 
@@ -218,6 +224,8 @@ async function plugin(imports, register) {
         }
 
         say.info(name + ' is back to nobody having said');
+        tell();
+
         return { forgotten: name };
     }
 
@@ -252,6 +260,14 @@ async function plugin(imports, register) {
             return out.refused ? { refused: out.refused } : out;
         }
 
+        //REFUSED FOR THE SAME REASON AND BY THE SAME LINE. Taking a guard back
+        //from a terminal is `guardSet --off` by another name -- the exact move
+        //this whole plugin exists to make impossible.
+        if (said.forget) {
+            var went = forget(said.forget, source);
+            return went.refused ? { refused: went.refused } : went;
+        }
+
         return { decisions: decisions(), answers: deciding.ANSWERS };
     });
 
@@ -280,7 +296,15 @@ async function plugin(imports, register) {
             return {
                 name: name,
                 about: declared[name].about || null,
-                answer: (one && one.answer) || forRun[name] || null
+                answer: (one && one.answer) || forRun[name] || null,
+
+                //WRITTEN DOWN, OR ONLY TRUE UNTIL THIS PROCESS ENDS. The page
+                //needs the difference to say it: "always" and "for this run"
+                //look identical from `answer` alone, and a screen offering to
+                //take back something that was never written would be offering
+                //to undo nothing.
+                remembered: !!one,
+                at: (one && one.at) || null
             };
         });
     }
@@ -310,6 +334,20 @@ async function plugin(imports, register) {
 
             ack(out);
         });
+
+        //TAKING ONE BACK IS A DECISION, so it goes through the same door and the
+        //same rule: the page says whether the browser called the press a
+        //person's, and ./deciding.js is the only thing that reads it.
+        //
+        //IT IS NOT SAFE-FROM-ANYBODY THE WAY "Not now" IS, even though it can
+        //only ever make the app do less. A driven run that could forget things
+        //could clear a `never` -- and the next outside caller would be asked
+        //about something a person had already refused, which is how a refusal
+        //quietly becomes a question again.
+        socket.on('may:forget', function (said, ack) {
+            var out = forget(said && said.name, { window: true, trusted: !!(said && said.trusted) });
+            if (typeof ack == 'function') ack(out);
+        });
     });
 
     await register(null, {
@@ -319,7 +357,9 @@ async function plugin(imports, register) {
             //declare its capabilities again.
             declare: function (name, about) {
                 declared[name] = { about: (about && about.about) || (typeof about === 'string' ? about : null) };
-                return function () { delete declared[name]; };
+                tell();
+
+                return function () { delete declared[name]; tell(); };
             },
 
             asks: asks,

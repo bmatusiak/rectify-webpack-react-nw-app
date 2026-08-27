@@ -138,6 +138,39 @@ function plugin(imports, register) {
         it('will not record a decision itself', function () {
             assert.ok(may.decide('serve', 'always').refused);
         });
+
+        //WHAT A SCREEN DRAWS. It is the mirror rather than a question, so it
+        //answers on the first frame -- a list that had to be awaited would paint
+        //an empty table and fill it in afterwards, which on this page reads as
+        //"nothing is guarded".
+        it('can say what is guarded and what was said about it, without asking', function () {
+            var rows = may.decisions();
+
+            assert.ok(rows.length > 0, 'the list is empty, so a screen would say nothing is guarded');
+
+            var serve = rows.filter(function (one) { return one.name === 'serve'; })[0];
+
+            assert.ok(serve, 'serve is not in the list');
+            assert.ok(serve.about && serve.about.length > 0, 'it does not say what serve is');
+
+            //`always` AND "for this run" LOOK IDENTICAL FROM `answer` ALONE, and
+            //a screen offering to take back something that was never written
+            //would be offering to undo nothing.
+            assert.equal(typeof serve.remembered, 'boolean', 'it cannot say whether it was written down');
+        });
+
+        //AND TAKING ONE BACK IS A DECISION, so this suite cannot do it either.
+        //Forgetting only ever makes the app do less, which is exactly why it
+        //looks safe to allow -- but a driven run that could forget things could
+        //clear a `never`, and the next caller would be asked about something a
+        //person had already refused.
+        it('cannot take a decision back with a press the browser called untrusted', async function () {
+            var out = await may.forget('probe-may-window-forget',
+                new MouseEvent('click', { bubbles: true }));
+
+            assert.ok(out && out.refused, 'a driven press forgot a decision');
+            assert.ok(out.refused.indexOf('press') > 0 || out.refused.indexOf('person') > 0, out.refused);
+        });
     });
 
     register();

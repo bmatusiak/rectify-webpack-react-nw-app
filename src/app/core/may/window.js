@@ -85,6 +85,28 @@ async function plugin(imports, register) {
         return Object.keys(guarded).filter(function (name) { return !guarded[name].answer; }).sort();
     }
 
+    //EVERYTHING THE CODE PROPOSED AND WHAT WAS SAID ABOUT IT, for a screen to
+    //draw. It is the mirror and not a fresh question, so it answers instantly
+    //and a page can render it -- main pushes a new list every time a decision
+    //changes, so what is drawn is what is true.
+    function decisions() {
+        return Object.keys(guarded).sort().map(function (name) { return guarded[name]; });
+    }
+
+    //---- and taking one back ----------------------------------------------
+    //
+    //THE PRESS TRAVELS WITH IT, exactly like the ask does. Main applies the same
+    //rule to forgetting as to deciding, so a driven press cannot clear a
+    //`never` -- which would turn a refusal somebody made back into a question
+    //the next caller gets to answer.
+    function forget(name, event) {
+        return new Promise(function (resolve) {
+            io.emit('may:forget', { name: name, trusted: personPressed(event) }, function (out) {
+                resolve(out || { refused: 'nothing answered' });
+            });
+        });
+    }
+
     //---- did a person do this ---------------------------------------------
     //
     //ASKED IN ONE PLACE, BY BOTH THINGS THAT NEED IT: the press that raises the
@@ -239,6 +261,8 @@ async function plugin(imports, register) {
             asks: asks,
             answered: answered,
             undecided: undecided,
+            decisions: decisions,
+            forget: forget,
 
             //SO A CONTROL REPAINTS THE MOMENT A DECISION CHANGES, rather than
             //at the next render something else happens to cause.

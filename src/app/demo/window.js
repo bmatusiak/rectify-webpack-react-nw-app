@@ -18,7 +18,7 @@ var ownPages = require('./pages');
 //theme -- which the README calls a slot you are expected to replace -- fail to
 //load if you deleted one of them.
 plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'preferences', 'session',
-    'editor', 'markdown', 'xterm', 'litegraph', 'ext', 'banner', 'pages', 'remember'];
+    'editor', 'markdown', 'xterm', 'litegraph', 'ext', 'banner', 'pages', 'remember', 'may'];
 plugin.provides = [];
 async function plugin(imports, register) {
     var { react, theme, appPackage, io, preferences, session, banner, pages, remember } = imports;
@@ -32,6 +32,7 @@ async function plugin(imports, register) {
     //type nobody owns.
     var bag = {
         theme: theme, io: io, appPackage: appPackage, preferences: preferences, session: session,
+        may: imports.may,
         services: imports.app.services, plugins: imports.app.plugins, ext: imports.ext,
         editor: imports.editor, markdown: imports.markdown,
         xterm: imports.xterm, litegraph: imports.litegraph

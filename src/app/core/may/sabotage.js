@@ -123,5 +123,30 @@ module.exports = [
         restart: true,
         find: '    function decide(name, answer, from) {',
         replace: '    function decide(name, answer, from) { from = { window: true, trusted: true };'
+    },
+    {
+        //FORGETTING IS THE DIRECTION THAT LOOKS HARMLESS, which is exactly why
+        //it is worth breaking on purpose. It can only ever make the app do less
+        //-- so letting anything do it seems like a kindness -- but a driven run
+        //that could forget things could clear a `never`, and the next caller
+        //would be asked about something a person had already refused. A refusal
+        //quietly turning back into a question is the failure with no symptom.
+        what: 'anything may take a decision back, including a never',
+        file: 'main.js',
+        check: 'core/may/main',
+        restart: true,
+        find: '    function forget(name, from) {',
+        replace: '    function forget(name, from) { from = { window: true, trusted: true };'
+    },
+    {
+        //AND THE PAGE'S HALF OF THE SAME SENTENCE. Main is only as good as what
+        //the window tells it about the press, so a page that always said "a
+        //person did this" would undo the rule from the other end.
+        what: 'the page says a person pressed it however it was pressed',
+        file: 'window.js',
+        check: 'core/may/window',
+        restart: true,
+        find: "            io.emit('may:forget', { name: name, trusted: personPressed(event) }, function (out) {",
+        replace: "            io.emit('may:forget', { name: name, trusted: true }, function (out) {"
     }
 ];

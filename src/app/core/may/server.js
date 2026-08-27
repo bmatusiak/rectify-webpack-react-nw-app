@@ -50,6 +50,16 @@ async function plugin(imports, register) {
                 };
             },
 
+            //AND THE SAME SENTENCE FOR TAKING ONE BACK. It is refused for the
+            //same reason it is refused over the wire: forgetting is a decision,
+            //and this half is not a person at a window either.
+            forget: function () {
+                return {
+                    refused: 'a decision cannot be made from the node half -- open the window and '
+                        + 'answer there. A guard the command line can remove is not a guard.'
+                };
+            },
+
             decisions: function () { return []; },
             ANSWERS: deciding.ANSWERS
         })

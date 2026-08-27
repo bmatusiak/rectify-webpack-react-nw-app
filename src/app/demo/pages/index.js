@@ -10,6 +10,10 @@ module.exports = [
     { id: 'disclosure', label: 'Disclosure', icon: 'chevron-expand', Page: require('./disclosure') },
     { id: 'layouts', label: 'Layouts', icon: 'columns-gap', Page: require('./layouts') },
 
+    //the elements are on Buttons and Forms; this is what a guard DOES -- who
+    //gets asked, and what happens to the answer afterwards
+    { id: 'guarded', label: 'Guarded', icon: 'shield-lock', Page: require('./guarded') },
+
     //the page-shaped ones, straight out of bootstrap's own examples folder
     { id: 'dashboard', label: 'Dashboard', icon: 'speedometer2', Page: require('./dashboard') },
     { id: 'checkout', label: 'Checkout', icon: 'bag-check', Page: require('./checkout') },

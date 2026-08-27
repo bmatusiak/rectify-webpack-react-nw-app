@@ -112,6 +112,57 @@ function plugin(imports, register) {
             } finally { forget(); undo(); }
         });
 
+        //`always` WITHOUT A WAY BACK IS A ONE-WAY DOOR. A person who allowed
+        //something and changed their mind had no way to say so, which makes the
+        //easy answer the dangerous one -- and teaches people to answer `once` to
+        //everything for ever rather than ever pressing it.
+        it('can take a written answer back', function () {
+            var undo = may.declare(probe, { about: 'a probe' });
+
+            try {
+                may.decide(probe, 'always', { window: true, trusted: true });
+                assert.ok(state.doc('may').read({ decisions: {} }).decisions[probe],
+                    'nothing was written down to take back');
+
+                var out = may.forget(probe, { window: true, trusted: true });
+                assert.equal(out.forgotten, probe, out.refused);
+
+                var kept = state.doc('may').read({ decisions: {} });
+                assert.equal(kept.decisions[probe], undefined, 'the answer is still on disk');
+
+                //FORGETTING IS NOT REFUSING. It puts the capability back to
+                //nobody having said, so the next outside caller is asked --
+                //which is a different thing from it being answered `never`.
+                assert.equal(may.decisions().filter(function (one) {
+                    return one.name === probe;
+                })[0].answer, null, 'it left an answer behind');
+            } finally { forget(); undo(); }
+        });
+
+        //THE SAME RULE, IN THE DIRECTION THAT LOOKS HARMLESS. Forgetting can
+        //only ever make the app do less, so it is tempting to let anything do
+        //it -- but a driven run that could forget things could clear a `never`,
+        //and the next caller would be asked about something a person had
+        //already refused. A refusal quietly becoming a question again is the
+        //one failure this plugin cannot have.
+        it('refuses to forget over the wire, and refuses a driven press too', function () {
+            var undo = may.declare(probe, { about: 'a probe' });
+
+            try {
+                may.decide(probe, 'never', { window: true, trusted: true });
+
+                var wire = may.forget(probe, { overTheWire: true });
+                assert.ok(wire.refused, 'the control socket cleared a never');
+                assert.ok(wire.refused.indexOf('open the window') > 0, wire.refused);
+
+                var driven = may.forget(probe, { window: true, trusted: false });
+                assert.ok(driven.refused, 'a driven click cleared a never');
+
+                assert.equal(state.doc('may').read({ decisions: {} }).decisions[probe].answer,
+                    'never', 'the never did not survive being asked to go');
+            } finally { forget(); undo(); }
+        });
+
         it('lists what a person has decided, with what the code said it was for', function () {
             var found = may.decisions().filter(function (one) { return one.name === 'serve'; })[0];
 
