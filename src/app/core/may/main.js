@@ -162,7 +162,13 @@ async function plugin(imports, register) {
         //answers an open question and does not overrule an answer somebody
         //already gave. A person who refused this last week should have to take
         //that back on purpose rather than by pressing the key again.
-        if (from.window && from.trusted) {
+        //
+        //AND IT ASKS ./deciding.js RATHER THAN TESTING `from` HERE. Written out
+        //as `from.window && from.trusted` it was a SECOND definition of "a
+        //person did this", sitting a few lines from the first -- and its own
+        //sabotage run proved nothing was watching it, because every entry in the
+        //list was about the original.
+        if (deciding.personDid(from)) {
             return { allowed: true, why: 'you did it yourself' };
         }
 

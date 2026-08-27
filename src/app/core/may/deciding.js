@@ -65,6 +65,25 @@ function mayDecide(from) {
 }
 
 //---------------------------------------------------------------------------
+//AND WHETHER A PERSON JUST DID IT, WHICH IS THE SAME QUESTION.
+//
+//`mayDecide` ASKS "is this a person at the window", for the purpose of writing
+//an answer down. This asks it for the purpose of doing the thing. There is no
+//second rule here on purpose -- two conditions meaning "a person did this" is
+//two places to get it wrong, and the one that drifts is whichever nobody reads.
+//
+//IT ALSO MEANS THE COVERAGE IS SHARED. Break the wire check or the trusted-press
+//check and BOTH collapse together, which the sabotages above `mayDecide` already
+//catch -- rather than a parallel copy that nothing was watching.
+//
+//WHY IT EXISTS AT ALL: ../may/window.js has always short-circuited a person's
+//press, so main never saw the case -- every guarded thing until now ACTS in the
+//page. A capability whose code lives in main has to come through main, and
+//without this a person pressing a key got a dialog asking whether they had meant
+//to press the key.
+function personDid(from) { return mayDecide(from) === null; }
+
+//---------------------------------------------------------------------------
 //WHETHER SOMETHING MAY HAPPEN.
 //
 //`kept` is what was written down, `runwise` is what was answered for this run,
@@ -146,5 +165,6 @@ function read(doc) {
 module.exports.ANSWERS = ANSWERS;
 module.exports.keeps = keeps;
 module.exports.mayDecide = mayDecide;
+module.exports.personDid = personDid;
 module.exports.verdict = verdict;
 module.exports.read = read;

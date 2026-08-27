@@ -62,6 +62,27 @@ module.exports = [
         replace: '            //sabotaged'
     },
     {
+        //THE RULE THAT SAYS A PERSON JUST DID IT, WHICH `may()` USES TO GO
+        //AHEAD WITHOUT ASKING ANYBODY.
+        //
+        //TAKEN THE WRONG WAY THIS IS THE WORST BREAK IN THE PLUGIN: every
+        //undecided capability is handed to anything that asks, and no dialog is
+        //ever raised, so there is nothing on screen to notice it by. It is a
+        //permission system that says yes and looks exactly like one that was
+        //answered.
+        //
+        //IT WAS WRITTEN OUT AT THE CALL SITE IN main.js AS `from.window &&
+        //from.trusted` -- a SECOND definition of a person, a few lines from the
+        //first -- and a full sabotage run of this plugin came back 13 of 13
+        //caught while nothing whatever was watching it. Sharing `mayDecide` is
+        //what puts it under the three entries above as well as this one.
+        what: 'anything is taken for a person who just did it',
+        file: 'deciding.js',
+        check: 'core/may/node',
+        find: 'function personDid(from) { return mayDecide(from) === null; }',
+        replace: 'function personDid(from) { return true; }'
+    },
+    {
         what: 'a once or a run is written down, so it outlives what it promised',
         file: 'deciding.js',
         check: 'core/may/node',

@@ -42,6 +42,35 @@ test('a decision from nowhere is refused', () => {
     assert.ok(deciding.mayDecide({}));
 });
 
+//---- and whether a person just did it ------------------------------------
+//
+//THE SAME QUESTION, ASKED FOR A DIFFERENT PURPOSE. `mayDecide` asks it to write
+//an answer down; this asks it to go ahead and do the thing. One rule and not
+//two, so a break in either direction shows up in both.
+
+//THE CASE IT EXISTS FOR. Without it, a person pressing ctrl+shift+D got a dialog
+//asking whether they had meant to press ctrl+shift+D -- see debug-snapshot,
+//which is the first capability whose code lives in main rather than in the page.
+test('a person at the window did it themselves', () => {
+    assert.equal(deciding.personDid({ window: true, trusted: true }), true);
+});
+
+//AND EVERY WAY OF NOT BEING ONE. This is the direction that matters: taken the
+//wrong way, `may()` hands out every undecided capability to anything that asks,
+//and no dialog is ever raised to notice it.
+test('nothing else did it themselves', () => {
+    assert.equal(deciding.personDid({ overTheWire: true }), false, 'the control socket');
+    assert.equal(deciding.personDid({ window: true, trusted: false }), false, 'a driven press');
+    assert.equal(deciding.personDid({}), false, 'a caller that said nothing');
+    assert.equal(deciding.personDid(null), false, 'a caller that was nothing');
+
+    //BOTH AT ONCE IS STILL THE WIRE. Nothing constructs this today -- ../ipc
+    //stamps `overTheWire` itself and a caller cannot reach past it -- but a rule
+    //that only holds because of what happens to call it is not a rule.
+    assert.equal(deciding.personDid({ overTheWire: true, window: true, trusted: true }), false,
+        'a wire call claiming to be a press');
+});
+
 //---- what is remembered --------------------------------------------------
 
 test('what nothing guards is simply allowed', () => {
