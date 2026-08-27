@@ -15,7 +15,7 @@ var path = require('path');
 //What it carries arrives on the host as `of` and `handedOver`, which is exactly
 //how an app plugin reaches its own main half without core naming it.
 plugin.consumes = ['app', 'appPackage', 'tray', 'ipc', 'window',
-    'dataDir', 'state', 'secret', 'log', 'cron', 'events', 'cached'];
+    'dataDir', 'state', 'secret', 'log', 'cron', 'events', 'cached', 'may'];
 plugin.provides = [];
 async function plugin(imports, register) {
     var { app, appPackage, tray, ipc, window: win } = imports;
@@ -147,6 +147,14 @@ async function plugin(imports, register) {
             }
         };
     }
+
+    //A CAPABILITY OF THE DEMO'S OWN, which is the point of declaring it here
+    //rather than in core: an app names what IT thinks is somebody's decision.
+    //Core has `serve` and `markup` because core owns those; a credential field
+    //belongs to whatever app has one.
+    var undeclare = imports.may.declare('demo:password', {
+        about: 'Fill in the demo password field. Nothing is done with what you type.'
+    });
 
     //---- the demo is the app, so the demo is what knows where it is --------
     //
@@ -368,6 +376,10 @@ async function plugin(imports, register) {
             //closure over a variable nothing can reach any more.
             unfollow();
             working = null;
+
+            //the declaration goes with the half that made it, so a reload does
+            //not leave a capability declared by code that is no longer running
+            undeclare();
 
             host.io.off('connection', onConnection);
             answered.remove();

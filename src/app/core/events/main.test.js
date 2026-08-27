@@ -21,6 +21,30 @@ function plugin(imports, register) {
 
     describe('what the app has done', function () {
 
+        //THE POLICY COMES OUT OF src/config.js, AND IT DID NOT.
+        //
+        //rectify hands every plugin the WHOLE config as its third argument and
+        //each one indexes by the service it provides -- ../window reads
+        //`config.window`. This read `config.keep`, so the block in the file was
+        //never looked at and the app ran on the defaults in ./keeping.js.
+        //
+        //NOTHING SAID SO, because the two lists agreed. It was found by adding a
+        //tag to the file and watching lines carrying it never reach the record.
+        //This is the check that would have caught it on the first run.
+        it('keeps what src/config.js says, not what it defaults to', function () {
+            var asked = require('../../../config.js')().events;
+
+            assert.ok(asked && asked.keep, 'src/config.js has no events policy to compare against');
+
+            asked.keep.forEach(function (tag) {
+                assert.ok(events.policy.keep.indexOf(tag) >= 0,
+                    'the config says keep "' + tag + '" and the record does not: it is running on '
+                    + 'its own defaults, which means the file is being ignored');
+            });
+
+            assert.equal(events.policy.most, asked.most);
+        });
+
         it('is really being kept, and says where', function () {
             assert.equal(events.kept, true, 'this half is not keeping anything');
             assert.ok(events.where.indexOf(dataDir.path) === 0,

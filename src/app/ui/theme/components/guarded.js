@@ -105,28 +105,95 @@ module.exports = function makeGuarded(may, plain) {
     return {
         Button: wrap(plain.Button),
 
-        //AN INPUT HAS NO PRESS, so what is guarded is the value being changed.
-        //The ring is the same; the lock is not, because an input has nowhere to
-        //put one without eating the field.
+        //AN INPUT IS GUARDED BY BEING READ-ONLY UNTIL SOMEBODY OPENS IT, which
+        //is not what guarding a button does -- see wrapInput below for why
+        //guarding its onChange was the obvious wrong answer.
         Input: wrapInput(plain.Input),
 
         useGuarded: useGuarded,
         wrap: wrap
     };
 
+    //A GUARDED FIELD IS ONE AN OUTSIDE CALLER HAS TO ASK ABOUT, and a person
+    //typing into it is not an outside caller. Clicking it opens it, with no
+    //dialog: the click is the consent, the same as a press on a guarded button.
+    //
+    //SO WHAT THE LOCK MEANS HERE is "a tool cannot fill this without asking" --
+    //which for a password field is the whole point of marking it.
+    //
+    //IT STARTS READ-ONLY SO THE MARK IS TRUE BEFORE ANYBODY TOUCHES IT, and one
+    //trusted mousedown or keypress opens it for as long as the page lasts.
+    //
+    //READ-ONLY RATHER THAN DISABLED, because a disabled field cannot be clicked
+    //-- so it could not be the thing you open it through -- and it is skipped by
+    //the keyboard, which would put the guard in the way of anybody not using a
+    //mouse.
+    //
+    //AND readOnly STOPS A PERSON, NOT A SCRIPT. Measured: with only the
+    //attribute set, `node src/cli.js fill "#f-guarded" hunter2` put the value
+    //straight in -- ../../../remote/window.js sets `.value` through the native
+    //setter and dispatches an input event, which readOnly has nothing to say
+    //about. So a change arriving while the field is shut goes through `may`
+    //like any other outside request, and the person is asked.
     function wrapInput(Control) {
         function GuardedInput(props) {
-            var { guard, onChange, onRefused, className, ...rest } = props;
+            var { guard, onChange, onRefused, onUnlocked, className, ...rest } = props;
+
             var on = useGuarded(guard);
+            var [open, setOpen] = useState(false);
 
             if (!guard) return React.createElement(Control, props);
 
-            async function change(event) {
-                var said = await may(guard, event);
+            var locked = on && !open;
 
-                if (!said.allowed) {
-                    if (onRefused) return onRefused(said);
-                    return console.warn('[may] ' + guard + ': ' + said.why);
+            //A PERSON OPENS IT BY TOUCHING IT. `may` answers a trusted event
+            //without asking anybody, so this is one round trip to nowhere and
+            //then an open field.
+            //
+            //AN UNTRUSTED ONE IS NOT HANDLED HERE AT ALL -- a driven mousedown
+            //should not raise a dialog just for pointing at a field. The
+            //question belongs to the attempt to CHANGE it, below.
+            async function unlock(event) {
+                if (!locked || !event || !event.isTrusted) return;
+
+                var said = await may(guard, event);
+                if (!said.allowed) return;
+
+                setOpen(true);
+                if (onUnlocked) onUnlocked(said);
+            }
+
+            //`readOnly` STOPS A PERSON AND NOT A SCRIPT, which is the whole
+            //reason this function is longer than it looks like it should be.
+            //
+            //MEASURED: with only `readOnly` set, `node src/cli.js fill
+            //"#f-guarded" hunter2` put the value straight in. The driver does
+            //not type -- ../../../remote/window.js sets `.value` through the
+            //native setter and dispatches an input event, and readOnly has
+            //nothing to say about that. The field looked locked and was not,
+            //which is precisely the mark promising what the mechanism cannot
+            //keep.
+            //
+            //SO A CHANGE ARRIVING WHILE IT IS LOCKED IS REFUSED, and because the
+            //field is controlled by react, not calling `onChange` means the
+            //value snaps back to what the page thinks it is on the next render.
+            async function changed(event) {
+                if (locked) {
+                    //THE VALUE IS ALREADY IN THE DOM AND HAS TO GO BACK. React
+                    //puts it back on the next render because the field is
+                    //controlled and `onChange` was not called -- so what a
+                    //refused fill leaves behind is the value the page had.
+                    var said = await may(guard, event);
+
+                    if (!said.allowed) {
+                        if (onRefused) return onRefused(said);
+                        return console.warn('[may] ' + guard + ': ' + said.why);
+                    }
+
+                    //ALLOWED, SO IT STAYS OPEN. A tool that asked and was told
+                    //yes should not have to ask again for the next character.
+                    setOpen(true);
+                    if (onUnlocked) onUnlocked(said);
                 }
 
                 if (onChange) onChange(event);
@@ -134,7 +201,16 @@ module.exports = function makeGuarded(may, plain) {
 
             return React.createElement(Control, Object.assign({}, rest, {
                 className: [className, on ? 'is-guarded' : null].filter(Boolean).join(' ') || undefined,
-                onChange: change
+
+                readOnly: locked || rest.readOnly,
+
+                //`onMouseDown` AND `onKeyDown`, so the field is reachable by
+                //either. Both carry the event, which is where the browser keeps
+                //its own word for whether a person did it.
+                onMouseDown: unlock,
+                onKeyDown: unlock,
+
+                onChange: changed
             }));
         }
 

@@ -194,6 +194,33 @@ async function plugin(imports, register) {
         return { decided: answer };
     }
 
+    //---- and taking one back ----------------------------------------------
+    //
+    //`always` WITHOUT THIS IS A ONE-WAY DOOR. A person who allowed something
+    //once and changed their mind had no way to say so -- which makes the easy
+    //answer the dangerous one, and teaches people to never pick it.
+    //
+    //IT IS A DECISION LIKE ANY OTHER, so it goes through the same rule: only a
+    //person at the window. Forgetting is not refusing -- what it does is put the
+    //capability back to nobody having said, so the next outside caller asks.
+    function forget(name, from) {
+        var no = deciding.mayDecide(from);
+        if (no) { say.warn('forgetting ' + name + ' was refused: ' + no); return { refused: no }; }
+
+        delete forRun[name];
+
+        var was = kept().read({});
+        var decisions = (was && was.decisions) || {};
+
+        if (decisions[name]) {
+            delete decisions[name];
+            kept().write({ decisions: decisions });
+        }
+
+        say.info(name + ' is back to nobody having said');
+        return { forgotten: name };
+    }
+
     //---- what a person has decided, for a screen --------------------------
 
     function decisions() {
@@ -241,8 +268,20 @@ async function plugin(imports, register) {
     //page from OUTSIDE and can only dispatch events the browser marks
     //untrusted. See ../../remote/window.js:186.
     function published() {
+        var back = stored();
+
         return Object.keys(declared).sort().map(function (name) {
-            return { name: name, about: declared[name].about || null };
+            var one = back.decisions[name];
+
+            //THE ANSWER TRAVELS WITH THE NAME, so the page can say "allowed
+            //always" next to a control rather than only that it is guarded --
+            //and so anything asking whether a question would even be raised can
+            //tell without raising one.
+            return {
+                name: name,
+                about: declared[name].about || null,
+                answer: (one && one.answer) || forRun[name] || null
+            };
         });
     }
 
@@ -285,6 +324,7 @@ async function plugin(imports, register) {
 
             asks: asks,
             decide: decide,
+            forget: forget,
             decisions: decisions,
             ANSWERS: deciding.ANSWERS
         }),

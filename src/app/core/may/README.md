@@ -21,6 +21,7 @@ var said = await may('serve', { from: from });   //-> { allowed } | { allowed: f
 may.asks(name)        is this guarded -- sync, for painting
 may.decisions()       what a person has decided, and what the code said it was for
 may.decide(name, answer, from)   WINDOW ONLY
+may.forget(name, from)           WINDOW ONLY -- back to nobody having said
 may.ANSWERS           once, run, always, never
 ```
 
@@ -30,17 +31,59 @@ is where the browser keeps its own word for whether a person did it:
 ```js
 var said = await may('serve', event);   //reads event.isTrusted before anything is awaited
 may.onChange(fn)                        //-> unsubscribe. repaint when a decision moves
+may.answered('serve')                   //the answer already given, or null
+may.undecided()                         //guarded things nobody has answered yet
 ```
+
+`answered` is how a page says *allowed always* beside a control instead of only
+that it is guarded. `undecided` is how anything finds out whether a question
+would even be raised **without raising one** — its own suite needs that: a test
+that wants to see the dialog has to pick something that still asks, and naming
+one in the source meant the day somebody answered it, the test quietly asserted
+a question about a thing that no longer asks.
 
 ```sh
 node src/cli.js may       # what is guarded and what has been decided
 ```
+
+## the question is for everything that is not a person
+
+**A person pressing a guarded control is not asked anything.** They are sitting
+there and they meant it — and a dialog confirming what somebody just did is the
+kind people learn to click through without reading.
+
+**The dialog is for the command line, an MCP tool, a model driving the window.**
+That is what a guarded control is *for*: not to slow a person down, but to give
+an outside caller a way to **ask** rather than either being refused outright or
+helping itself.
+
+So the lock does not mean *you need permission*. It means **something outside has
+to ask about this one**, and it tells a person what the control is protected
+from.
+
+`event.isTrusted` is what tells them apart, and a page cannot forge it.
+
+| who | what happens |
+|---|---|
+| a person presses it | it happens |
+| the cli, a tool, a model | a question goes up in the window |
+| that same caller answering the question | ignored — only a person may allow |
+| that same caller pressing **Not now** | allowed. Refusing can only make the app do less |
+
+**Anything may say no**, and it has to: a dialog only a person can dismiss is one
+that sits over the app until somebody comes back, with a driven run wedged on it
+and the thing it asked about not happening either way.
 
 ## the code proposes and a person decides
 
 A plugin says `may.declare('serve')` — that is the app's opinion that opening a
 port is somebody's decision to make — and it stands until a person answers.
 Nothing here decides anything on its own.
+
+**A decision can be taken back.** `always` without `forget` is a one-way door,
+which makes the easy answer the dangerous one and teaches people never to pick
+it. Forgetting is not refusing: it puts the capability back to nobody having
+said, so the next outside caller asks.
 
 **Answers have scope**: `once`, `run`, `always`, `never`. Only `always` and
 `never` are written down; `run` lives in main's memory and dies with the process,

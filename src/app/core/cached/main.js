@@ -114,7 +114,10 @@ async function plugin(imports, register, config) {
     }
 
     var drawers = Drawers({
-        keep: (config && config.keep) || undefined,
+        //`config.cached`, NOT `config` -- the third argument is the whole of
+        //src/config.js, indexed by the service name. ../events had the same
+        //line and it meant the configured policy was never read at all.
+        keep: (config && config.cached && config.cached.keep) || undefined,
         load: load,
         save: save
     });

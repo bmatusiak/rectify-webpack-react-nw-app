@@ -18,15 +18,28 @@ var deciding = require('./deciding');
 //IT IS ALSO WHY core DOES NOT CONSUME ui HERE. That direction is backwards
 //everywhere else in the app and would be worse in this file than in any other.
 //
-//---- the check that makes the mark honest ---------------------------------
+//---- who the question is for ----------------------------------------------
 //
-//`event.isTrusted` IS THE BROWSER'S OWN, AND A PAGE CANNOT FORGE IT. It is
-//false for every event javascript constructs, which is exactly what
-//../../remote/window.js builds and dispatches to drive this app.
+//A PERSON PRESSING A GUARDED CONTROL IS NOT ASKED ANYTHING. Their press is the
+//consent -- they are sitting there and they meant it. A dialog confirming what
+//somebody just did is the kind people learn to click through without reading,
+//and one of those is worth less than none.
 //
-//SO AN UNTRUSTED PRESS IS REFUSED WITHOUT ASKING. Putting the dialog up for a
-//driven click would only mean a second driven click could answer it -- the
-//prompt would become the hole rather than the gate.
+//THE DIALOG IS FOR EVERYTHING ELSE: the command line, an MCP tool, a model
+//driving the window. That is what a guarded control is FOR -- not to slow a
+//person down, but to give an outside caller a way to ASK rather than either
+//being refused outright or helping itself.
+//
+//`event.isTrusted` IS WHAT TELLS THEM APART, and a page cannot forge it: false
+//for every event javascript constructs, which is what ../../remote/window.js
+//builds to drive this app.
+//
+//SO THE LOCK MEANS "SOMETHING OUTSIDE HAS TO ASK ABOUT THIS", not "you need
+//permission". It tells a person what the control is protected FROM.
+//
+//AND ONLY A PERSON MAY ANSWER THE DIALOG, which is what stops a driven click
+//raising a question and a second driven click answering it. Refusing is the one
+//thing anything may do -- see `answer` below.
 //---------------------------------------------------------------------------
 
 plugin.consumes = ['io'];
@@ -59,6 +72,18 @@ async function plugin(imports, register) {
     io.emit('may:list', {}, apply);
 
     function asks(name) { return !!guarded[name]; }
+
+    //WHAT HAS ALREADY BEEN ANSWERED, so a page can say so next to a control --
+    //and so anything that wants to know whether a question would be raised can
+    //find out without raising one.
+    function answered(name) { return (guarded[name] && guarded[name].answer) || null; }
+
+    //THE GUARDED THINGS NOBODY HAS DECIDED YET. Its own suite needs this: a test
+    //that wants to see the dialog has to pick something that would still raise
+    //one, and `serve` having been answered once left it asking about nothing.
+    function undecided() {
+        return Object.keys(guarded).filter(function (name) { return !guarded[name].answer; }).sort();
+    }
 
     //---- did a person do this ---------------------------------------------
     //
@@ -123,13 +148,19 @@ async function plugin(imports, register) {
                 never: 'Never'
             };
 
-            function answer(said) {
-                //TRUSTED HERE TOO, NOT ONLY AT THE BUTTON THAT ASKED. The
-                //dialog is in the same page a driven click can reach, so the
-                //answer needs the same check the question did -- otherwise the
-                //prompt is the way around the prompt.
+            //SAYING NO IS THE ONE THING ANYTHING MAY DO.
+            //
+            //Every answer that ALLOWS needs a person, or a driven click could
+            //raise the question and a second driven click could answer it --
+            //the prompt would be the way around the prompt.
+            //
+            //REFUSING IS SAFE FROM ANYBODY, and making it so is not just a
+            //convenience. A dialog only a person can dismiss is a dialog that
+            //sits over the app until somebody comes back -- a driven run wedged
+            //on a modal, with the thing it asked about not happening either way.
+            function answer(said, safe) {
                 return function (event) {
-                    if (!personPressed(event)) return;
+                    if (!safe && !personPressed(event)) return;
 
                     close();
                     resolve(said);
@@ -147,6 +178,19 @@ async function plugin(imports, register) {
 
                 row.appendChild(button);
             });
+
+            //NOT AN ANSWER, AND NOT RECORDED. "Not now" is how the question goes
+            //away without deciding anything -- and it is the one control here
+            //that anything may press, because refusing can only make the app do
+            //less than it was asked to.
+            var away = document.createElement('button');
+
+            away.type = 'button';
+            away.className = 'btn btn-sm btn-link text-body-secondary ms-auto';
+            away.textContent = 'Not now';
+            away.addEventListener('click', answer(null, true));
+
+            row.appendChild(away);
 
             body.appendChild(title);
             body.appendChild(lead);
@@ -169,22 +213,22 @@ async function plugin(imports, register) {
     //---- and asking on behalf of a press ----------------------------------
 
     function may(name, event) {
-        var trusted = personPressed(event);
-
-        //REFUSED HERE RATHER THAN BY MAIN, so the page never even asks about a
-        //press that was not a person's. Main would refuse it too -- see
-        //./deciding.js, which has one path to a yes -- but a round trip to
-        //learn that is a round trip a driven run gets to make.
-        if (!trusted) {
-            return Promise.resolve({
-                allowed: false,
-                why: 'that press was not a person\'s -- the browser marked it untrusted, which is '
-                    + 'what a driven click is'
-            });
+        //A PERSON DID IT, SO IT HAPPENS. No round trip and no dialog: the press
+        //IS the consent, and asking somebody to confirm what they just did is
+        //how a prompt becomes something people click through unread.
+        //
+        //IT DOES NOT CONSULT A STORED `never` EITHER, and that is deliberate. A
+        //`never` is an answer about what OUTSIDE callers may do; it was never a
+        //promise to stop the person who set it from using their own app.
+        if (personPressed(event)) {
+            return Promise.resolve({ allowed: true, why: 'you pressed it yourself' });
         }
 
+        //AND EVERYTHING ELSE ASKS. This is the case the whole plugin is for: a
+        //model, a tool, or the command line reaching into the window, which main
+        //turns into a question for whoever is sitting in front of it.
         return new Promise(function (resolve) {
-            io.emit('may:want', { name: name, trusted: true }, function (out) {
+            io.emit('may:want', { name: name, trusted: false }, function (out) {
                 resolve(out || { allowed: false, why: 'nothing answered' });
             });
         });
@@ -193,6 +237,8 @@ async function plugin(imports, register) {
     await register(null, {
         may: Object.assign(may, {
             asks: asks,
+            answered: answered,
+            undecided: undecided,
 
             //SO A CONTROL REPAINTS THE MOMENT A DECISION CHANGES, rather than
             //at the next render something else happens to cause.

@@ -23,12 +23,33 @@ function plugin(imports, register) {
         //THE RULE, FROM THE HALF MOST LIKELY TO TRY. A model reaching this app
         //arrives here, and this is where "just turn the guard off first" would
         //be attempted.
-        it('cannot decide anything from here either', function () {
-            var out = may.decide('serve', 'always', { window: true, trusted: true });
+        //
+        //IT ASKS ABOUT A PROBE AND NOT ABOUT `serve`, AND THAT IS THE POINT OF
+        //THE WHOLE COMMENT. The first version of this called
+        //`may.decide('serve', 'always', { window: true, trusted: true })` and
+        //asserted `refused || decided` -- which is true whatever happens, so it
+        //checked nothing. And because this half's `may` IS main's, the call went
+        //through: every run of the suite left `serve` permanently allowed in the
+        //real app. A test that asserts nothing and grants a permission is the
+        //worst of both.
+        it('cannot decide anything over the wire from here either', function () {
+            var probe = 'probe-server-may-' + process.pid;
+            var out = may.decide(probe, 'always', { overTheWire: true });
 
-            //even claiming to be a trusted window press, because this half is
-            //not a window and cannot have had one
-            assert.ok(out.refused || out.decided, 'it answered neither way');
+            assert.ok(out.refused, 'the node half decided something over the wire');
+            assert.ok(out.refused.indexOf('open the window') > 0, out.refused);
+        });
+
+        //AND WHAT IT CAN DO, SAID PLAINLY RATHER THAN LEFT TO BE DISCOVERED.
+        //
+        //This half runs in the same process as main, so a call from here saying
+        //it is a trusted window press is one main cannot check -- and that is
+        //not a hole, because code running in this process could do the thing
+        //itself without asking. What `may` protects is the app's SURFACE: the
+        //control socket, the MCP tools, a driven window. See ./README.md.
+        it('is not pretending to defend the app from its own code', function () {
+            assert.equal(typeof may.decide, 'function');
+            assert.equal(may.decide('probe-anything', 'always', { overTheWire: true }).decided, undefined);
         });
 
         it('has the whole surface, not a narrower stand-in', function () {

@@ -43,10 +43,21 @@ async function plugin(imports, register, config) {
     //core, and it is why the same list could not be carried over: nothing in
     //this scaffold has a `vm`. So the shape comes here and the words come from
     //src/config.js, keyed by service name like every other plugin's.
+    //`config.events`, NOT `config`. The third argument is the WHOLE of
+    //src/config.js and every plugin indexes into it by the service it provides
+    //-- ../window reads `config.window`, ../tray reads `config.tray`.
+    //
+    //READING IT AS THE SLICE ITSELF MEANT THIS SILENTLY IGNORED THE FILE. The
+    //app ran on these defaults from the day the config block was written, and
+    //nothing said so: the record kept the right things by coincidence, because
+    //the default list and the configured one agreed. It was found by adding
+    //`may` to the file and watching decisions never turn up in the record.
+    var mine = (config && config.events) || {};
+
     var policy = {
-        keep: (config && config.keep) || keeping.KEEP,
-        never: (config && config.never) || keeping.NEVER,
-        most: (config && config.most) || keeping.MOST
+        keep: mine.keep || keeping.KEEP,
+        never: mine.never || keeping.NEVER,
+        most: mine.most || keeping.MOST
     };
 
     var FILE = 'events.jsonl';

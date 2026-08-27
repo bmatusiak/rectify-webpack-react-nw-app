@@ -6,7 +6,7 @@ var { useState } = React;
 
 module.exports = function Forms(props) {
     var { theme, preferences, toast } = props;
-    var { Section, Form, Input, Textarea, Select, Check, Range, InputGroup, Button, Card, Alert, Badge } = theme.ui;
+    var { Section, Form, Input, Textarea, Select, Check, Range, InputGroup, Button, Card, Alert, Badge, Icon } = theme.ui;
 
     var saved = preferences('demo.profile', {
         name: '', email: '', role: 'developer', about: '', notify: true, level: 50
@@ -17,6 +17,13 @@ module.exports = function Forms(props) {
         about: saved.about, notify: saved.notify, level: saved.level
     });
     var [savedAt, setSavedAt] = useState(null);
+
+    //NOTHING IS DONE WITH EITHER OF THESE. The point of the pair is the shape of
+    //the control, not the value -- and a demo that really kept a password would
+    //be teaching the opposite of ../core/secret.
+    var [secret, setSecret] = useState('');
+    var [plain, setPlain] = useState('');
+    var locked = !secret;
 
     function set(key) {
         return function (e) {
@@ -35,6 +42,46 @@ module.exports = function Forms(props) {
 
     return (
         <>
+            <Section title="A field that is a person's to fill" id="guarded-field"
+                lead="core/may -- read-only until somebody says otherwise, beside the same field without a guard">
+
+                <div className="row g-3">
+                    <div className="col-md-6">
+                        <Input id="f-guarded" type="password" label="Password"
+                            guard="demo:password"
+                            value={secret} onChange={function (e) { setSecret(e.target.value); }}
+                            onRefused={function (said) { toast(said.why, 'warning', 'shield-lock'); }}
+                            onUnlocked={function () { toast('the field is yours now', 'success', 'unlock'); }}
+                            hint={locked
+                                ? 'click it and type -- nothing will ask you anything'
+                                : 'open for as long as this page is'} />
+                    </div>
+
+                    <div className="col-md-6">
+                        <Input id="f-plain" type="password" label="The same field, unguarded"
+                            value={plain} onChange={function (e) { setPlain(e.target.value); }}
+                            hint="type into it straight away" />
+                    </div>
+                </div>
+
+                <Alert variant="secondary" className="d-flex align-items-start gap-2 mt-3 mb-0">
+                    <Icon name="shield-lock" className="mt-1" />
+                    <span>
+                        <strong>Click it and type. You will not be asked anything.</strong> The lock
+                        says an outside caller has to ask before it can fill this &mdash; which for a
+                        password field is the whole reason to mark one.
+                        {' '}Try <code>node src/cli.js fill &quot;#f-guarded&quot; hunter2</code> and a
+                        question comes up here instead.
+                        {' '}It starts read-only so the mark is true before anybody touches it, and
+                        read-only rather than disabled because a disabled field cannot be clicked and
+                        is skipped by the keyboard. <strong>readOnly stops a person, not a script</strong>
+                        &mdash; measured &mdash; so a value arriving while it is shut goes through
+                        <code>may</code> like any other outside request.
+                    </span>
+                </Alert>
+            </Section>
+
+
             <Section title="Forms" lead="validated by the browser, stored by the app"
                 aside={savedAt ? <Badge variant="success" pill>saved {savedAt}</Badge> : null}>
                 <div className="row g-4">

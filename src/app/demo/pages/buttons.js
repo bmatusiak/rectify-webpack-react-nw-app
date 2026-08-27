@@ -25,10 +25,17 @@ module.exports = function Buttons(props) {
                 lead="a press that is a person's to make, beside the same control without a guard">
 
                 <p className="text-body-secondary">
-                    The lock and the ring are painted from <code>core/may</code>, and the press goes
-                    through it &mdash; so a control cannot be drawn as guarded without being guarded,
-                    or guarded without saying so. Try the pair below, then drive the same button from
-                    the terminal and watch it refuse.
+                    <strong>Press it. Nothing will ask you anything</strong> &mdash; you are sitting
+                    here, and your press is the consent. The lock does not mean <em>you</em> need
+                    permission; it means <strong>something outside has to ask about this one</strong>.
+                </p>
+
+                <p className="text-body-secondary">
+                    Try it from a terminal instead &mdash;{' '}
+                    <code>node src/cli.js click &quot;Write the page to a file&quot;</code> &mdash;
+                    and a question comes up here for you to answer. That is what the mark is for: an
+                    outside caller gets a way to ask rather than being refused outright or helping
+                    itself.
                 </p>
 
                 <div className="d-flex flex-wrap gap-3 align-items-center mb-3">

@@ -71,16 +71,19 @@ module.exports = [
 
     //---- and the page, which is where the refusal has to happen -------------
     {
-        //REFUSED IN THE PAGE, BEFORE ASKING MAIN. Main would refuse it too, but
-        //a round trip to learn that is a round trip a driven run gets to make --
-        //and a prompt raised for a driven click is one a second driven click can
-        //answer.
-        what: 'the page asks main about a press the browser called untrusted',
+        //THE ASYMMETRY THAT LETS THE DIALOG EXIST AT ALL.
+        //
+        //Anything may say no -- refusing can only make the app do less, and a
+        //dialog only a person can dismiss would leave every driven run staring
+        //at a modal. But ALLOWING needs a person, or one driven press raises the
+        //question and a second gets through it, and the prompt becomes the way
+        //around the prompt.
+        what: 'anything may answer the question, not just take it away',
         file: 'window.js',
         check: 'core/may/window',
         restart: true,
-        find: '        if (!trusted) {',
-        replace: '        if (false) {'
+        find: '                    if (!safe && !personPressed(event)) return;',
+        replace: '                    if (false) return;'
     },
     {
         //THE CHECK ITSELF, WHICH IS ONE FUNCTION FOR A REASON.
@@ -109,11 +112,16 @@ module.exports = [
         replace: '    function asks(name) { return false; }'
     },
     {
-        what: 'a decision is taken without asking who made it',
+        //A SINGLE LINE, BECAUSE `forget` ASKS THE SAME QUESTION and the tool
+        //refuses a pattern that matches twice -- which is the right refusal: a
+        //sabotage that breaks two things does not say which one the check
+        //noticed. So this stamps the caller as a person on the way in, which is
+        //the same fault seen from one step earlier.
+        what: 'every caller is taken for a person at the window',
         file: 'main.js',
         check: 'core/may/main',
         restart: true,
-        find: '        var no = deciding.mayDecide(from);',
-        replace: '        var no = null; deciding.mayDecide(from);'
+        find: '    function decide(name, answer, from) {',
+        replace: '    function decide(name, answer, from) { from = { window: true, trusted: true };'
     }
 ];

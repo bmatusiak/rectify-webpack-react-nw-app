@@ -439,33 +439,44 @@ async function guarded (ipc) {
     return check('a guarded control refuses a driven press', false, pressed.error)
   }
 
-  // and the same for the answer coming back
-  let said = []
+  // A DRIVEN PRESS RAISES A QUESTION RATHER THAN DOING THE THING, which is the
+  // whole point of a guarded control: an outside caller gets a way to ASK, and
+  // a person answers. This tool is exactly such a caller.
+  let box = null
 
-  for (let tries = 0; tries < 30; tries++) {
-    said = saw(await ipc.call('read', { selector: '.toast' }).catch(() => null))
-    if (said.length) break
+  for (let tries = 0; tries < 40; tries++) {
+    box = saw(await ipc.call('read', { selector: '#may-asking' }).catch(() => null))
+    if (box.length) break
     await new Promise(r => setTimeout(r, 150))
   }
 
-  // THE REFUSAL IS THE PASS. The page says why in a toast, and a prompt must
-  // NOT be up -- one raised for a driven click is one a second driven click
-  // could answer.
-  const text = said.join(' ')
+  check('a driven press asks a person instead of going ahead', box.length > 0,
+    box.length ? box[0].slice(0, 60) : 'nothing was asked, so it either refused or just did it')
 
-  // MATCHED ON WORDS THAT SURVIVE. `read` truncates anything past sixty
-  // characters, and the first version looked for "untrusted" -- which is the
-  // eleventh word of the refusal and was always cut off. The check saw the
-  // refusal and called it silence.
-  check('a guarded control refuses a driven press', text.indexOf('not a person') >= 0,
-    text ? text.slice(0, 80)
-      : 'it said nothing at all, which is not a refusal -- it pressed '
-        + ((pressed && pressed.clicked && pressed.clicked.text) || JSON.stringify(pressed).slice(0, 60)))
+  if (!box.length) return
 
-  const asking = saw(await ipc.call('read', { selector: '#may-asking' }).catch(() => null))
+  // AND THIS RUN CANNOT ANSWER IT YES. Every event this tool makes is one the
+  // browser marks untrusted, so pressing "Always" must leave the question up --
+  // otherwise one driven press raises the dialog and a second gets through it.
+  // "JUST THIS ONCE" AND NOT "ALWAYS", because `once` is never written down.
+  // If the check this is testing were broken, pressing "Always" here would grant
+  // the capability permanently in the real app -- a drive run leaving a standing
+  // permission behind is a worse outcome than the failure it was looking for.
+  await ipc.call('click', { text: 'Just this once' }).catch(() => null)
+  await new Promise(r => setTimeout(r, 300))
 
-  check('and puts no prompt up for one', !asking.length,
-    'a driven press raised a dialog a driven press could answer')
+  const after = saw(await ipc.call('read', { selector: '#may-asking' }).catch(() => null))
+
+  check('and cannot answer its own question', after.length > 0,
+    'a press the browser called untrusted allowed something')
+
+  // BUT IT MAY ALWAYS SAY NO, and it has to -- a dialog only a person can
+  // dismiss would leave every run after this one staring at a modal.
+  await ipc.call('click', { text: 'Not now' }).catch(() => null)
+  await new Promise(r => setTimeout(r, 300))
+
+  const gone = saw(await ipc.call('read', { selector: '#may-asking' }).catch(() => null))
+  check('and can always take the question away', !gone.length, 'the dialog would not go')
 }
 
 async function readable (ipc, page, selector, what) {
