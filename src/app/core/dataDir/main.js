@@ -1,4 +1,3 @@
-var os = require('node:os');
 var path = require('node:path');
 var fs = require('node:fs');
 
@@ -39,10 +38,10 @@ var fs = require('node:fs');
 //browser's, and ../webStorage is where it goes.
 //---------------------------------------------------------------------------
 
-//WHERE PROFILES SIT INSIDE THE APP'S DIRECTORY, named once in
-//../../../profile.js so the boot that validates the name and the plugin that
-//builds the path cannot come to differ about the layout.
-var PROFILES = require('../../../profile').FOLDER;
+//WHERE THINGS GO IS IN ./places.js, answerable without an app. It was inline
+//here, and nothing could check it: this app runs with no profile, so the branch
+//that puts one somewhere never ran and its own sabotages survived.
+var places = require('./places');
 
 plugin.consumes = ['app'];
 plugin.provides = ['dataDir'];
@@ -54,9 +53,7 @@ async function plugin(imports, register) {
     //two shapes, because main IS the host and the node half is handed one.
     var name = (app.appPackage && app.appPackage.name) || 'rectify-app';
 
-    var root = process.platform === 'win32'
-        ? path.join(process.env.LOCALAPPDATA || os.homedir(), name)
-        : path.join(os.homedir(), '.config', name);
+    var root = places.root(name);
 
     //A PROFILE MOVES ALL OF IT, WHICH IS THE WHOLE FEATURE.
     //
@@ -75,7 +72,7 @@ async function plugin(imports, register) {
     //between two data directories. A namespace changes a DRAWER, at runtime,
     //and leaves the things that must survive the switch where they are.
     var profile = app.profile || null;
-    var dir = profile ? path.join(root, PROFILES, profile) : root;
+    var dir = places.within(root, profile);
 
     await register(null, {
         dataDir: {
@@ -99,16 +96,7 @@ async function plugin(imports, register) {
             //WHAT WORLDS THERE ARE. A profile is created by being asked for, so
             //nothing else can list them -- and a switch nobody can enumerate is
             //a switch with no way back except remembering what you typed.
-            profiles: function () {
-                try {
-                    return fs.readdirSync(path.join(root, PROFILES), { withFileTypes: true })
-                        .filter(function (e) { return e.isDirectory(); })
-                        .map(function (e) { return e.name; })
-                        .sort();
-                } catch (e) {
-                    return [];//none have ever been used, which is not an error
-                }
-            },
+            profiles: function () { return places.namesIn(root); },
 
             at: function (/* ...parts */) {
                 return path.join.apply(path, [dir].concat([].slice.call(arguments)));
