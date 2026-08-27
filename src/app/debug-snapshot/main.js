@@ -57,14 +57,34 @@ var path = require('node:path');
 //tree in cleartext and are the right thing to delete after reading.
 //---------------------------------------------------------------------------
 
-plugin.consumes = ['app', 'ipc', 'window', 'bridge', 'may', 'log'];
+plugin.consumes = ['ipc', 'window', 'bridge', 'may', 'log', 'dataDir'];
 plugin.provides = [];
 async function plugin(imports, register) {
-    var { app, ipc, bridge, may } = imports;
+    var { ipc, bridge, may, dataDir } = imports;
     var win = imports.window;
     var say = imports.log.on('snapshot');
 
-    function shots() { return path.join(app.root, 'shots'); }
+    //IN THE DATA DIR, NOT IN THE WORKING TREE.
+    //
+    //It was `shots/` in the project root, which is gitignored -- and gitignored
+    //is not the same as safe. These files hold whatever was on the screen, in
+    //cleartext, and a repository is the one place a person routinely copies
+    //wholesale: a zip of the folder, a `git add -f`, an editor that indexes
+    //everything, somebody else's .gitignore after a merge.
+    //
+    //../core/dataDir IS WHERE EVERYTHING ELSE THE APP WRITES ALREADY LIVES --
+    //the state, the cache, the record, the decisions -- and it is outside the
+    //repository entirely. It also follows the profile, so a snapshot taken in
+    //one workspace does not turn up in another's folder.
+    //
+    //A NAME GIVEN ON THE COMMAND LINE STILL LANDS WHERE YOU ARE STANDING. Only
+    //the default moved; ./cli.js resolves what you type against your own
+    //directory, and the answer prints the full path either way.
+    //
+    //RESOLVED LAZILY, like ../core/state and ../core/cached: ../core/dataDir
+    //refuses when there is no main half behind it, and asking at setup would
+    //turn "cannot write a snapshot" into "will not load".
+    function shots() { return dataDir.at('snapshots'); }
 
     //TWO FILES THAT SHARE A NAME. A pair from one moment that does not is a pair
     //somebody has to match up by timestamp, at the point they are already

@@ -49,6 +49,13 @@ async function plugin(imports, register) {
     //the buffer stops here rather than going down the socket: the wire is one
     //json object per line, and a megabyte of base64 on it would be a waste of
     //both ends when the file wants to be a file anyway
+    //
+    //NOT GUARDED, WHICH IS A DECISION AND NOT AN OVERSIGHT -- see ./README.md.
+    //The short of it: this writes a FILE on this machine, where a person can look
+    //before it goes anywhere, and anything that could both call this and read
+    //that file already has a shell. ../../../app_plugins/mcp-example's
+    //`screenshot` asks about the same pixels because it hands them back over the
+    //channel the caller is already on, with no step in between.
     answer('capture', async function (data) {
         var shot = await control.capture(data);
 

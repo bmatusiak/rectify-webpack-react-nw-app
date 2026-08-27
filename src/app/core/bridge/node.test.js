@@ -59,6 +59,31 @@ test('a handler that answers twice is only heard once', async () => {
     assert.equal(count, 1);
 });
 
+//AND IT DOES NOT SEND ONE EITHER, which is a different fact from the one above
+//and the only one that is checkable here.
+//
+//THE TEST ABOVE CANNOT SEE THE DIFFERENCE. The receiving end deletes `pending`
+//when the first answer lands, so a second reply arrives for a caller nobody is
+//waiting for and vanishes -- the far end being tidy hides the near end being
+//wrong. Its own sabotage proved that by surviving: `if (answered) return` was
+//removed and every assertion still passed.
+//
+//SO THIS COUNTS WHAT WENT ON THE WIRE. Two protocol messages for one call is a
+//bug whether or not the other end happens to swallow the second, and the id it
+//carries belongs to whatever has since taken that number.
+test('a handler that answers twice sends one reply, not two', () => {
+    const sent = [];
+    const b = wire((line) => sent.push(JSON.parse(line)));
+
+    b.on('once', (data, reply) => { reply('first'); reply('second'); });
+    b.receive(JSON.stringify({ event: 'once', data: {}, id: 7 }));
+
+    const replies = sent.filter((msg) => msg.reply === 7);
+
+    assert.equal(replies.length, 1, 'it put ' + replies.length + ' answers on the wire for one call');
+    assert.equal(replies[0].data, 'first');
+});
+
 test('nothing is left waiting once an answer is in', async () => {
     const { a, b } = pair();
     b.on('ping', (data, reply) => reply('pong'));

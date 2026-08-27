@@ -12,14 +12,18 @@ var path = require('node:path');
 //earlier version of this suite wrote into `shots/`, which is where a person's
 //own snapshots are, and left `snapshot-*.png` behind on every run.
 
-plugin.consumes = ['selftest', 'ipc', 'may', 'window', 'app'];
+plugin.consumes = ['selftest', 'ipc', 'may', 'window', 'dataDir'];
 plugin.provides = [];
 function plugin(imports, register) {
     var { describe, it, assert } = imports.selftest;
-    var { ipc, may, app } = imports;
+    var { ipc, may } = imports;
     var win = imports.window;
 
-    var here = path.join(app.root, 'shots', 'probe-snapshot-' + process.pid);
+    //IN THE SCRATCH FOLDER, NOT WHERE A PERSON'S OWN SNAPSHOTS GO. These write
+    //real pictures of whatever is on the screen; leaving them beside the files
+    //somebody took on purpose mixes a suite's litter in with their work, and two
+    //of them escaped that way already.
+    var here = path.join(require('node:os').tmpdir(), 'probe-snapshot-' + process.pid);
 
     //A PERSON AT THE WINDOW, WHICH IS WHAT THE COMMAND WOULD SEE IF SOMEBODY
     //PRESSED THE KEY. Calling it with nothing would make it an outside caller
@@ -56,6 +60,23 @@ function plugin(imports, register) {
         //-- and a guard nobody declares is a command with nothing in front of it.
         it('is somebody\'s decision to make', function () {
             assert.equal(may.asks('snapshot'), true, 'writing the screen down is not guarded');
+        });
+
+        //OUT OF THE WORKING TREE. `shots/` was gitignored, and gitignored is not
+        //the same as safe -- a repository is the one folder a person routinely
+        //copies wholesale. These files hold whatever was on the screen.
+        it('keeps them in the data dir, not in the repository', async function () {
+            var out = await ipc.invoke('snapshot', {}, asPerson);
+
+            try {
+                assert.ok(!out.skipped, out.why);
+                assert.ok(out.name.indexOf(imports.dataDir.path) === 0,
+                    out.name + ' is not under ' + imports.dataDir.path);
+            } finally {
+                [out.markup, out.picture].filter(Boolean).forEach(function (f) {
+                    try { fs.unlinkSync(f); } catch (e) { /* never written */ }
+                });
+            }
         });
 
         //THE WHOLE REASON THIS PLUGIN EXISTS. Two files of one moment, sharing a
@@ -133,21 +154,40 @@ function plugin(imports, register) {
         //attached to a bug report.
         var INLINED = /<style data-snapshot="inlined">[\s\S]*?<\/style>\n/;
 
+        //IT COMPARES AGAINST A PAGE THAT IS MOVING, and that is why it tries
+        //more than once.
+        //
+        //THE FIRST VERSION TOOK ONE SNAPSHOT AND COMPARED IT TO `win.markup()`.
+        //It passed alone and failed in a full run -- the demo's Plumbing page
+        //pulls the log every two seconds, so the dom it wrote and the dom it
+        //then read were a heartbeat apart. A test that only passes while nothing
+        //in the app is happening is not testing what it claims to.
+        //
+        //SO IT TAKES THE PAIR UNTIL BOTH HALVES ARE OF ONE MOMENT. A page that
+        //never stopped changing would fail, which is right -- there would be no
+        //moment to be of.
         it('writes the scrubbed markup, not the raw page', async function () {
             clean();
 
+            var matched = false;
+            var last = '';
+
             try {
-                await ipc.invoke('snapshot', { path: here }, asPerson);
+                for (var tries = 0; tries < 5 && !matched; tries++) {
+                    await ipc.invoke('snapshot', { path: here }, asPerson);
 
-                var wrote = fs.readFileSync(here + '.html', 'utf8');
+                    //THE MARKUP HALF, WITH THE STYLES TAKEN BACK OUT. Comparing
+                    //the whole file stopped working the day the stylesheets went
+                    //in, and the honest repair is to remove exactly what this
+                    //plugin added rather than to loosen it into an `indexOf`.
+                    last = fs.readFileSync(here + '.html', 'utf8').replace(INLINED, '');
+                    matched = last === win.markup();
+                }
 
-                //THE MARKUP HALF, WITH THE STYLES TAKEN BACK OUT. Comparing the
-                //whole file stopped working the day the stylesheets went in, and
-                //the honest repair is to remove exactly what this plugin added
-                //rather than to loosen the assertion into `indexOf`.
-                assert.equal(wrote.replace(INLINED, ''), win.markup(),
+                assert.ok(matched,
                     'what was written is not what the window hands out, so something '
-                    + 'is reading the page a second way');
+                    + 'is reading the page a second way (' + last.length + ' bytes written, '
+                    + win.markup().length + ' handed out)');
             } finally { clean(); }
         });
 

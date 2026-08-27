@@ -5,12 +5,12 @@ folder and the commands, the key, the banner and the guard all go with it.**
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | — | `app`, `ipc`, `window`, `bridge`, `may`, `log` |
+| `main.js` | — | `ipc`, `window`, `bridge`, `may`, `log`, `dataDir` |
 | `window.js` | — | `io`, `banner` |
 | `cli.js` | — | `cli`, `ipc` |
 
 ```sh
-node src/cli.js snapshot          # both halves, named the same, into shots/
+node src/cli.js snapshot          # both halves, named the same, into the data dir
 node src/cli.js snapshot bug      # ... as bug.png and bug.html, where you are
 node src/cli.js markup            # the markup on its own
 ```
@@ -101,9 +101,21 @@ has a *shape* — a token, a long random run, the tail of a URL. A short, plain
 secret on the page survives. The picture is a photograph: a secret on screen is a
 secret in the png unless it is a password field.
 
-`shots/` is gitignored, which is why both halves land there. **They are not
-protected, only unpublished** — they sit in the working tree in cleartext, and
-they are the right thing to delete after reading.
+**They land in the [data dir](../core/dataDir/), not in the repository.** It was
+`shots/` in the project root, which is gitignored — and *gitignored is not the
+same as safe*. These files hold whatever was on the screen, in cleartext, and a
+repository is the one folder a person routinely copies wholesale: a zip of it, a
+`git add -f`, an editor that indexes everything, somebody else's `.gitignore`
+after a merge.
+
+The data dir is where everything else the app writes already lives — the state,
+the cache, the record, the decisions — it is outside the repository entirely, and
+it follows the profile, so a snapshot taken in one workspace does not turn up in
+another's folder. They are still **unencrypted files on disk**, and still the
+right thing to delete after reading.
+
+A name given on the command line lands **where you are standing**; only the
+default moved, and the answer prints the full path either way.
 
 **`capture` in `core/window` is not guarded and never was**, so deleting this
 folder does not lock the picture away; it removes the pair, the guard and the

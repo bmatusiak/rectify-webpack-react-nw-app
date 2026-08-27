@@ -10,6 +10,32 @@ The nw.js window. It is a view onto a server that outlives it.
 node src/cli.js capture    # a picture of the window
 ```
 
+## `capture` is not guarded, and that is a decision
+
+[`mcp-example`](../../../app_plugins/mcp-example/)'s `screenshot` tool asks a
+person first. This does not, for the same pixels — so the difference is worth
+stating rather than leaving as an inconsistency somebody finds later.
+
+**`capture` writes a file on this machine.** It lands in the working tree, where
+a person can open it and decide before it goes anywhere. The MCP tool hands the
+pixels **back over the channel the caller is already on** — no filesystem, no
+step in between, and nothing on screen moves while it happens.
+
+**A caller that can reach the control socket *and* read the file it wrote already
+has a shell**, and [`may`](../may/) says plainly that it cannot protect against
+one: anything that can run `node` in this folder can edit the code that calls
+`may` at all. Guarding `capture` would stop nobody it is not already unable to
+stop.
+
+**And it would be asked constantly.** `npm run drive -- --shots` photographs
+every page — twenty of them in a run — and a permission people answer twenty
+times is one they answer without reading, which makes the guards that matter
+worth less.
+
+The pair *is* guarded, because writing the screen down under a name somebody will
+attach to a bug report is a different act from taking a picture. That guard lives
+with the pairing, in [`debug-snapshot`](../../debug-snapshot/).
+
 ## writing either of them down is somebody else's plugin
 
 `window.markup()` reads the page, `window.styles()` reads what it is made to look
