@@ -1,4 +1,5 @@
 var wire = require('./wire');
+var topmost = require('./isTop');
 
 //BOTH DIRECTIONS ARE DIRECT CALLS, and neither is postMessage.
 //
@@ -102,39 +103,13 @@ async function plugin(imports, register) {
         //surfaced as the window reporting itself a browser, four steps from the
         //cause.
         //
-        //A top-level document is its own parent. An iframe's parent is the page
-        //holding it, and a cross-origin one throws rather than answering, which
-        //is also a no.
-        function isTop(frame) {
-            if (!frame) return false;
-
-            //THE CHEAP ANSWER FIRST, AND IT CAN ONLY BE A TRUE POSITIVE. If this
-            //frame IS the window's own, it is the top one. A stale win.window --
-            //which is what it is during document-start for a reload -- is a
-            //different object, so it says false rather than lying.
-            //
-            //Asking it first also keeps chromium quiet: reading `frame.parent`
-            //in a packaged build is met with "Cross-Origin-Opener-Policy policy
-            //would block the window.parent call" every time, warned into a log
-            //somebody is trying to read.
-            try { if (frame === win.window) return true; }
-            catch (e) { /* cannot even compare: ask the frame instead */ }
-
-            try { return frame.parent === frame; }
-            catch (e) { /* refused: fall through */ }
-
-            //AND WHEN CHROMIUM REFUSES TO ANSWER. In a packaged build reading
-            //`frame.parent` is met with "Cross-Origin-Opener-Policy policy would
-            //block the window.parent call" -- a console warning, not a throw
-            //that says what it wants, and the frame is left unclassified.
-            //
-            //Neither would answer, so it is not ours to inject into. Without
-            //this pair the packaged window was classified as not-top, skipped
-            //injection at document-start, and worked only because `loaded` puts
-            //the way home back afterwards. Working by luck is not the same as
-            //working.
-            return false;
-        }
+        //A top-level document is its own parent -- ./isTop.js has the rule and
+        //the four cases it has to get right. It lives outside this file because
+        //it could not be reached from here: it closed over `win`, inside a setup
+        //function, inside a plugin that needs nw to load. Its own sabotage said
+        //so by surviving -- main.js was broken and nothing noticed, because
+        //nothing could ask.
+        function isTop(frame) { return topmost(frame, win && win.window); }
 
         //before any of the page's own script runs, so the page can never find
         //itself without a way home

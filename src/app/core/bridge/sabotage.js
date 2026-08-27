@@ -90,15 +90,16 @@ module.exports = [
         //Markdown page renders into a srcdoc iframe, and main repointed at it --
         //so the bridge was attached to a frame with none of the app in it, and
         //everything after that was a page that would not answer.
+        //IT SURVIVED THE FIRST TIME THIS LIST WAS RUN, and the reason was the
+        //finding: the rule was a closure inside ./main.js's setup function, in a
+        //plugin that needs nw to load, so nothing could reach it to ask. main.js
+        //was broken on purpose and every check passed because none of them could
+        //see it. It is ./isTop.js now, and this breaks the rule rather than the
+        //one call site -- which also means no restart and no window.
         what: 'an iframe is taken for the window',
-        file: 'main.js',
-        check: 'core/bridge/main',
-        restart: true,
-        //`onStart` AND `onEnd` BOTH ASK IT, so the line matches twice and the
-        //tool refuses -- rightly: a sabotage that breaks two things does not say
-        //which one the check noticed. document-start is the one that matters,
-        //because that is where `__host` is injected.
-        find: '        function onStart(frame) {\n            if (!isTop(frame)) return;',
-        replace: '        function onStart(frame) {\n            if (false) return;'
+        file: 'isTop.js',
+        check: 'core/bridge/node',
+        find: '    try { return frame.parent === frame; }',
+        replace: '    try { return true; }'
     }
 ];

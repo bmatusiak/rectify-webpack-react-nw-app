@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const wire = require('./wire');
+const isTop = require('./isTop');
 
 //the packaged build has no socket. What carries messages between main and the
 //window is this, so its behaviour is worth pinning: acks that come back, acks
@@ -14,6 +15,94 @@ function pair() {
     b = wire((line) => a.receive(line));
     return { a, b };
 }
+
+//AN ANSWER THAT NEVER COMES IS A FAILURE, NOT A HANG.
+//
+//Every test below that waits for an ack was `await new Promise(...)` with
+//nothing else in the race, so a wire that lost the reply hung the whole FILE
+//rather than failing one test. Its own sabotage said so in as many words:
+//"core/bridge/node never finished rather than failing -- give that test a
+//timeout, so the failure is one somebody can read".
+//
+//A HANG IS THE WORST SHAPE A FAILURE CAN TAKE. Nothing names the test, nothing
+//names the file, and the run has to be killed -- so what is reported is "the
+//suite timed out", which is true of every test in it equally.
+function answered(fn, what) {
+    return Promise.race([
+        new Promise(fn),
+        new Promise((resolve, reject) => setTimeout(
+            () => reject(new Error(what || 'no answer came back')), 2000).unref())
+    ]);
+}
+
+//---- is this frame the page, or something inside it -----------------------
+//
+//`document-start` FIRES FOR EVERY FRAME. The demo's Markdown page renders into a
+//srcdoc iframe, and main repointed at it -- the bridge attached to a frame with
+//none of the app in it, and the window ended up reporting itself a browser, four
+//steps from the cause.
+//
+//THIS WAS A CLOSURE INSIDE ./main.js UNTIL ITS OWN SABOTAGE SURVIVED. main.js was
+//broken on purpose and every check passed, because nothing could reach the rule
+//to ask it anything.
+
+test('a top-level document is its own parent', () => {
+    const top = {};
+    top.parent = top;
+
+    assert.equal(isTop(top), true);
+});
+
+test('an iframe is not the page', () => {
+    const page = {};
+    page.parent = page;
+
+    assert.equal(isTop({ parent: page }), false, 'an iframe was taken for the window');
+});
+
+//THE CHEAP ANSWER, AND IT CAN ONLY BE A TRUE POSITIVE. Asking it first keeps
+//chromium quiet: reading `frame.parent` in a packaged build warns about
+//Cross-Origin-Opener-Policy every single time, into a log somebody is reading.
+test('the window main was handed is the page, without asking the frame', () => {
+    const own = {
+        get parent() { throw new Error('this must not be reached'); }
+    };
+
+    assert.equal(isTop(own, own), true);
+});
+
+//A STALE `win.window` -- which is what it is during document-start for a reload
+//-- is a DIFFERENT object, so the cheap answer says false rather than lying, and
+//the frame gets asked.
+test('a frame that is not the window it was handed is still asked', () => {
+    const stale = { parent: 'something else' };
+    const frame = {};
+    frame.parent = frame;
+
+    assert.equal(isTop(frame, stale), true, 'it trusted a stale window over the frame itself');
+});
+
+//NEITHER WOULD ANSWER, so it is not ours to inject into. Without this the
+//packaged window was classified as not-top, skipped injection at
+//document-start, and worked only because `loaded` puts the way home back
+//afterwards -- working by luck.
+test('a frame that refuses to answer is not the page', () => {
+    const refuses = { get parent() { throw new Error('COOP'); } };
+
+    assert.equal(isTop(refuses), false);
+    assert.equal(isTop(null), false, 'nothing was taken for the page');
+});
+
+//---- the wire -------------------------------------------------------------
+
+test('a call that loses its answer fails rather than hanging', async () => {
+    const { a, b } = pair();
+    b.on('silence', () => { /* answers nothing, ever */ });
+
+    await assert.rejects(
+        answered((resolve) => a.emit('silence', {}, resolve), 'the reply never came'),
+        /never came/);
+});
 
 test('a message arrives with its data', () => {
     const { a, b } = pair();
@@ -29,7 +118,8 @@ test('an ack comes back to the caller that asked for one', async () => {
     const { a, b } = pair();
     b.on('add', (data, reply) => reply(data.x + data.y));
 
-    const answer = await new Promise((resolve) => a.emit('add', { x: 2, y: 3 }, resolve));
+    const answer = await answered((resolve) => a.emit('add', { x: 2, y: 3 }, resolve),
+        'the ack never came back to the caller that asked for one');
     assert.equal(answer, 5);
 });
 
@@ -38,8 +128,11 @@ test('two calls in flight do not get each other answers', async () => {
     const held = [];
     b.on('slow', (data, reply) => held.push(() => reply(data.n * 10)));
 
-    const first = new Promise((r) => a.emit('slow', { n: 1 }, r));
-    const second = new Promise((r) => a.emit('slow', { n: 2 }, r));
+    //THE ONE THAT HUNG. Routing a reply by "whoever asked most recently" leaves
+    //the other caller waiting for ever, and without a timeout that took the
+    //whole file down rather than failing this test.
+    const first = answered((r) => a.emit('slow', { n: 1 }, r), 'the first caller never got its answer');
+    const second = answered((r) => a.emit('slow', { n: 2 }, r), 'the second caller never got its answer');
 
     //answered out of order on purpose
     held[1]();
@@ -53,7 +146,8 @@ test('a handler that answers twice is only heard once', async () => {
     b.on('once', (data, reply) => { reply('first'); reply('second'); });
 
     let count = 0;
-    const answer = await new Promise((resolve) => a.emit('once', {}, (value) => { count++; resolve(value); }));
+    const answer = await answered((resolve) => a.emit('once', {}, (value) => { count++; resolve(value); }),
+        'the first of two answers never arrived');
 
     assert.equal(answer, 'first');
     assert.equal(count, 1);
@@ -89,7 +183,7 @@ test('nothing is left waiting once an answer is in', async () => {
     b.on('ping', (data, reply) => reply('pong'));
 
     assert.equal(a.waiting, 0);
-    await new Promise((r) => a.emit('ping', {}, r));
+    await answered((r) => a.emit('ping', {}, r), 'the ping was never answered');
     assert.equal(a.waiting, 0, 'the pending entry is not cleaned up');
 });
 

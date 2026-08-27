@@ -89,7 +89,23 @@ async function plugin(imports, register) {
 
         return new Promise(function (resolve) {
             var timer = setTimeout(function () {
-                resolve(absent('window', 'the window did not answer within ' + timeout + 'ms', true));
+                //IT SAYS WHAT TO DO ABOUT IT, because the obvious reading is
+                //wrong and expensive.
+                //
+                //A WINDOW SUITE THAT HANGS NEVER REACHES ITS `finally`, so it
+                //leaves mounted views and raised banners in the live page. The
+                //next run counts the leftovers, its own wait never comes true,
+                //and it hangs too -- with the same message, which by then is
+                //accusing whatever was edited most recently rather than the
+                //thing that actually broke.
+                //
+                //Measured: one flaky assertion wedged this once, and afterwards
+                //`tools/test.js ui/banner` failed identically against code that
+                //was fine, through several rounds of bisecting the wrong thing.
+                resolve(absent('window', 'the window did not answer within ' + timeout + 'ms. '
+                    + 'A suite that hung earlier leaves mounted views and banners behind, and every '
+                    + 'run after it hangs the same way -- so restart before believing this is about '
+                    + 'the last thing you changed: `node tools/restart.js`', true));
             }, timeout);
 
             socket.emit('selftest:run', { only: only }, function (results) {

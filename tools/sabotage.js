@@ -49,6 +49,30 @@ const byHand = argv.indexOf('--')
 // file -- a sed pattern with one wrong backslash.
 function apply(target, find, replace) {
     const original = fs.readFileSync(target, 'utf8')
+
+    // THE PATTERN IS WRITTEN WITH \n AND THE FILE MAY BE CRLF, which is not a
+    // hypothetical here: this repository has core.autocrlf=true, so any file that
+    // has been through a git checkout comes back with CRLF endings while the
+    // sabotage.js beside it still says \n.
+    //
+    // A MULTI-LINE PATTERN THEN MATCHES NOTHING, and the tool says so in the one
+    // way that reads as a mistake in the LIST -- "nothing matches" -- when the
+    // list is right and the line endings are not. Measured on
+    // debug-snapshot/main.js, whose guard entry stopped matching the moment the
+    // file was checked out, leaving the most important sabotage in the plugin
+    // silently unrunnable.
+    //
+    // SO THE PATTERN IS BENT TO THE FILE, not the file to the pattern: nothing
+    // is rewritten, and a file with mixed endings still gets an exact match.
+    if (!original.includes(find) && original.includes('\r\n')) {
+        const crlf = find.split('\n').join('\r\n')
+
+        if (original.includes(crlf)) {
+            find = crlf
+            replace = replace.split('\n').join('\r\n')
+        }
+    }
+
     const hits = original.split(find).length - 1
 
     if (hits === 0) throw new Error('nothing in ' + rel(target) + ' matches:\n    ' + find +
