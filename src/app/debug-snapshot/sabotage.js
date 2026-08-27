@@ -68,6 +68,18 @@ module.exports = [
         replace: '        if (shot.skipped) { /* sabotaged */ }'
     },
 
+    {
+        //THE FILE STOPS OPENING ON ITS OWN. It still LOOKS right -- a document
+        //with <link> tags in it -- and renders unstyled the moment somebody
+        //moves it, which is the only time anybody would notice.
+        what: 'the saved page relies on a port that is gone',
+        file: 'main.js',
+        check: 'debug-snapshot/main',
+        restart: true,
+        find: '        return inlined(win.markup(), win.styles());',
+        replace: '        return win.markup();'
+    },
+
     //---- and the terminal --------------------------------------------------
     {
         //THE PATH IS RESOLVED WHERE YOU ARE STANDING. Without this a bare name

@@ -209,6 +209,21 @@ async function plugin(imports, register, config) {
         return looksLike.redact(page, 'durable');
     }
 
+    //THE SAME READ AND THE SAME SCRUB, for what the page is made to LOOK like.
+    //
+    //IT IS SCRUBBED TOO, WHICH LOOKS LIKE OVERKILL AND IS NOT. A stylesheet
+    //carries urls -- `background-image: url(...)` -- and this app's own swatches
+    //are files on disk, but a rule written at run time by a plugin can carry
+    //whatever it was handed. The scrub costs a pass over text that is already
+    //being copied to a file, and the alternative is deciding that one of the two
+    //halves of a saved page is not worth looking at.
+    function styles() {
+        var css = bridge.styles();
+        if (!css) return null;
+
+        return looksLike.redact(css, 'durable');
+    }
+
     //---- WHAT IS NOT HERE ANY MORE -----------------------------------------
     //
     //`markup()` AND `capture()` ARE CAPABILITIES; WRITING THEM DOWN IS A
@@ -283,6 +298,7 @@ async function plugin(imports, register, config) {
             //file, and ./README.md says so rather than letting a scrub imply
             //otherwise.
             markup: markup,
+            styles: styles,
 
             capture: function (options) {
                 options = options || {};

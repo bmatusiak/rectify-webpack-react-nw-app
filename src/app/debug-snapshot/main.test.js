@@ -131,6 +131,8 @@ function plugin(imports, register) {
         //but a plugin that writes the screen to disk is the one place worth
         //checking that the scrub really ran, because it is the file that ends up
         //attached to a bug report.
+        var INLINED = /<style data-snapshot="inlined">[\s\S]*?<\/style>\n/;
+
         it('writes the scrubbed markup, not the raw page', async function () {
             clean();
 
@@ -139,9 +141,38 @@ function plugin(imports, register) {
 
                 var wrote = fs.readFileSync(here + '.html', 'utf8');
 
-                assert.equal(wrote, imports.window.markup(),
+                //THE MARKUP HALF, WITH THE STYLES TAKEN BACK OUT. Comparing the
+                //whole file stopped working the day the stylesheets went in, and
+                //the honest repair is to remove exactly what this plugin added
+                //rather than to loosen the assertion into `indexOf`.
+                assert.equal(wrote.replace(INLINED, ''), win.markup(),
                     'what was written is not what the window hands out, so something '
                     + 'is reading the page a second way');
+            } finally { clean(); }
+        });
+
+        //IT HAS TO OPEN ON ITS OWN, which is the whole point of inlining. The
+        //document's own <link> tags point at the dev server, and that port is
+        //gone the moment the app is -- so a file that relied on them renders
+        //unstyled the first time somebody moves it or opens it tomorrow, which
+        //is exactly what somebody does with it.
+        it('carries what the page is made to look like, not a link to a dead port', async function () {
+            clean();
+
+            try {
+                await ipc.invoke('snapshot', { path: here }, asPerson);
+
+                var wrote = fs.readFileSync(here + '.html', 'utf8');
+                var block = (wrote.match(INLINED) || [''])[0];
+
+                assert.ok(block, 'no stylesheets were inlined');
+
+                //REAL RULES, NOT AN EMPTY BLOCK. Every sheet is read behind its
+                //own try -- one from another origin throws on `cssRules` -- so
+                //"it wrote a <style> tag" and "it wrote the styles" are
+                //genuinely different outcomes, and only one of them is useful.
+                assert.ok(block.indexOf('{') > 0 && block.length > 500,
+                    'the block is there and has no rules in it: ' + block.length + ' bytes');
             } finally { clean(); }
         });
 

@@ -318,9 +318,30 @@ function once() {
     const command = argv.slice(byHand + 1)
     const wait = (flags.find((f) => f.startsWith('--wait=')) || '').slice('--wait='.length)
 
+    // `--restart`, WHICH A REGISTRY ENTRY HAS AND THIS DID NOT.
+    //
+    // src/main.js and every main.js it loads are read OFF DISK when the app
+    // starts and never again. So breaking one and running the check without a
+    // restart runs the check against the code that is still in memory -- the
+    // break is on disk, the app has never seen it, and the check passes.
+    //
+    // IT THEN PRINTS `SURVIVED`, which says "your check is watching nothing".
+    // That is the wrong finding and it points at the wrong file: the check was
+    // fine and the tool never delivered the break. Measured on
+    // debug-snapshot/main.js, where it cost a real minute of looking at a test
+    // that was never broken.
+    const restart = flags.includes('--restart')
+
     if (!file || find === undefined || replace === undefined || !command.length) {
-        console.error('usage: node tools/sabotage.js <file> <find> <replace> -- <command...>')
+        console.error('usage: node tools/sabotage.js [--restart] [--wait=N] <file> <find> <replace> -- <command...>')
         return 2
+    }
+
+    // SAID BEFORE THE RUN RATHER THAN AFTER IT, because after it the answer is
+    // already the wrong one and nothing about the output looks suspicious.
+    if (!restart && /(^|[\/])main\.js$/.test(file)) {
+        console.log('note: ' + file + ' is read off disk when the app starts. Without --restart '
+            + 'the check runs against the code already in memory, and a real break reads as SURVIVED.')
     }
 
     const target = path.resolve(ROOT, file)
@@ -328,7 +349,7 @@ function once() {
 
     let outcome
     try {
-        outcome = tried(target, find, replace, command, wait, true)
+        outcome = tried(target, find, replace, command, wait, true, undefined, restart)
     } catch (e) {
         console.error(e.message)
         return 2

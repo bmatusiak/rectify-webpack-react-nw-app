@@ -377,6 +377,44 @@ async function plugin(imports, register) {
                 }
             },
 
+            //WHAT THE PAGE IS MADE TO LOOK LIKE, WHICH `markup` DOES NOT CARRY.
+            //
+            //The document has the <link> tags in it, and they point at the dev
+            //server -- a port that is gone the moment the app is. So a saved
+            //document renders UNSTYLED the first time somebody moves it or opens
+            //it tomorrow, which is exactly what a saved document is for. In a
+            //package there is no server at all and the links are worse than
+            //useless.
+            //
+            //READ AS RULES RATHER THAN COPIED AS FILES, because that is what
+            //resolves the difference: `cssRules` is what the browser actually
+            //applied, after the swatch was chosen and the mode followed it.
+            //
+            //A SHEET FROM ANOTHER ORIGIN THROWS ON `cssRules` rather than
+            //answering nothing, and one throw would lose every sheet after it --
+            //so each is caught on its own and contributes what it can.
+            //
+            //IT IS NOT SCRUBBED HERE, for the same reason `markup` is not: what
+            //comes back is what is on the screen, and deciding what may reach a
+            //file is the caller's -- see ../window/main.js.
+            styles: function () {
+                try {
+                    var frame = current && current.win && current.win.window;
+                    var doc = frame && frame.document;
+                    if (!doc || !doc.styleSheets) return null;
+
+                    return [].slice.call(doc.styleSheets).map(function (sheet) {
+                        try {
+                            return [].slice.call(sheet.cssRules).map(function (rule) {
+                                return rule.cssText;
+                            }).join('\n');
+                        } catch (e) { return ''; }
+                    }).join('\n');
+                } catch (e) {
+                    return null;
+                }
+            },
+
             //WHETHER MAIN HAS A WINDOW AT ALL, which is a different question
             //from `connected` above: that one is about the page having a socket,
             //this one is about nw having handed us a window to inject into. A

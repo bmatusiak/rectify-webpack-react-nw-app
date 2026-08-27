@@ -12,7 +12,8 @@ node src/cli.js capture    # a picture of the window
 
 ## writing either of them down is somebody else's plugin
 
-`window.markup()` reads the page and scrubs it; `window.capture()` photographs
+`window.markup()` reads the page, `window.styles()` reads what it is made to look
+like, and both are scrubbed; `window.capture()` photographs
 it. Those are things a window can do. **Putting either on disk is a feature, and
 it lives in [`debug-snapshot`](../../debug-snapshot/)** — the commands, the guard
 in front of them, the key that takes both at once and the notice offering the
@@ -50,6 +51,7 @@ leaving it here.
 window.url  .isOpen  .isMinimized  .current
 window.open()  .show()  .hide()  .openInBrowser()  .quit(reason)
 window.capture({ format })   -> a picture, or { skipped, why }
+window.markup()    -> the page, scrubbed        .styles() -> its css, scrubbed
 window.views       .openView()  .closeView(session)
 ```
 

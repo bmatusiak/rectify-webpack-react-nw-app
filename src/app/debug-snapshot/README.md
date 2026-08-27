@@ -50,13 +50,31 @@ situations somebody reaches for this. Neither half is the only skip.
 
 ## what stays in core/window, and why the split is there
 
-`window.markup()` reads the page and scrubs it; `window.capture()` photographs
-it. Those are capabilities of a window. **Writing them down, guarding that,
-naming the pair and offering the paths is a feature**, and a debugging tool that
-cannot be deleted cleanly is the wrong kind of tool.
+`window.markup()` reads the page, `window.styles()` reads its css, and
+`window.capture()` photographs it. Those are capabilities of a window. **Writing
+them down, guarding that, naming the pair and offering the paths is a feature**,
+and a debugging tool that cannot be deleted cleanly is the wrong kind of tool.
 
 It is the same line the app this came from draws: `windowShot` lives in its core
 and only the pairing is in the deletable folder.
+
+## the saved page opens on its own
+
+The document carries `<link>` tags pointing at the dev server, and **that port is
+gone the moment the app is** — so a file that relied on them renders unstyled the
+first time somebody moves it or opens it tomorrow, which is exactly what somebody
+does with it. In a package there is no server at all. Unstyled markup answers
+none of the questions the picture could not, which is the whole reason for
+writing two files.
+
+So the stylesheets are read as **rules** rather than copied as files — `cssRules`
+is what the browser actually applied, after the swatch was chosen and the mode
+followed it — and inlined into the head.
+
+**Added rather than substituted.** The dead `<link>` stays: the markup is meant to
+be what the page *was*, a link that was there is a fact about the page, and
+quietly deleting it would make the file disagree with the app it came from. A
+later `<style>` simply wins.
 
 ## it is main's, not the node half's
 

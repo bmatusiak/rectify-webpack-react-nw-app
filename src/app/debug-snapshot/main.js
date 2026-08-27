@@ -92,11 +92,39 @@ async function plugin(imports, register) {
 
     //---- the two halves ----------------------------------------------------
 
+    //WITH THE STYLESHEETS INLINED, SO THE FILE OPENS ON ITS OWN.
+    //
+    //The document carries <link> tags pointing at the dev server, and that port
+    //is gone the moment the app is -- so a saved page renders unstyled the first
+    //time somebody moves it or opens it tomorrow, which is exactly what somebody
+    //does with it. Unstyled markup answers none of the questions the picture
+    //could not, which is the whole reason for writing two files.
+    //
+    //ADDED RATHER THAN SUBSTITUTED. The dead <link> stays in the document,
+    //because the markup is meant to be what the page WAS -- a link that was
+    //there is a fact about the page, and quietly deleting it would make the file
+    //disagree with the app it came from. A later <style> simply wins.
+    function inlined(page, css) {
+        if (!page || !css) return page;
+
+        var block = '<style data-snapshot="inlined">\n' + css + '\n</style>';
+        var head = page.indexOf('</head>');
+
+        //NO </head> IS NOT A BROKEN PAGE. A document that failed early may have
+        //no head at all, and that is precisely the document worth saving -- so
+        //the styles go at the front rather than nowhere.
+        if (head < 0) return block + '\n' + page;
+
+        return page.slice(0, head) + block + '\n' + page.slice(head);
+    }
+
     function markup() {
         //`bridge.attached` RATHER THAN A TRY. There being no page is an ordinary
         //state -- the window is closed, or has not finished loading -- and it is
         //a different answer from the page failing to give up its markup.
-        return bridge.attached ? win.markup() : null;
+        if (!bridge.attached) return null;
+
+        return inlined(win.markup(), win.styles());
     }
 
     async function picture(where) {
