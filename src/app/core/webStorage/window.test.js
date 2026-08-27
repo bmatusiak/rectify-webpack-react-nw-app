@@ -19,12 +19,54 @@ function plugin(imports, register) {
             assert.equal(store.c, false);
         });
 
-        it('writes through on assignment, with no save to remember', function () {
-            var store = session('probe.writes', { count: 0 });
-            store.count = 7;
+        //A DEFAULT IS WRITTEN DOWN THE FIRST TIME, and the test above cannot see
+        //whether it was: every read comes back from MEMORY, so a store that
+        //never persisted anything answers exactly like one that did. Its own
+        //sabotage found that by surviving -- the write was removed and every
+        //assertion still passed.
+        //
+        //WHAT IS ON DISK IS THE ONLY PLACE THE DIFFERENCE SHOWS. A store that is
+        //only half written comes back half empty in the next window, which is
+        //the one moment nobody is watching.
+        it('writes the defaults down, not just into memory', function () {
+            var name = 'probe.persisted.' + Date.now();
 
-            //a second handle on the same name reads what the first wrote
-            assert.equal(session('probe.writes', { count: 0 }).count, 7);
+            try {
+                session(name, { kept: 'yes', n: 3 });
+
+                var raw = sessionStorage.getItem(name);
+                assert.ok(raw, 'nothing at all was written for ' + name);
+
+                var back = JSON.parse(raw);
+                assert.equal(back.kept, 'yes', 'the default never reached storage: ' + raw);
+                assert.equal(back.n, 3, raw);
+            } finally { sessionStorage.removeItem(name); }
+        });
+
+        //A FRESH NAME EVERY RUN, AND TAKEN AWAY AFTER.
+        //
+        //THIS USED TO USE A FIXED `probe.writes` AND NEVER CLEAN UP, so the 7 it
+        //wrote stayed in sessionStorage for the life of the browser profile --
+        //and every later run read that leftover instead of what it had just
+        //written. Its own sabotage found it: the write-through was removed and
+        //the check still passed, on a value put there days earlier.
+        //
+        //A TEST THAT PASSES ON ITS OWN LITTER IS WORSE THAN NO TEST. It is right
+        //the first time and right for the wrong reason ever after.
+        it('writes through on assignment, with no save to remember', function () {
+            var name = 'probe.writes.' + Date.now();
+
+            try {
+                var store = session(name, { count: 0 });
+                store.count = 7;
+
+                //a second handle on the same name reads what the first wrote
+                assert.equal(session(name, { count: 0 }).count, 7);
+
+                //and it really is in storage rather than in the handle
+                assert.equal(JSON.parse(sessionStorage.getItem(name)).count, 7,
+                    'the value never left memory: ' + sessionStorage.getItem(name));
+            } finally { sessionStorage.removeItem(name); }
         });
 
         it('puts preferences in localStorage and session in sessionStorage', function () {

@@ -14,6 +14,10 @@ var wanted = require('../../../target');
 //test plugin is set up, and every `describe` that plugin makes is attributed to
 //it. Then `run({ only })` filters by that.
 
+//THIRTY SECONDS, NOT FIVE -- see `run` below for why a test that hangs must
+//fail instead of stopping the context.
+var STUCK = 30000;
+
 module.exports = function suites() {
     var mine = harness.create();
 
@@ -32,11 +36,34 @@ module.exports = function suites() {
             return mine.describe(name, fn);
         },
 
+        //A TEST THAT HANGS FAILS, RATHER THAN TAKING THE CONTEXT WITH IT.
+        //
+        //The harness defaults to no timeout, so one test that never settles
+        //stops the whole run -- and what gets reported is "the window did not
+        //answer", which is equally true of every test in it and names none of
+        //them. The suite that actually hung is invisible.
+        //
+        //IT IS WORSE THAN A BAD MESSAGE. A window suite that never reaches its
+        //`finally` leaves mounted views and raised banners in the live page, so
+        //the NEXT run counts the leftovers and hangs the same way -- and the run
+        //after that. The failure walks forward through the session, always
+        //appearing to accuse whatever was edited most recently.
+        //
+        //Measured twice in one day: once from a flaky assertion in
+        //../../debug-snapshot, once from ../webStorage's own sabotage, which the
+        //tool reported as "never finished rather than failing -- give that test
+        //a timeout, so the failure is one somebody can read".
+        //
+        //THIRTY SECONDS, NOT FIVE. Some of these really are slow -- the demo
+        //opens twenty pages, and a capture waits on the compositor -- so this is
+        //a backstop for something that has stopped, not a budget for something
+        //being careful. A caller may still say otherwise.
+
         //`only` is a plugin with or without its context: core/ipc, core/ipc/main
         run: function (options) {
             var only = options && options.only;
 
-            return mine.run(Object.assign({}, options || {}, {
+            return mine.run(Object.assign({ timeoutMs: STUCK }, options || {}, {
                 log: function () {},
                 testFilter: !only ? undefined : function (testName, suiteName) {
                     return wanted(tags[suiteName] || '', only);
