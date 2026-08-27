@@ -4,28 +4,22 @@ The nw.js window. It is a view onto a server that outlives it.
 
 | file | provides | consumes |
 |---|---|---|
-| `main.js` | `window` | `app`, `http`, `lifecycle`, `bridge`, `ipc`, `may` |
+| `main.js` | `window` | `app`, `http`, `lifecycle`, `bridge` |
 
 ```sh
 node src/cli.js capture    # a picture of the window
-node src/cli.js markup     # what the page is made of
 ```
 
-## the picture and the markup answer different halves of one question
+## writing either of them down is somebody else's plugin
 
-**A class that matches no rule is invisible in the picture and obvious in the
-markup**; a value drawn from the wrong field is the other way round. CSS has no
-undefined-name error, which makes a misspelt class the quietest failure
-available.
+`window.markup()` reads the page and scrubs it; `window.capture()` photographs
+it. Those are things a window can do. **Putting either on disk is a feature, and
+it lives in [`debug-snapshot`](../../debug-snapshot/)** — the commands, the guard
+in front of them, the key that takes both at once and the notice offering the
+paths, in one folder that can be deleted whole. This plugin cannot be deleted;
+it is the window.
 
-**`markup` is answered by main and `capture` is not**, and that is deliberate.
-`capture`'s handler is in [`server.js`](server.js) and dies with the node half —
-fine for a photograph, since a window worth photographing is usually drawing.
-The markup is wanted in the opposite case: the page that failed to render, where
-the node half may be exactly what failed. Main is loaded once, off disk, and
-reads the page through [`bridge`](../bridge/).
-
-## it copies the screen to a file, and the scrub is not a guarantee
+## markup is scrubbed here, and the scrub is not a guarantee
 
 The [`durable`](../log/looks-like.js) rules run over it on the way out — the same
 ones [`events`](../events/) uses for a record kept for ever, and for the same
@@ -46,8 +40,9 @@ file. That is a property of React rather than a rule anybody enforces, it stops
 being true for an uncontrolled input, and it says nothing whatever about text
 that is simply *on* the page.
 
-**So look at the file before sharing it.** The cli says so on every run rather
-than leaving it here.
+**So look at the file before sharing it.**
+[`debug-snapshot`](../../debug-snapshot/)'s cli says so on every run rather than
+leaving it here.
 | `server.js` | `window` | `app`, `ipc`, `Plugin` |
 | `cli.js` | — | `cli`, `ipc` |
 

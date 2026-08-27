@@ -1,6 +1,3 @@
-var fs = require('node:fs');
-var path = require('node:path');
-
 var looksLike = require('../log/looks-like');
 
 //THE WINDOW IS NOT THE APP, and everything awkward in this file follows from
@@ -9,7 +6,7 @@ var looksLike = require('../log/looks-like');
 //that half, and a window rebuilt with it is a window that blinks out of
 //existence while somebody is reading it.
 
-plugin.consumes = ['app', 'http', 'lifecycle', 'bridge', 'ipc', 'may'];
+plugin.consumes = ['app', 'http', 'lifecycle', 'bridge'];
 plugin.provides = ['window'];
 async function plugin(imports, register, config) {
     var { app, http, lifecycle, bridge } = imports;
@@ -212,49 +209,16 @@ async function plugin(imports, register, config) {
         return looksLike.redact(page, 'durable');
     }
 
-    //---- and one command, answered here rather than in the node half ------
+    //---- WHAT IS NOT HERE ANY MORE -----------------------------------------
     //
-    //`capture` IS REGISTERED BY ./server.js AND DIES WITH IT. That is fine for a
-    //photograph -- a window worth photographing is usually one that is drawing.
-    //The markup is wanted in the opposite case: the page that failed to render,
-    //where the node half may be exactly what failed. So this one is main's.
+    //`markup()` AND `capture()` ARE CAPABILITIES; WRITING THEM DOWN IS A
+    //FEATURE. The commands that put either on disk, the guard in front of them,
+    //the key that takes both at once and the notice offering the paths all live
+    //in ../../debug-snapshot, which is one folder and deletable in one piece.
     //
-    //IT WRITES A FILE RATHER THAN ANSWERING WITH THE PAGE. A document is tens of
-    //kilobytes and the control socket is a line-delimited pipe carrying every
-    //other command; the path is the useful answer anyway.
-    //COPYING THE SCREEN TO A FILE IS SOMEBODY'S DECISION TO MAKE. The scrub
-    //catches what has a shape and nothing else -- see ./README.md -- so what is
-    //really being agreed to is "write whatever is on the screen down".
-    imports.may.declare('markup', {
-        about: 'Write what the page is made of to a file. It holds whatever is on the screen.'
-    });
-
-    var markupCommand = imports.ipc.handle('markup', async function (data, from) {
-        var said = await imports.may('markup', { from: from });
-        if (!said.allowed) return { skipped: true, why: said.why };
-
-        var page = bridge.attached ? markup() : null;
-
-        if (!page) return { skipped: true, why: 'there is no window to read' };
-
-        //BESIDE THE SCREENSHOTS, NOT IN THE PROJECT ROOT.
-        //
-        //It defaulted to the root, and the first file it wrote there had this
-        //app's own demo secret in it -- one `git add -A` from being committed.
-        //`shots/` is already where captures of the screen go and is already
-        //ignored by git, which is the same decision made once rather than twice.
-        var where = (data && data.path) || path.join(app.root, 'shots', 'markup.html');
-
-        try {
-            fs.mkdirSync(path.dirname(where), { recursive: true });
-            fs.writeFileSync(where, page);
-        } catch (e) {
-            return { skipped: true, why: 'it could not be written: ' + ((e && e.message) || e) };
-        }
-
-        return { path: where, bytes: page.length, redacted: page.indexOf('[redacted]') >= 0 };
-    });
-
+    //A DEBUGGING TOOL THAT CANNOT BE DELETED CLEANLY IS THE WRONG KIND OF TOOL,
+    //and this plugin is not deletable -- it is the window. So the two are not the
+    //same plugin, however close the code looked when both were here.
     await register(null, {
         window: {
             get isOpen() { return !!win; },

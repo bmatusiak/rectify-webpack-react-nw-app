@@ -150,8 +150,9 @@ async function plugin(imports, register) {
 
     //A CAPABILITY OF THE DEMO'S OWN, which is the point of declaring it here
     //rather than in core: an app names what IT thinks is somebody's decision.
-    //Core has `serve` and `markup` because core owns those; a credential field
-    //belongs to whatever app has one.
+    //../../core/http has `serve` because core owns the port, and
+    //../../debug-snapshot has `snapshot` because it owns writing the screen
+    //down; a credential field belongs to whatever app has one.
     var undeclare = imports.may.declare('demo:password', {
         about: 'Fill in the demo password field. Nothing is done with what you type.'
     });

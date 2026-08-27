@@ -148,9 +148,27 @@ async function plugin(imports, register) {
             return out;
         }
 
-        //ONLY A PERSON CAN BE ASKED, AND ONLY AT THE WINDOW. Everything else
-        //gets the refusal with the reason -- which is an answer a caller can
-        //show to whoever asked it.
+        //A PERSON'S OWN PRESS ANSWERS THE QUESTION, so nobody is asked about it.
+        //
+        //../may/window.js has always done this for a guarded control, which is
+        //why main never saw the case: the page short-circuits a trusted press
+        //and never emits `may:want` at all. But a capability whose CODE lives in
+        //main -- ../../debug-snapshot is the first -- has to come through here,
+        //and without this a person pressing ctrl+shift+D got a dialog asking
+        //whether they had meant to press ctrl+shift+D.
+        //
+        //ONLY WHEN NOBODY HAS SAID, which is the one difference from the page's
+        //version. `out.ask` is already false for a stored `never`, so this
+        //answers an open question and does not overrule an answer somebody
+        //already gave. A person who refused this last week should have to take
+        //that back on purpose rather than by pressing the key again.
+        if (from.window && from.trusted) {
+            return { allowed: true, why: 'you did it yourself' };
+        }
+
+        //AND ONLY A PERSON CAN BE ASKED, AT THE WINDOW. Everything else gets the
+        //refusal with the reason -- which is an answer a caller can show to
+        //whoever asked it.
         var answer = await ask(name, options.about || (declared[name] && declared[name].about));
 
         if (!answer) return { allowed: false, why: 'nobody allowed ' + name };

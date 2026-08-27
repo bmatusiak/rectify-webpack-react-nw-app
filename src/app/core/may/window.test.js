@@ -44,7 +44,7 @@ function plugin(imports, register) {
         //the asking worked.
         it('knows what is guarded without waiting to be told', function () {
             assert.equal(may.asks('serve'), true, 'the guard list never arrived');
-            assert.equal(may.asks('markup'), true);
+            assert.equal(may.asks('snapshot'), true);
             assert.equal(may.asks('probe-nobody-guards-this'), false);
         });
 

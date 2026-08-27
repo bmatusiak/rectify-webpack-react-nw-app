@@ -40,7 +40,7 @@ function plugin(imports, register) {
 
         it('guards what the app really declared', function () {
             assert.equal(may.asks('serve'), true, 'serve is not guarded');
-            assert.equal(may.asks('markup'), true, 'markup is not guarded');
+            assert.equal(may.asks('snapshot'), true, 'snapshot is not guarded');
         });
 
         //A DECISION REACHES ../state, which is what makes `always` outlive the

@@ -54,7 +54,18 @@ async function plugin(imports, register) {
             text: options.text,
             icon: options.icon,
             dismissible: !!options.dismissible,
-            onDismiss: options.onDismiss
+            onDismiss: options.onDismiss,
+
+            //SOMETHING TO DO ABOUT IT, which is what turns a notice into a
+            //place a person can act. `[{ label, onClick, variant }]`.
+            //
+            //A BANNER WITH A BUTTON IS AN ORDINARY THING ANY PLUGIN MAY WANT,
+            //and that is the test of whether this belongs here. ../../
+            //debug-snapshot needed one to offer two file paths for copying, and
+            //the alternative was for a debugging tool to grow its own bar --
+            //which would make it the only thing in the app that knows what a
+            //notice looks like, and undeletable without a search.
+            does: Array.isArray(options.does) ? options.does : null
         };
 
         var at = showing.findIndex(function (b) { return b.id === id; });
@@ -102,6 +113,16 @@ async function plugin(imports, register) {
                             className="mb-0 rounded-0 border-0 border-bottom py-2 px-3 d-flex align-items-center gap-2">
                             {b.icon ? <Icon name={b.icon} /> : null}
                             <span className="flex-grow-1 small">{b.text}</span>
+
+                            {(b.does || []).map(function (one, at) {
+                                return (
+                                    <button key={one.label || at} type="button"
+                                        className={'btn btn-sm btn-' + (one.variant || 'outline-secondary')}
+                                        onClick={function () { if (one.onClick) one.onClick(b.id); }}>
+                                        {one.label}
+                                    </button>
+                                );
+                            })}
 
                             {b.dismissible ? (
                                 //OUR OWN BUTTON, NOT bootstrap's data-bs-dismiss.

@@ -39,7 +39,7 @@ module.exports = function Buttons(props) {
                 </p>
 
                 <div className="d-flex flex-wrap gap-3 align-items-center mb-3">
-                    <Button variant="primary" guard="markup"
+                    <Button variant="primary" guard="snapshot"
                         onRefused={function (said) { toast(said.why, 'warning', 'shield-lock'); }}
                         onClick={function () { toast('allowed, and it would have run', 'success', 'unlock'); }}>
                         Write the page to a file
