@@ -46,6 +46,28 @@ switches it while the app is running, with a plain item whose LABEL says what cl
 -- nw draws no checkmark for a `type: 'checkbox'` item on windows, so a checkbox there shows
 state to nobody.
 
+**`"app": { "open" }` is the same idea applied to being DRIVEN**, and it is the
+one constant that differs between a development build and a package. Absent
+means **open in development and closed when packaged**: `npm start` and
+`npm run drive` reach everything, and a shipped binary reaches only what
+`config.may.open` lists and what is marked `is-open` in the markup. `src/stance.js`
+decides it, `webpack.config.js` and `src/main.js` both read that one file, and it
+becomes `BUILD_OPEN`.
+
+A closed build **refuses flat and never prompts** -- a default-deny that raised a
+dialog for hundreds of controls would be answered `always` to everything inside a
+week. `commands` answers only the open names, an unlisted command and a
+nonexistent one get the same sentence (so the surface cannot be guessed at), an
+MCP tool that is not listed is not in `tools/list` at all, and `read` answers what
+an element IS while withholding `value` and `checked`.
+
+**To work on the closed stance, close a development build**: put
+`"app": { "open": false }` in package.json and `npm run restart` -- three seconds
+rather than the three minutes `npm run dist` costs. **`npm test` will then fail**,
+and correctly: `selftest` is not on the open list, so the runner cannot ask the
+app for its suites. Put the key back to run the suites. The **Reachable** page and
+`node src/cli.js may` both list what the build allows, in either stance.
+
 Call the cli as `node src/cli.js <cmd>` when driving the app yourself, not
 `npm run cli --`: npm adds ~530ms per call and buries the real exit code and
 stderr behind its own. Poll for readiness rather than sleeping -- incremental
@@ -579,6 +601,22 @@ undo. The tool refuses a pattern that matches nothing or matches twice, keeps
 a COPY rather than trusting git, and writes a note before touching anything so
 the NEXT run puts back what a killed one left -- signal handlers do not fire
 when the harness kills the process.
+
+**Two counts come out of `npm run sabotage`, and they send you to different
+files.** *Survived* means the check is watching nothing. *Could not be applied*
+means the `find` names a line that is not there any more -- the list is stale,
+the check may be perfectly fine, and whatever the entry defended has been
+unguarded since the line changed. They were one number until a pattern written
+with twelve spaces of indent against a line with eight reported a node suite as
+watching nothing.
+
+**Check a new entry's pattern before running it.** `require` the sabotage file
+and count `src.split(entry.find).length - 1` for each one; anything but 1 is a
+pattern to fix, and it takes a second instead of a minute.
+
+**An in-app check reports `caught` when the app is simply down**, because a
+check that cannot run is a check that failed. Only `<plugin>/node` results are
+trustworthy without a running app.
 
 **Measure what is read, not what contains it.** The sidebar test passed happily while every
 link in it was the colour of the ground, because it measured `.app-sidebar` rather than the

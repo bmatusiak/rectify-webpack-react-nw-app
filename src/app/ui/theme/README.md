@@ -212,3 +212,35 @@ keep finding headings.
 `npm run drive -- --swatches` is what holds this up: 28 swatches in both modes,
 every heading, paragraph, piece of muted text, inline `code` and alert measured. It is how the three above
 were found and how they stay found.
+
+## the other mark, which means the opposite
+
+`<Reachable name="...">` wraps a subtree and `open="..."` marks one control. Both
+emit `class="is-open" data-open="<name>"`, which `remote` reads with the same
+`closest` it uses for `.is-guarded`.
+
+**A region is the unit that survives.** Marking each button one at a time is
+exactly as forgettable as marking each guarded one, and it fails the dangerous
+way round: a button added to an open panel next year is silently *unreachable*,
+and the way anybody finds out is a tool that stopped working for a reason nothing
+prints.
+
+**Solid where the guard is dashed.** Both are outlines in a token colour, so hue
+is not what separates them — 28 swatches this app does not own rule that out, and
+five already spend a purple. Solid against dashed reads in greyscale, in a
+screenshot, and to somebody who cannot tell the two colours apart at all. The
+glyph is `robot` where the guard's is `lock-fill`.
+
+**It is drawn only in a closed build.** In an open one everything is reachable,
+and a ring round three controls would read as *and nothing else* — the dangerous
+direction for a mark to be wrong in. `theme.closed()` is the one place that
+decides.
+
+**A control that is both shows guarded**, and that is not a tie-break: `open`
+means *a tool may use this without asking*, and a guarded control always asks.
+Drawing the open ring there would be the mark promising what the mechanism does
+not do, which is the thing `components/guarded.js` exists to avoid.
+
+**The mark is only a mark.** `remote` and `core/ipc` enforce; this draws. A plain
+`<div class="is-open">` opens a subtree exactly as well, which is what keeps a
+control outside the kit covered.

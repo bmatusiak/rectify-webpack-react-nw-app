@@ -171,3 +171,53 @@ Two things it has to get right, and got wrong first:
   heading in the app looked unreadable and none of them were.
 - **`rgb()` counts to 255 and `color(srgb …)` counts to 1.** Reading one as the
   other makes every mixed colour come out nearly black.
+
+## two doors, and they are not the same question
+
+Every verb goes through both before it touches anything.
+
+| | asks | answer |
+|---|---|---|
+| **the guard** | is this capability somebody's to allow? | a person can say yes |
+| **the stance** | does this build reach this at all? | nothing can say yes |
+
+**The stance is asked first.** Both orders are equally safe — either one refuses
+— but a guarded control that a closed build was never going to reach would
+otherwise put a dialog on somebody's screen about a press that is already
+decided.
+
+**What it must not become is `if (reachable(el)) return null`.** An open region
+says the *driver* may touch this; it does not say a capability inside it stopped
+being somebody's to allow, and skipping the guard there would quietly turn the
+two marks into the weaker of them.
+
+### the mark is a class, read with `closest`
+
+`.is-guarded[data-guard]` and `.is-open[data-open]`, both read the same way, so
+the mark may be on the control or on a region around it. A rule written with
+`matches` would cover a guarded button and miss a guarded panel — and a region is
+the shape the stance marks take, so the two would disagree about the same markup.
+
+A plain `<div class="is-open">` opens a subtree and a plain `<button
+class="is-guarded">` is covered. That is the point: a control outside the theme
+can only fail to *look* marked.
+
+### read is the one verb that is not shut outright
+
+In a closed build, outside an open region, `read` still answers `element`,
+`text`, `visible` and `contrast`, and withholds `value` and `checked` — with a
+`withheld` field saying so, because a `null` that might mean *empty field* and
+might mean *you may not have this* is an answer callers get quietly wrong.
+
+The split is where the risk actually is. The values are what leaked; the shape is
+what keeps a packaged app diagnosable and what `drive --package` measures
+contrast with. **Text is not withheld, which is a real choice**: a key printed on
+screen as text would come back, and a region put round it is the answer.
+
+### a refusal is an answer and has to look like one
+
+`cli.js` throws on `{ refused }` so it goes out the way every other failure does,
+with an exit code. Before that line existed, `node src/cli.js click` on a guarded
+control **printed nothing and exited 0** — measured — which reads exactly like a
+click that worked, and which anything counting exit codes would have scored as a
+pass.

@@ -298,6 +298,18 @@ function registry(only) {
     let survived = 0
     let ran = 0
 
+    //COUNTED APART FROM `survived`, because they are different findings that
+    //send you to different files. A survivor means the CHECK is watching
+    //nothing; an entry that cannot be applied means the LIST is out of date --
+    //the line it names has been edited or deleted. Lumping them together prints
+    //"those checks are watching nothing" over a check that was fine, which is
+    //the same wrong finding `--restart` further down was added to stop.
+    //
+    //Measured here: a `find` written with twelve spaces of indent against a
+    //line that has eight matched nothing, and the run reported the node suite
+    //as watching nothing when the node suite would have caught it.
+    let unrunnable = 0
+
     found.forEach((one) => {
         one.entries.forEach((entry) => {
             const check = entry.check || one.name
@@ -313,9 +325,9 @@ function registry(only) {
                 outcome = tried(target, entry.find, entry.replace,
                     ['node', 'tools/test.js', check], entry.wait, false, entry.limit, entry.restart)
             } catch (e) {
-                console.log('  ✖ ' + one.name + '  ' + entry.what)
+                console.log('  ! ' + one.name + '  ' + entry.what)
                 console.log('      ' + String(e.message).split('\n').join('\n      '))
-                survived++
+                unrunnable++
                 return
             }
 
@@ -325,10 +337,17 @@ function registry(only) {
     })
 
     console.log('')
+    if (unrunnable) {
+        console.log(unrunnable + ' of ' + ran + ' could not be applied -- those entries name'
+            + ' a line that is not there any more,')
+        console.log('  so whatever they were defending has been unguarded since it changed')
+    }
+
     if (survived) {
         console.log(survived + ' of ' + ran + ' survived -- those checks are watching nothing')
-        return 1
     }
+
+    if (survived || unrunnable) return 1
 
     console.log(ran + ' sabotages, all of them caught')
     return 0

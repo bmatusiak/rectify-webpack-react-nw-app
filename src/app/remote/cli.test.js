@@ -71,6 +71,44 @@ function plugin(imports, register) {
             assert.equal(asked.name, 'read');
             assert.equal(asked.data.selector, 'h1');
         });
+
+        //---- and a refusal, which is an answer -------------------------
+        //
+        //A REFUSAL THAT PRINTS NOTHING AND EXITS 0 READS EXACTLY LIKE SUCCESS.
+        //Measured before this was covered: `node src/cli.js click Guarded`
+        //against a build that refused it was silent and successful -- and
+        //../../../tools/drive.js reads exit codes, so it would have counted
+        //every refusal as a pass.
+        //
+        //ITS OWN SABOTAGE FOUND THE GAP by surviving: ./cli.js was broken on
+        //purpose and every check here still passed, because none of them ever
+        //handed it an answer that said no.
+
+        it('fails rather than going quiet when the app refuses', async function () {
+            var threw = null;
+
+            await intercept(function () {
+                return cli.run(['click', 'Save']);
+            }, { refused: 'nobody allowed snapshot' }).catch(function (e) { threw = e; });
+
+            assert.ok(threw, 'a refusal came back and the terminal said nothing about it');
+        });
+
+        //AND IN THE APP'S OWN WORDS. A refusal reworded here is a refusal that
+        //cannot say which capability, which build, or where to look -- and
+        //those sentences are the whole of what makes one actionable.
+        it('says what the app said, rather than a sentence of its own', async function () {
+            var threw = null;
+
+            await intercept(function () {
+                return cli.run(['read', '#secret']);
+            }, { refused: 'this build is closed, see config.may.open' })
+                .catch(function (e) { threw = e; });
+
+            assert.ok(threw, 'a refused read came back silently');
+            assert.ok(String(threw.message).indexOf('config.may.open') >= 0,
+                'the refusal was reworded on the way out: ' + threw.message);
+        });
     });
 
     register();

@@ -99,3 +99,43 @@ it.
   is unlinked before binding.
 - **Not listening at all.** A bind error is logged and startup continues. An app
   without a control socket is still an app.
+
+## the gate a closed build hangs on this
+
+`gate(fn)` installs a predicate over every call that arrives **over the wire**;
+`fn(name)` answers `null` to let it through or a sentence to refuse it. It
+returns a remover, and the first refusal wins.
+
+```js
+var gate = ipc.gate(function (name) { return open(name) ? null : 'not in this build'; });
+gate.remove();
+```
+
+**It is a hook and not a consumed service, and the direction will not allow
+anything else.** `core/may` consumes this plugin, so this plugin cannot consume
+`core/may` — the rule lives there and the place to apply it lives here. Same
+shape as `remote/window.js` being *handed* its `refusedFor` rather than reaching
+for one.
+
+**It defaults to letting everything past**, which is not a hole: a build with no
+`core/may` in it is a build with no stance to enforce. What it must not do is
+fail open once something *is* installed, so it is asked for every wire call and
+never cached.
+
+Two things follow that are easy to get backwards:
+
+**`invoke` is never gated.** It carries `{ overTheWire: false }` — the app asking
+itself a question is not a caller to be suspicious of, and gating it would mean a
+closed build could not use its own commands. That is not hardening, it is
+breaking the app to keep it safe from itself.
+
+**The gate is asked before the handler is looked up.** Looking up first reads
+better and hands out a map: a caller could tell a refused command from one that
+does not exist and learn the whole surface a name at a time — which is exactly
+what filtering `commands` was for. A gated name and a nonsense one get the same
+sentence.
+
+The `commands` **handler** answers only what the gate allows; the `commands`
+**service** answers everything registered. That is deliberate: the first is what
+the wire is told, the second is the app asking itself, and `ui/reachable` needs
+both to say which entries in the config no longer name anything.

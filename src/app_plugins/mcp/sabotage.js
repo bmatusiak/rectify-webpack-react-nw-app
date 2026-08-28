@@ -6,6 +6,63 @@
 //was added to close, and nothing on screen moves while it happens.
 
 module.exports = [
+    //---- and what a closed build will not admit to having ------------------
+    //
+    //`needs` IS WHO MAY AND THIS IS WHETHER IT EXISTS HERE AT ALL. The entries
+    //below the divider are about a tool that runs when it should have asked;
+    //these are about one a closed build was never supposed to offer.
+    //
+    //THEY GO TO ./node.test.js, and that is the finding rather than a
+    //convenience. Hiding only happens in a CLOSED build and every machine this
+    //is worked on runs an open one -- as a closure inside ./server.js the whole
+    //rule could be broken with `mcp/server` still green, because that suite has
+    //no way to be a closed build. ./showing.js takes the predicate as an
+    //argument, so the closed answer is one line away with no app at all.
+    {
+        //THE FILTER ITSELF. Without it a closed build lists every tool it has
+        //and the whole surface is back -- `tools/call` would still refuse, but
+        //a model cannot be tempted by what it was never shown, and being shown
+        //is most of how it gets tempted.
+        what: 'a closed build lists every tool it has anyway',
+        file: 'showing.js',
+        check: 'mcp/node',
+        find: '    return names.filter(function (name) { return !isHidden || !isHidden(name); });',
+        replace: '    return names;'
+    },
+    {
+        //LISTING AND CALLING HAVE TO AGREE, and this is the half that makes
+        //`tools/list` mean anything. Hand `listed` the whole registry and the
+        //list goes back to naming what the caller may not have.
+        what: 'the listing is built before the hiding rather than after it',
+        file: 'showing.js',
+        check: 'mcp/node',
+        find: '    return module.exports.shown(map, isHidden).sort().map(function (key) {',
+        replace: '    return Object.keys(map || {}).sort().map(function (key) {'
+    },
+    {
+        //TEMPLATES ARE AN ARRAY CARRYING THEIR OWN NAMES and everything else is
+        //a map keyed by them. Read one shape only and `app://readme/{plugin}` --
+        //which reads a file off disk by name -- is never hidden by anything.
+        what: 'resource templates are not read the way they are stored, so they never hide',
+        file: 'showing.js',
+        check: 'mcp/node',
+        find: '        ? map.map(function (one) { return one && one.name; })',
+        replace: '        ? []'
+    },
+    {
+        //OUR OWN FIELDS MUST NOT REACH THE WIRE. `needs` is a map of what is
+        //guarded, handed to the one caller it is guarded against -- and it is
+        //not a field the protocol has, so a client that validates would reject
+        //the lot.
+        what: 'the implementation and what guards it go out with the listing',
+        file: 'showing.js',
+        check: 'mcp/node',
+        find: '        (drop || []).forEach(function (field) { delete copy[field]; });',
+        replace: '        //sabotaged'
+    },
+
+    //---- and who may run one -----------------------------------------------
+
     {
         //THE WHOLE POINT. Without the gate, a picture of the screen, the text on
         //it and the app's own log all go to whatever connected, unasked -- which
@@ -64,7 +121,7 @@ module.exports = [
         what: 'a field the protocol does not have is sent to the client',
         file: 'server.js',
         check: 'mcp/server',
-        find: "                tools: listed(tools, ['run', 'needs']),",
-        replace: "                tools: listed(tools, ['run']),"
+        find: "                tools: listed(tools, ['run', 'needs'], 'tools'),",
+        replace: "                tools: listed(tools, ['run'], 'tools'),"
     }
 ];

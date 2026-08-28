@@ -152,6 +152,131 @@ function plugin(imports, register) {
         });
     });
 
+    //---- and what it will not touch ----------------------------------------
+    //
+    //THE GUARD AND THE STANCE ARE BOTH ENFORCED HERE, at the door the outside
+    //comes through, and until now nothing was watching either. That is not a
+    //small gap: ../core/may can be perfectly correct and this file is where it
+    //is actually applied to a click.
+    //
+    //AN UNNAMED MARK IS THE CASE THESE USE, and it is chosen to be quiet. A
+    //named guard raises a real dialog in this window and sits there for two
+    //minutes -- which would wedge every suite after it, the exact failure the
+    //30s per-test timeout in ../core/selftest/suites.js was added for. An
+    //unnamed one is refused without asking anybody, so it exercises the mark,
+    //the lookup and all three verbs with nothing left on screen.
+
+    describe('a control the driver may not touch', function () {
+        function guarded(withName) {
+            var box = scratch();
+
+            var button = document.createElement('button');
+            button.id = 'probe-guarded';
+            button.className = 'btn is-guarded';
+            button.textContent = 'probe guarded control';
+            if (withName) button.setAttribute('data-guard', withName);
+
+            box.appendChild(button);
+            return button;
+        }
+
+        it('refuses to press one, rather than pressing it and saying so after', async function () {
+            var pressed = 0;
+            guarded().addEventListener('click', function () { pressed++; });
+
+            var out = await ask('click', { selector: '#probe-guarded' });
+            clear();
+
+            assert.ok(out.refused, 'a guarded control was pressed by the driver');
+            assert.equal(pressed, 0, 'it was refused AND pressed, which is the worst of both');
+        });
+
+        //ASKED BEFORE ANYTHING IS TYPED. A field written to and then refused
+        //has been written to.
+        it('refuses to fill one before the value goes in', async function () {
+            var box = scratch();
+            var field = document.createElement('input');
+            field.id = 'probe-guarded-field';
+            field.className = 'form-control is-guarded';
+            box.appendChild(field);
+
+            var out = await ask('fill', { selector: '#probe-guarded-field', value: 'hunter2' });
+            clear();
+
+            assert.ok(out.refused, 'a guarded field was filled by the driver');
+            assert.equal(field.value, '', 'it was refused after the value was already in');
+        });
+
+        //READING IS WHERE THE LEAK WAS. Measured on this app's own demo before
+        //the guard covered `read`: the value of a password field a person had
+        //unlocked came back over the wire with no dialog and no record.
+        it('refuses to read one, which is the verb the hole was in', async function () {
+            var box = scratch();
+            var field = document.createElement('input');
+            field.id = 'probe-guarded-secret';
+            field.className = 'form-control is-guarded';
+            field.value = 'hunter2';
+            box.appendChild(field);
+
+            var out = await ask('read', { selector: '#probe-guarded-secret' });
+            clear();
+
+            assert.ok(out.refused, 'a guarded value came back over the wire');
+            assert.notEqual(out.value, 'hunter2', 'the value came back anyway');
+        });
+
+        //A MARK THAT CANNOT BE NAMED IS A COMMENT. There is nothing to ask
+        //about, so it is refused rather than waved through -- and the refusal
+        //says what to do about it.
+        it('says what is wrong with a mark that names nothing', async function () {
+            guarded();
+            var out = await ask('click', { selector: '#probe-guarded' });
+            clear();
+
+            assert.ok(String(out.refused).indexOf('guard') >= 0, out.refused);
+        });
+
+        //THE MARK MAY BE ROUND IT RATHER THAN ON IT. A wrapper is just as valid
+        //a place to put the class, and `closest` is what reads both -- a rule
+        //written with `matches` would cover the button and miss the panel.
+        it('honours a mark on something around it, not only on it', async function () {
+            var box = scratch();
+            box.className = 'is-guarded';
+
+            var button = document.createElement('button');
+            button.id = 'probe-guarded-inside';
+            button.className = 'btn';
+            button.textContent = 'inside a guarded region';
+            box.appendChild(button);
+
+            var out = await ask('click', { selector: '#probe-guarded-inside' });
+            clear();
+
+            assert.ok(out.refused, 'a mark on the wrapper was not read, so only closest() would');
+        });
+
+        //AND AN UNMARKED CONTROL IS STILL PRESSED. A guard that refused
+        //everything would pass every check above and break the whole app --
+        //which is the shape of failure a test that only asserts refusals
+        //cannot see.
+        it('still presses one that is not marked at all', async function () {
+            var box = scratch();
+            var pressed = 0;
+
+            var button = document.createElement('button');
+            button.id = 'probe-plain';
+            button.className = 'btn';
+            button.textContent = 'plain probe control';
+            button.addEventListener('click', function () { pressed++; });
+            box.appendChild(button);
+
+            var out = await ask('click', { selector: '#probe-plain' });
+            clear();
+
+            assert.ok(!out.refused, 'an unmarked control was refused: ' + out.refused);
+            assert.equal(pressed, 1, 'it was allowed and not actually pressed');
+        });
+    });
     register();
 }
 module.exports = plugin;

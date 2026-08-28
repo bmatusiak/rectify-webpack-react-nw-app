@@ -182,6 +182,120 @@ function plugin(imports, register) {
         });
     });
 
+    //---- and the gate a closed build hangs on it --------------------------
+    //
+    //THE STANCE IS ../may's AND THE HOOK IS ../ipc's, so this is the half that
+    //can be checked WITHOUT a closed build -- which matters more than it looks.
+    //A closed build behaves differently from every build a developer runs, so a
+    //check that needed one would be a check that runs about once a release.
+    //
+    //INSTALLING ITS OWN GATE IS THE TRICK. The rule under test is "a gate that
+    //says no is obeyed", and that is true in either stance -- ../may simply
+    //installs a gate that says yes to everything while the build is open.
+
+    describe('a gate on the control socket', function () {
+        var probe = 'probe-gated-' + process.pid;
+        var free = 'probe-free-' + process.pid;
+
+        function withGate(names, run) {
+            var handles = names.map(function (name) {
+                return ipc.handle(name, function () { return 'ran'; });
+            });
+
+            var gate = ipc.gate(function (name) {
+                return name === probe ? 'the probe gate says no' : null;
+            });
+
+            return Promise.resolve(run()).then(function (out) {
+                gate.remove(); handles.forEach(function (h) { h.remove(); });
+                return out;
+            }, function (e) {
+                gate.remove(); handles.forEach(function (h) { h.remove(); });
+                throw e;
+            });
+        }
+
+        it('refuses a command it says no to, in the words the gate used', async function () {
+            var replies = await withGate([probe, free], function () {
+                return attempt([
+                    { command: 'auth', data: { token: secret() } },
+                    { id: 1, command: probe }
+                ]);
+            });
+
+            assert.equal(replies.length, 2, 'no answer to the gated command');
+            assert.equal(replies[1].ok, false, 'the gate was ignored');
+            assert.ok(String(replies[1].error).indexOf('probe gate') >= 0, replies[1].error);
+        });
+
+        it('lets everything else through, so it is a gate and not a wall', async function () {
+            var replies = await withGate([probe, free], function () {
+                return attempt([
+                    { command: 'auth', data: { token: secret() } },
+                    { id: 1, command: free }
+                ]);
+            });
+
+            assert.equal(replies[1].ok, true, replies[1].error);
+            assert.equal(replies[1].result, 'ran');
+        });
+
+        //THE APP ASKING ITSELF IS NOT A CALLER TO BE SUSPICIOUS OF. `invoke`
+        //carries `{ overTheWire: false }` and must not be gated -- gating it
+        //would mean a closed build could not use its own commands, which is not
+        //hardening, it is breaking the app to keep it safe from itself.
+        it('does not stand between the app and its own commands', async function () {
+            var out = await withGate([probe], function () { return ipc.invoke(probe, {}); });
+            assert.equal(out, 'ran', 'the gate refused an in-process call');
+        });
+
+        //ASKED BEFORE THE HANDLER IS LOOKED UP. Looking up first reads better
+        //and hands out a map: a caller could tell a refused command from one
+        //that does not exist, and learn the whole surface a name at a time.
+        it('answers a gated name the same whether or not anything registers it', async function () {
+            var replies = await withGate([], function () {
+                return attempt([
+                    { command: 'auth', data: { token: secret() } },
+                    { id: 1, command: probe }
+                ]);
+            });
+
+            assert.equal(replies[1].ok, false);
+            assert.ok(String(replies[1].error).indexOf('probe gate') >= 0,
+                'a gated command that is not registered said "unknown" instead: ' + replies[1].error);
+        });
+
+        //AND THE LISTING AGREES WITH THE GATE. A caller that cannot use a
+        //command has no business being told it is there -- and `commands` is
+        //the first thing anything driving an app asks for.
+        it('leaves a gated command out of the listing', async function () {
+            var replies = await withGate([probe, free], function () {
+                return attempt([
+                    { command: 'auth', data: { token: secret() } },
+                    { id: 1, command: 'commands' }
+                ]);
+            });
+
+            var listed = replies[1].result || [];
+            assert.ok(listed.indexOf(free) >= 0, 'an ungated command was hidden');
+            assert.ok(listed.indexOf(probe) < 0, 'a gated command was advertised');
+        });
+
+        it('is gone when it is removed, rather than for the rest of the run', async function () {
+            await withGate([probe], function () { return null; });
+
+            var handle = ipc.handle(probe, function () { return 'ran'; });
+
+            var replies = await attempt([
+                { command: 'auth', data: { token: secret() } },
+                { id: 1, command: probe }
+            ]);
+
+            handle.remove();
+            assert.equal(replies[1].ok, true, 'the gate outlived its remover: ' + replies[1].error);
+        });
+    });
+
     register();
 }
 module.exports = plugin;

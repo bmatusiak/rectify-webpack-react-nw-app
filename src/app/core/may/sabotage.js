@@ -9,6 +9,98 @@
 //../../../../tools/sabotage.js, which is why those restart it.
 
 module.exports = [
+    //---- the stance, which is the other half and the same failure ----------
+    //
+    //A DENY LIST SAYS YES WHEN NOBODY DID BY FORGETTING TO NAME SOMETHING. The
+    //stance says yes by defaulting the wrong way, and it is the more dangerous
+    //of the two because the failure is silent AND global -- one wrong boolean
+    //and a shipped binary is driveable by anything that can open a socket.
+    //
+    //ALL OF THESE GO TO ./node.test.js, and that is the point. Hiding, refusing
+    //and listing only differ in a CLOSED build, and every machine this is worked
+    //on runs an open one -- so an entry that needed a package would be an entry
+    //nobody runs, which ../../ui/theme/sabotage.js already argues is worse than
+    //no entry at all.
+    {
+        //THE DEFAULT, AND THE DIRECTION THAT COSTS SOMETHING. Absent from the
+        //manifest has to mean CLOSED when packaged: getting it backwards ships
+        //a binary anything can drive and nothing says a word.
+        what: 'a manifest that says nothing ships an open package',
+        file: '../../../stance.js',
+        check: 'core/may/node',
+        find: '    return !isProduction;',
+        replace: '    return true;'
+    },
+    {
+        //A STRING IS TRUTHY, which is how `"open": "false"` would ship a build
+        //the manifest plainly meant to close. Refused rather than guessed at.
+        what: 'a manifest that says something odd is guessed at rather than refused',
+        file: '../../../stance.js',
+        check: 'core/may/node',
+        find: "        if (typeof app.open !== 'boolean') {",
+        replace: '        if (false) {'
+    },
+    {
+        //THE GATE ITSELF. Without this a closed build reaches everything, which
+        //is the whole feature undone by one line -- and looks like working code.
+        what: 'a closed build reaches whatever it is asked for',
+        file: 'stance.js',
+        check: 'core/may/node',
+        find: '        if (!closed) return null;',
+        replace: '        return null;'
+    },
+    {
+        //FAIL SHUT. A config that cannot be read is not a config that lists
+        //nothing -- but both refuse, so the only way to tell them apart is the
+        //sentence, and a caller staring at the wrong one looks in the wrong file.
+        what: 'a config that cannot be read is treated as one that listed nothing',
+        file: 'stance.js',
+        check: 'core/may/node',
+        find: '        if (lists.unreadable) {',
+        replace: '        if (false) {'
+    },
+    {
+        //A TYPO IS A LIST THAT DOES NOTHING. `command:` for `commands:` leaves
+        //every command shut while the config plainly says otherwise, which reads
+        //as a broken app rather than as a misspelling.
+        what: 'a misspelled kind is accepted in silence',
+        file: 'stance.js',
+        check: 'core/may/node',
+        find: '    if (strange.length) {',
+        replace: '    if (false) {'
+    },
+    {
+        //THE LISTS MUST NOT BLEED. An MCP tool called `screenshot` being open
+        //does not make a COMMAND of that name reachable -- they are different
+        //surfaces, and one list standing in for another opens a name somewhere
+        //nobody meant.
+        what: 'one kind of name opens another',
+        file: 'stance.js',
+        check: 'core/may/node',
+        find: '        if (lists[kind].indexOf(name) >= 0) return null;',
+        replace: '        if (JSON.stringify(lists).indexOf(name) >= 0) return null;'
+    },
+    {
+        //A ROW THAT IS NOT A NAME. Numbers and empty strings in the list are a
+        //config somebody got wrong, and letting them through means `indexOf`
+        //quietly matching nothing while the screen says the name is open.
+        what: 'a list with something in it that is not a name is used anyway',
+        file: 'stance.js',
+        check: 'core/may/node',
+        find: "        var bad = said.filter(function (one) { return typeof one !== 'string' || !one; });",
+        replace: '        var bad = [];'
+    },
+    {
+        //WHAT IS LISTED BUT NOT THERE. The only drift a list of names invites,
+        //and the Reachable page draws it -- so losing it means the config goes
+        //on promising something that no longer exists, silently.
+        what: 'a listed name that nothing registers is never reported',
+        file: 'stance.js',
+        check: 'core/may/node',
+        find: '        return lists[kind].filter(function (name) { return present.indexOf(name) < 0; });',
+        replace: '        return [];'
+    },
+
     //---- the rule, answered without an app ---------------------------------
     {
         //THE ONE THE WHOLE DESIGN RESTS ON.

@@ -23,6 +23,12 @@ may.decisions()       what a person has decided, and what the code said it was f
 may.decide(name, answer, from)   WINDOW ONLY
 may.forget(name, from)           WINDOW ONLY -- back to nobody having said
 may.ANSWERS           once, run, always, never
+
+may.stance            'open' | 'closed' -- decided when the build was made
+may.closed()          the same, in the window, read off BUILD_OPEN
+may.reaches(kind, name)   null, or why a closed build does not reach it
+may.stale(kind, present)  listed names that nothing registers any more
+may.reach()           the whole inventory, for a screen
 ```
 
 In the window, `may` takes the **event** rather than a `from`, because the event
@@ -186,3 +192,84 @@ exact colour there would be to reserve. Measured, not assumed.
 A ring is not a field of colour, so a swatch that also spends purple does not
 collide with it — which is what makes one token enough for all 28, with no
 per-swatch table to keep in step.
+
+## the other half: what this build reaches at all
+
+Everything above is a **deny list**. A capability is named, a person decides, and
+everything nobody named is reachable. That is the right shape for a development
+build — it is how this app is driven and tested — and the wrong one to ship.
+
+The app's own files already argue against deny lists. `core/log`, `core/events`
+and `profile.js` each land on some version of *a deny list is a list somebody has
+to have got right*. And it was not theoretical here: measured on this app's own
+demo, `node src/cli.js read "#f-plain"` handed back `hunter2` from an unguarded
+password field, with no dialog and no record. Not a bug in the guard — the
+guard's premise.
+
+So there is a second, coarser answer underneath it.
+
+| | deny (`declare` / `may()`) | allow (the stance) |
+|---|---|---|
+| unit | a named capability | the whole build |
+| decided by | a person, at the window, at the time | whoever made the build |
+| when nobody has said | it asks | it refuses |
+| can it be changed while running | yes — `once`, `run`, `always`, `never` | **no** |
+
+### it is decided when the build is made
+
+`src/stance.js` answers it and it becomes the `BUILD_OPEN` constant, exactly the
+way `canServe` does — because **the thing being shut off is the runtime**. A
+stance the command line can turn off is `guardSet --off` by another name, which
+is the move `deciding.js` exists to make impossible. Webpack folds the open
+branches out, so there is nothing left to flip.
+
+Absent from `package.json` means **open in development, closed when packaged**.
+`"app": { "open": true }` makes a debug package; `"app": { "open": false }` closes
+a development build, which is how the closed stance gets worked on in a restart
+rather than a three-minute `dist`.
+
+### closed refuses flat and never prompts
+
+That is the whole difference from the deny half. `once` / `run` / `always` are
+for a capability somebody weighs up; a default-deny that raised a dialog for
+hundreds of controls would be answered `always` to everything inside a week — and
+then it would be a deny list again, with extra steps.
+
+In a closed build the only way in is that somebody listed it before shipping:
+
+```js
+//src/config.js
+may: { open: { commands: [...], tools: [], resources: [], prompts: [] } }
+```
+
+`may` is on the shipped list on purpose. Reading what a build allows was never
+the risk, and a person at a terminal who cannot ask has to take the app's word
+for it.
+
+### `stance.js` is a module for the reason four others are
+
+Two stances means two behaviours, and the one nobody runs rots. That is this
+codebase's most-repeated finding — `bridge/isTop.js`, `ipc/token.js`,
+`dataDir/places.js`, `ui/theme/isDark.js` and `deciding.js#personDid` were all
+moved out after their own sabotage survived, because nothing on one machine could
+reach the branch.
+
+So the stance is **handed in** rather than read off the world, and `node.test.js`
+asks both branches in a millisecond with no build, no window and no package.
+
+### what enforces it, and where
+
+| | |
+|---|---|
+| `core/ipc` | a wire call to an unlisted command is refused. `commands` answers only the open ones, and an unlisted name and a nonexistent one get the **same sentence**, so the surface cannot be guessed at. The gate is a hook `ipc` holds and this plugin installs — `may` consumes `ipc`, so it cannot be the other way round |
+| `remote` | `click` and `fill` refuse outside a `.is-open` region; `read` answers what an element **is** and withholds `value` and `checked` |
+| `app_plugins/mcp` | a tool that is not listed is not in `tools/list` at all, and calling it by name answers exactly what a tool nobody registered does |
+| `ui/theme` | `Reachable` and `open=` draw the mark, **only in a closed build** |
+| `ui/reachable` | the one screen that says what all of the above adds up to |
+
+**The stance is asked before the guard** in `remote`. Both orders are equally
+safe — either refuses — but a guarded control a closed build was never going to
+reach would otherwise put a dialog on somebody's screen about a press that is
+already decided. What it must not become is *reachable therefore allowed*: an
+open region says the driver may touch this, not that a capability inside it
+stopped being somebody's to allow.

@@ -201,3 +201,34 @@ It is `node.test.js` rather than a context because it cannot be a plugin: the
 point of it is to be a stranger at the door. It lived in `test/` until that was
 noticed to break `npm test -- mcp`, which matched the file and stopped looking
 for the plugin.
+
+## what a closed build does not admit to having
+
+`needs` is **who may**. The stance is **whether it exists here at all**, and the
+two are orthogonal: a tool can be listed and still guarded.
+
+In a closed build a tool, resource or prompt that is not in `config.may.open` is
+**not in `tools/list`**, and calling it by name answers exactly what a tool nobody
+registered does. Hidden rather than refused — which is the one place this differs
+from the control socket, where an unlisted command is refused with a sentence
+naming the config key.
+
+The difference is who is on the other side. Whoever is at a terminal has the
+token and the config file anyway. **This is the surface a model arrives on with
+nothing but the list**, and the note at the top of `server.js` already says the
+tool list *is where that list stops being a list of things it may simply take*. A
+tool a model cannot see is one it cannot be talked into trying, and one that
+cannot turn up in a description somebody else wrote.
+
+**Listing and calling agree**, and that is the part that has to be right. A name
+missing from the list that answers differently from a nonsense one is a list
+anybody can work around by guessing.
+
+**The capabilities block is counted after the hiding**, so a build with nothing
+open drops `resources` and `prompts` entirely rather than announcing a menu and
+then serving an empty one — the same failure that block was already written for.
+
+`showing.js` holds the filter and the scrub, and it is a module for a reason:
+hiding happens only in a closed build and every machine this is developed on runs
+an open one, so as a closure the whole rule could be broken with `mcp/server`
+still green. The predicate is handed in, and `node.test.js` asks both ways.

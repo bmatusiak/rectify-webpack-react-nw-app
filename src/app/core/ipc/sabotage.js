@@ -15,6 +15,73 @@
 //stamp. Four capabilities had been built on top of it by then.
 
 var entries = [
+    //---- the gate a closed build hangs on this ------------------------------
+    //
+    //THE HOOK IS OURS AND THE RULE IS ../may's, which is what makes these
+    //runnable at all. A closed build behaves differently from every build a
+    //developer runs, so an entry that needed one would be an entry nobody runs
+    //-- and ../../ui/theme/sabotage.js already argues those are worse than no
+    //entry at all.
+    //
+    //./main.test.js INSTALLS ITS OWN GATE instead. The rule under test is "a
+    //gate that says no is obeyed", and that holds in either stance: ../may
+    //simply installs one that says yes to everything while the build is open.
+    {
+        //THE GATE NOT BEING ASKED AT ALL. One line, and a closed build answers
+        //every command it has to anything that can open the socket -- the whole
+        //feature undone, in code that looks perfectly well.
+        what: 'a command is dispatched without the gate being asked',
+        file: 'main.js',
+        check: 'core/ipc/main',
+        restart: true,
+        find: '        var no = barred(msg.command);',
+        replace: '        var no = null;'
+    },
+    {
+        //ASKED AFTER THE HANDLER IS LOOKED UP RATHER THAN BEFORE. It reads
+        //better and it hands out a map: a caller could tell a refused command
+        //from one that does not exist and learn the whole surface a name at a
+        //time, which is what filtering the listing was for.
+        what: 'a refused command and a nonexistent one answer differently',
+        file: 'main.js',
+        check: 'core/ipc/main',
+        restart: true,
+        find: "        var no = barred(msg.command);\n        if (no) return reply({ id: msg.id, ok: false, error: no });\n\n        var fn = handlers[msg.command];\n        if (!fn) return reply({ id: msg.id, ok: false, error: 'unknown command: ' + msg.command });",
+        replace: "        var fn = handlers[msg.command];\n        if (!fn) return reply({ id: msg.id, ok: false, error: 'unknown command: ' + msg.command });\n\n        var no = barred(msg.command);\n        if (no) return reply({ id: msg.id, ok: false, error: no });"
+    },
+    {
+        //THE LISTING GOING BACK TO NAMING EVERYTHING. `commands` is the first
+        //thing anything driving an app asks for, and a caller that may not use
+        //one has no business being told it is there.
+        what: 'the listing advertises commands the gate will refuse',
+        file: 'main.js',
+        check: 'core/ipc/main',
+        restart: true,
+        find: '        return Object.keys(handlers).filter(function (name) { return !barred(name); }).sort();',
+        replace: '        return Object.keys(handlers).sort();'
+    },
+    {
+        //THE FIRST REFUSAL WINNING. With the loop returning nothing, every gate
+        //is a no-op and the refusals are unanimous the other way, in silence.
+        what: 'a gate that says no is asked and then ignored',
+        file: 'main.js',
+        check: 'core/ipc/main',
+        restart: true,
+        find: '            if (no) return no;',
+        replace: '            //sabotaged'
+    },
+    {
+        //AND A GATE THAT CANNOT BE TAKEN OFF. A hook whose remover does nothing
+        //outlives the plugin that installed it -- and a stale gate refuses
+        //commands on behalf of a rule nobody is running any more.
+        what: 'removing a gate leaves it in place for the rest of the run',
+        file: 'main.js',
+        check: 'core/ipc/main',
+        restart: true,
+        find: '            if (i >= 0) gates.splice(i, 1);',
+        replace: '            //sabotaged'
+    },
+
     //---- where a call came from --------------------------------------------
     {
         //THE ONE THAT MATTERS MOST IN THE WHOLE APP.
