@@ -149,8 +149,11 @@ function of(open, config) {
 module.exports.KINDS = KINDS;
 
 //RE-EXPORTED RATHER THAN RESTATED, so a plugin asking whether the build is open
-//and the build that decided it cannot come to differ.
+//and the build that decided it cannot come to differ. Both of them: `decided`
+//is whether anything may drive this build at all, and `driveable` is whether a
+//closed one lists the four commands a driver arrives on.
 module.exports.decided = require('../../../stance').decided;
+module.exports.driveable = require('../../../stance').driveable;
 
 module.exports.read = read;
 module.exports.of = of;

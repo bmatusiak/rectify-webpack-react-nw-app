@@ -47,7 +47,22 @@ const constants = (isProduction) => new webpack.DefinePlugin({
     //constant that differs between the configs webpack is handed in a single
     //run -- and folding it out is what makes a closed build not CONTAIN the
     //branch that would have let something drive it.
-    BUILD_OPEN: JSON.stringify(stance.decided(isProduction, manifest, process.env))
+    BUILD_OPEN: JSON.stringify(stance.decided(isProduction, manifest, process.env)),
+
+    //AND WHETHER A CLOSED BUILD LISTS THE DRIVER. Off unless asked for, so a
+    //package ships without `views`, `click`, `fill` and `read` IN IT -- src/
+    //config.js concatenates them behind this, and webpack folds the branch out.
+    //`APP_DRIVEABLE=1 npm run dist` makes the one you can check the marks with.
+    BUILD_DRIVEABLE: JSON.stringify(stance.driveable(process.env)),
+
+    //AND ITS `typeof`, WHICH IS NOT A DETAIL. src/config.js is required by
+    //boots that webpack never touches -- src/cli.js and the two test harnesses
+    //-- so it guards the constant with `typeof`. Without this line webpack
+    //replaces the identifier and leaves the `typeof` alone, so the branch stays
+    //a runtime check, stays unfoldable, and the four driver names STAY IN THE
+    //BUNDLE of a package that was built shut. The claim would be false and
+    //nothing would say so.
+    'typeof BUILD_DRIVEABLE': JSON.stringify('boolean')
 });
 
 module.exports = (env, argv = {}) => {

@@ -72,6 +72,29 @@ module.exports = [
         replace: '        if (false) {'
     },
     {
+        //THE DRIVER DEFAULTING ON. A build nobody asked to be driveable would
+        //ship `views`, `click`, `fill` and `read` on its open list -- and the
+        //only sign of it is four extra names in a config nobody reads twice.
+        what: 'a build nobody asked about ships with the driver listed',
+        file: '../../../stance.js',
+        check: 'core/may/node',
+        find: '    if (!said) return false;',
+        replace: '    if (!said) return true;'
+    },
+    {
+        //AND READ LOOSELY, which is the same string-is-truthy trap as the
+        //stance above: `APP_DRIVEABLE=false` would list the driver.
+        what: 'the driveable flag is read loosely, so any value lists the driver',
+        file: '../../../stance.js',
+        check: 'core/may/node',
+        find: "    if (said === '1' || said === 'true') return true;" + String.fromCharCode(10)
+            + "    if (said === '0' || said === 'false') return false;" + String.fromCharCode(10)
+            + String.fromCharCode(10)
+            + "    throw new Error('APP_DRIVEABLE is '",
+        replace: "    return !!said;" + String.fromCharCode(10) + String.fromCharCode(10)
+            + "    throw new Error('APP_DRIVEABLE is '"
+    },
+    {
         //THE GATE ITSELF. Without this a closed build reaches everything, which
         //is the whole feature undone by one line -- and looks like working code.
         what: 'a closed build reaches whatever it is asked for',

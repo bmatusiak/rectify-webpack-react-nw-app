@@ -89,3 +89,52 @@ module.exports.decided = function decided(isProduction, manifest, env) {
 
     return !isProduction;
 };
+
+//---------------------------------------------------------------------------
+//AND WHETHER THIS BUILD PUTS THE DRIVER ON ITS OPEN LIST.
+//
+//A SECOND CONSTANT BECAUSE THE FIRST ONE CANNOT ANSWER IT. `BUILD_OPEN` says
+//whether anything outside may drive the app AT ALL; this says whether a CLOSED
+//build lists the four commands the driver arrives on -- `views`, `click`, `fill`
+//and `read`. They are different questions and folding them together would mean
+//a build that can be tested is a build that is open, which is the opposite of
+//what is being tested.
+//
+//IT SHIPS OFF, and that is the point: a package built from this scaffold answers
+//nothing on the control socket but `commands`, `health` and `may`. The names are
+//not merely refused, they are not in the bundle -- webpack folds the branch out
+//of ../src/config.js the same way it folds the routes out of a build that cannot
+//serve.
+//
+//---- why it exists at all --------------------------------------------------
+//
+//BECAUSE SHIPPING SHUT MAKES THE SECOND LAYER UNTESTABLE, and the second layer
+//is the one that does the protecting. A closed build shuts the door twice: the
+//open list decides which COMMANDS answer, and the `Reachable` marks decide which
+//CONTROLS the driver may touch. With the driver off the list, nothing can reach
+//the page at all -- so `npm run drive -- --closed` and `--package` can prove the
+//lock works and nothing whatever about the marks behind it.
+//
+//That is the exact rot this whole feature was written against, so the answer is
+//a build you can drive rather than a default you can walk through.
+//
+//AND IT IS BUILD TIME, WHICH IS THE WHOLE REASON IT IS SAFE. A runtime flag that
+//widened the open list would be the switch ./app/core/may/deciding.js exists to
+//make impossible -- something running could turn the driver on. This cannot be
+//turned on by anything running, because a build made without it does not contain
+//the names.
+module.exports.driveable = function driveable(env) {
+    var said = env && env.APP_DRIVEABLE;
+
+    //SAYING NOTHING IS SAYING NO, which is the opposite of ./decided above and
+    //deliberately so. There, absent means "use the sensible default for this
+    //mode"; here, absent means a shipped build, and a shipped build does not
+    //hand out the driver.
+    if (!said) return false;
+
+    if (said === '1' || said === 'true') return true;
+    if (said === '0' || said === 'false') return false;
+
+    throw new Error('APP_DRIVEABLE is ' + JSON.stringify(said) + ', and it has to be '
+        + '1, 0, true or false. Unset it for a build that ships shut.');
+};

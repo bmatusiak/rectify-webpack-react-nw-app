@@ -53,11 +53,28 @@ const wantSelftest = process.argv.includes('--selftest')
 // same way, and src/app/core/build/main.js runs webpack INSIDE that nw process,
 // so one variable reaches the off-disk boot and all three bundles at once.
 const wantClosed = process.argv.includes('--closed')
-if (wantClosed) process.env.APP_OPEN = '0'
+
+if (wantClosed) {
+  process.env.APP_OPEN = '0'
+
+  // AND THE DRIVER ON ITS OPEN LIST, or there is nothing to check BEHIND the
+  // lock. A closed build shuts the door twice: the open list decides which
+  // commands answer, and the Reachable marks decide which controls the driver
+  // may touch. Without this the run would prove the first and could not reach
+  // the second -- and the second is the one that does the protecting.
+  //
+  // A SHIPPED BUILD DOES NOT GET THIS. It is a constant, folded out, and the
+  // four names are not in the bundle -- measured by building both ways and
+  // grepping. See src/stance.js#driveable.
+  process.env.APP_DRIVEABLE = '1'
+}
 
 // THE STANCE THE APP ACTUALLY CAME UP IN, asked rather than assumed -- see the
 // note by `stance` in main().
 let isClosed = false
+
+// AND WHETHER THE DRIVER IS ON ITS OPEN LIST -- see where this is set, in main().
+let canDrive = true
 
 //the app has to be started with it too: it decides at boot whether to load its
 //own test plugins, and the window is told by the url it is opened with
@@ -183,30 +200,6 @@ async function main () {
     return finish(wasRunning, ipc, restoreOpen)
   }
 
-  // "up" from tools/nw.js means the server is listening, which is earlier than
-  // the window having loaded and opened its socket. Driving needs the second
-  // one, so wait for it rather than assuming the first implies it.
-  const views = await shared.waitForView(ipc)
-
-  // AND WHEN IT DOES NOT, SAY WHAT MAIN KNOWS.
-  //
-  // `0 connected` is a symptom and not a diagnosis. `views` is answered by
-  // src/app/remote/server.js -- the NODE half -- so a node half that failed to
-  // load answers nothing and the count is zero whether or not there is a
-  // window. Main is loaded once and off disk, and it can still see the window,
-  // which is exactly the fact that tells those two apart.
-  check('a view connects', views.views.length > 0,
-    views.connected + ' connected' +
-    (state && state.window && state.window.attached
-      ? ' -- but main still has a window attached, so the window is not what is missing:'
-        + ' nothing answered `views`, which is what a node half that failed to load looks like.'
-        + ' npm run log has the throw.'
-      : ''))
-
-  if (!views.views.length) return finish(wasRunning, ipc, restoreOpen)
-
-  note('driving ' + (views.views[0].title || 'the window'))
-
   // WHICH STANCE THIS ACTUALLY IS, ASKED RATHER THAN ASSUMED.
   //
   // `--closed` sets an environment variable and hopes; this is the part that
@@ -228,6 +221,12 @@ async function main () {
 
   isClosed = !reach.open
 
+  // AND WHETHER THERE IS ANYTHING TO DRIVE WITH. A package built the normal way
+  // ships without `views`, `click`, `fill` and `read` on its open list -- so
+  // everything below that touches the page has nothing to touch it through, and
+  // saying so once here is better than sixty failures that all mean this.
+  canDrive = !isClosed || reach.lists.commands.indexOf('click') >= 0
+
   if (wantClosed && !isClosed) {
     console.log(NEWLINE + 'you asked to drive a closed build and this one is open.')
     console.log('APP_OPEN did not reach it -- see src/stance.js, and check that',
@@ -237,6 +236,36 @@ async function main () {
   }
 
   note('this build is ' + (isClosed ? 'closed' : 'open'))
+
+  // "up" from tools/nw.js means the server is listening, which is earlier than
+  // the window having loaded and opened its socket. Driving needs the second
+  // one, so wait for it rather than assuming the first implies it.
+  const views = await shared.waitForView(ipc)
+
+  // AND WHEN IT DOES NOT, SAY WHAT MAIN KNOWS.
+  //
+  // `0 connected` is a symptom and not a diagnosis. `views` is answered by
+  // src/app/remote/server.js -- the NODE half -- so a node half that failed to
+  // load answers nothing and the count is zero whether or not there is a
+  // window. Main is loaded once and off disk, and it can still see the window,
+  // which is exactly the fact that tells those two apart.
+  // AND A BUILD THAT LISTS NO DRIVER CANNOT BE ASKED. `views` is one of the four
+  // driver commands, so a package that ships shut answers it with a refusal and
+  // this would read `0 connected` -- a window that is plainly there, reported as
+  // missing. Measured on the first shut package built.
+  if (!canDrive) skip('a view connects', 'this build lists no driver, so nothing can ask')
+  else check('a view connects', views.views.length > 0,
+    views.connected + ' connected' +
+    (state && state.window && state.window.attached
+      ? ' -- but main still has a window attached, so the window is not what is missing:'
+        + ' nothing answered `views`, which is what a node half that failed to load looks like.'
+        + ' npm run log has the throw.'
+      : ''))
+
+  if (canDrive && !views.views.length) return finish(wasRunning, ipc, restoreOpen)
+
+  if (canDrive) note('driving ' + (views.views[0].title || 'the window'))
+
 
   // A GUARDED CONTROL MUST REFUSE THE ONE THING THIS TOOL DOES.
   //
@@ -249,9 +278,20 @@ async function main () {
   // looks right in a screenshot. If a driven press ever gets through, the mark
   // on that control has been promising something the app does not do -- which is
   // the exact failure the plugin it came from warns about and does not close.
-  await guarded(ipc)
+  if (canDrive) await guarded(ipc)
+  else skip('a guarded control refuses a driven press', 'this build lists no driver')
 
   await stance(ipc, reach)
+
+  // AND EVERYTHING BELOW REACHES INTO THE PAGE, which a build that lists no
+  // driver cannot do at all. The command-level checks above are the whole of
+  // what such a build CAN be asked, and they are the ones that matter about it.
+  if (!canDrive) {
+    note(NEWLINE + 'this package lists no driver, so the marks behind the lock were not checked.')
+    note('`APP_DRIVEABLE=1 npm run dist` builds the one those are measured on.')
+    skip('every page opens', 'this build lists no driver')
+    return finish(wasRunning, ipc, restoreOpen)
+  }
 
   // WHAT IS ON THE SIDEBAR, read off the app rather than listed here. A page
   // added to src/app/demo/pages is a page this drives, without being told.
@@ -636,6 +676,11 @@ async function stance (ipc, reach) {
   // ON THE DEMO'S OWN PAGE, because that is where a control inside a region and
   // one outside it sit side by side on purpose. `skip` rather than fail if the
   // demo is gone: it is deletable, and this is the demo's markup.
+  if (!canDrive) {
+    return skip('a control outside every open region refuses',
+      'this build lists no driver, so nothing can reach the page to be refused')
+  }
+
   const nav = await ipc.call('read', { selector: '.app-sidebar .nav-pills .nav-link' }).catch(() => null)
   const pages = ((nav && nav.items) || []).map(one => one.text)
 
@@ -741,8 +786,13 @@ async function finish (wasRunning, ipc, restoreOpen) {
     shared.start(passthrough)
   } else if (!wasRunning) {
     note('\nshutting it down again')
-    if (isClosed) stopIt()
-    else await ipc.call('quit', {}).catch(() => {})
+
+    // `quit` FIRST, BECAUSE A PACKAGE WRITES NO .nw-instance.json and
+    // tools/stop.js has nothing to find. It is on the shipped open list for
+    // exactly this reason -- see src/config.js. stopIt() is the fallback for a
+    // build old enough, or shut hard enough, to refuse it.
+    await ipc.call('quit', {}).catch(() => {})
+    if (await ipc.running().catch(() => false)) stopIt()
   } else {
     note('\nleaving it running, since it was')
   }

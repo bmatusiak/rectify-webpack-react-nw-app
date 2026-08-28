@@ -72,7 +72,49 @@ module.exports = function () {
         //that is the sidebar and one demo button, and both are marked on screen.
         may: {
             open: {
-                commands: ['commands', 'health', 'may', 'views', 'click', 'fill', 'read'],
+                //FOUR NAMES, AND A PACKAGE SHIPS WITH NO MORE THAN THESE.
+                //Reading what a build allows was never the risk, and a person
+                //at a terminal who cannot ask has to take the app's word for it.
+                //
+                //`quit` IS ON IT, AND IT IS THE ONE WORTH ARGUING ABOUT. It lets
+                //whatever holds the token shut the app down -- a nuisance, but
+                //not an escalation: it reads nothing, writes nothing and acts on
+                //nothing.
+                //
+                //LEAVING IT OFF COSTS MORE THAN IT SAVES. A package writes no
+                //.nw-instance.json, so tools/stop.js cannot see one -- and with
+                //`quit` refused there is no clean way to stop a packaged build
+                //from a terminal at all. What people do then is kill by image
+                //name, which took an unrelated project down during this
+                //scaffold's own development and is why CLAUDE.md says never to.
+                //A door nobody can close politely gets forced.
+                //
+                //MEASURED: a packaged closed build answered `quit` with a
+                //refusal and had to be ended by pid, three processes deep.
+                commands: ['commands', 'health', 'may', 'quit'].concat(
+                    //AND THE DRIVER, ONLY IN A BUILD MADE TO BE CHECKED.
+                    //
+                    //BUILD_DRIVEABLE IS A CONSTANT, so a normal `npm run dist`
+                    //does not contain these four names at all -- webpack folds
+                    //the branch out, the same way it folds the routes out of a
+                    //build that cannot serve. Nothing running can turn them on.
+                    //
+                    //IT EXISTS BECAUSE A BUILD THAT SHIPS SHUT CANNOT BE CHECKED
+                    //BEHIND THE LOCK. The stance shuts the door twice -- this
+                    //list decides which COMMANDS answer, and the `Reachable`
+                    //marks decide which CONTROLS the driver may touch -- and
+                    //with the driver off the list nothing reaches the page, so
+                    //`drive` can prove the lock works and nothing at all about
+                    //the marks. `APP_DRIVEABLE=1 npm run dist` makes the build
+                    //those are measured on. See src/stance.js.
+                    //`typeof` GUARDED, because this file is also required by
+                    //boots webpack never touches -- src/cli.js, and the two
+                    //harnesses that build a graph in a plain node process. They
+                    //get `false`, which is the right answer for a client: the
+                    //open list only decides anything in main.
+                    typeof BUILD_DRIVEABLE !== 'undefined' && BUILD_DRIVEABLE
+                        ? ['views', 'click', 'fill', 'read'] : []
+                ),
 
                 //AND NOTHING AT ALL ON THE MODEL-FACING SIDE, which is not an
                 //oversight. `mcp:call` is not in `commands` above either, so a

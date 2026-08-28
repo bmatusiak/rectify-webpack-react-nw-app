@@ -273,3 +273,27 @@ reach would otherwise put a dialog on somebody's screen about a press that is
 already decided. What it must not become is *reachable therefore allowed*: an
 open region says the driver may touch this, not that a capability inside it
 stopped being somebody's to allow.
+
+### the door is shut twice, and only one half has pixels
+
+| | decides | lives in |
+|---|---|---|
+| the open list | which **commands** answer at all | `src/config.js` |
+| the marks | which **controls** the driver may touch | `Reachable` / `open=` in the markup |
+
+A package ships with `commands`, `health`, `may` and `quit` and nothing else. The
+four driver commands are behind the `BUILD_DRIVEABLE` constant, so a normal
+`npm run dist` does not contain the names — measured by building both ways and
+grepping `dist/`.
+
+**Which makes the second half untestable in a shipped build, and that is what
+`APP_DRIVEABLE=1` is for.** The marks are the layer that does the protecting, and
+with nothing able to reach the page `drive` can only prove the lock works. A
+build made to be checked is safer than a default somebody can walk through: the
+flag is build-time, folded out, and cannot be turned on by anything running.
+
+`quit` is on the shipped list deliberately. It reads nothing, writes nothing and
+acts on nothing — and a package writes no instance file, so with `quit` refused
+there is no clean way to stop one from a terminal at all. What people do then is
+kill by image name, which is exactly what CLAUDE.md says never to do and for a
+reason that happened here.

@@ -340,3 +340,84 @@ test('an environment value nobody understands is refused rather than guessed at'
     assert.throws(() => stance.decided(true, {}, { APP_OPEN: 'no' }), /1, 0, true or false/);
     assert.throws(() => stance.decided(true, {}, { APP_OPEN: 'closed' }), /APP_OPEN/);
 });
+
+//---- and whether the driver is on that list ------------------------------
+//
+//A SECOND CONSTANT BECAUSE THE FIRST CANNOT ANSWER IT. `decided` says whether
+//anything may drive the app at all; this says whether a CLOSED build lists the
+//four commands the driver arrives on. Folding them together would mean a build
+//you can test is a build that is open, which is the opposite of the thing being
+//tested.
+
+test('a build ships without the driver unless it is asked for', () => {
+    assert.equal(stance.driveable({}), false, 'a normal build listed the driver');
+    assert.equal(stance.driveable(null), false);
+    assert.equal(stance.driveable({ APP_DRIVEABLE: '' }), false);
+});
+
+//SAYING NOTHING IS SAYING NO HERE, which is the opposite of `decided` and
+//deliberately so: there, absent means "the sensible default for this mode";
+//here, absent means a shipped build, and a shipped build does not hand out the
+//driver.
+test('it is the opposite default from the stance itself', () => {
+    assert.equal(stance.decided(false, {}, {}), true, 'development stopped being open');
+    assert.equal(stance.driveable({}), false, 'the driver defaulted on');
+});
+
+test('and it is asked for the same way anything else is', () => {
+    assert.equal(stance.driveable({ APP_DRIVEABLE: '1' }), true);
+    assert.equal(stance.driveable({ APP_DRIVEABLE: 'true' }), true);
+    assert.equal(stance.driveable({ APP_DRIVEABLE: '0' }), false);
+    assert.equal(stance.driveable({ APP_DRIVEABLE: 'false' }), false);
+});
+
+test('a value nobody understands is refused rather than guessed at', () => {
+    assert.throws(() => stance.driveable({ APP_DRIVEABLE: 'yes' }), /APP_DRIVEABLE/);
+    assert.throws(() => stance.driveable({ APP_DRIVEABLE: 'on' }), /1, 0, true or false/);
+});
+
+//THE TWO ARE INDEPENDENT, and every combination has to mean something. A
+//driveable OPEN build is just an open build -- the list is not consulted -- and
+//a driveable CLOSED one is the only thing `drive --closed` can measure.
+test('the two constants do not decide each other', () => {
+    const env = { APP_OPEN: '0', APP_DRIVEABLE: '1' };
+
+    assert.equal(stance.decided(false, {}, env), false, 'asking for a driver opened the build');
+    assert.equal(stance.driveable(env), true);
+
+    assert.equal(stance.decided(false, {}, { APP_OPEN: '0' }), false);
+    assert.equal(stance.driveable({ APP_OPEN: '0' }), false, 'closing a build listed the driver');
+});
+
+//---- and what this app actually ships ------------------------------------
+//
+//THE LIST IS THE APP'S AND NOT core's, so this is the one check that is about
+//src/config.js rather than about the rule. It is worth having because the cost
+//of a name creeping onto it is a shipped binary that answers something nobody
+//meant, and nothing else anywhere would say so.
+//
+//IT ALSO COVERS THE `typeof` GUARD. src/config.js is required by boots webpack
+//never touches -- src/cli.js and two harnesses -- so the constant is guarded.
+//Take the guard off and this line throws rather than fails, which is the loudest
+//way a build-time constant can tell you it leaked into a plain node process.
+test('a package ships with four commands open and no driver among them', () => {
+    const open = require('../../../config.js')().may.open;
+
+    assert.deepStrictEqual(open.commands, ['commands', 'health', 'may', 'quit'],
+        'the shipped open list has changed -- if that is on purpose, change it here too');
+
+    for (const name of ['views', 'click', 'fill', 'read']) {
+        assert.ok(open.commands.indexOf(name) < 0,
+            name + ' is on the shipped list, so a package can be driven out of the box');
+    }
+});
+
+//AND NOTHING AT ALL ON THE MODEL-FACING SIDE. `mcp:call` is not a listed command
+//either, so a closed build shuts MCP twice.
+test('and nothing at all on the model-facing side', () => {
+    const open = require('../../../config.js')().may.open;
+
+    assert.deepStrictEqual(open.tools, []);
+    assert.deepStrictEqual(open.resources, []);
+    assert.deepStrictEqual(open.prompts, []);
+});

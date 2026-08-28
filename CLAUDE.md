@@ -61,6 +61,23 @@ nonexistent one get the same sentence (so the surface cannot be guessed at), an
 MCP tool that is not listed is not in `tools/list` at all, and `read` answers what
 an element IS while withholding `value` and `checked`.
 
+**A package ships shut.** Its open list is `commands`, `health`, `may` and
+`quit` -- and the four driver commands (`views`, `click`, `fill`, `read`) are not
+merely refused, they are **not in the bundle**: `src/config.js` concatenates them
+behind the `BUILD_DRIVEABLE` constant and webpack folds the branch out. Measured
+by building both ways and grepping `dist/`.
+
+`quit` is on the list on purpose. A package writes no `.nw-instance.json`, so
+`npm run stop` cannot see one -- and a build nobody can stop politely gets killed
+by image name, which is the thing that took an unrelated project down here.
+
+**`APP_DRIVEABLE=1 npm run dist` builds the package you can check the marks on.**
+A closed build shuts the door twice: the open list decides which COMMANDS answer,
+and the `Reachable` marks decide which CONTROLS the driver may touch. With the
+driver off the list nothing reaches the page at all, so `drive --package` against
+a normal package proves the lock and says plainly that it checked nothing behind
+it -- 5 checks and 4 named skips. Against a driveable one it runs the lot.
+
 **`npm run drive -- --closed` is how the closed stance gets exercised.** It sets
 `APP_OPEN=0`, restarts into a closed build, drives it, and puts the open one back
 -- about twenty seconds, against four minutes for `npm run dist` plus

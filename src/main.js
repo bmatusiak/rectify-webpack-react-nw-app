@@ -34,6 +34,11 @@ global.BUILD_SERVABLE = true;
 //`npm run dist` and nobody will ever run it. See ./stance.js.
 global.BUILD_OPEN = require('./stance').decided(false, require('../package.json'), process.env);
 
+//AND WHETHER THE DRIVER IS ON THE OPEN LIST, which only matters once the above
+//is false. Off unless asked for, here as everywhere: `npm run drive -- --closed`
+//sets it, and nothing else does.
+global.BUILD_DRIVEABLE = require('./stance').driveable(process.env);
+
 var rectify = require('@bmatusiak/rectify');
 var fs = require('fs');
 var path = require('path');
