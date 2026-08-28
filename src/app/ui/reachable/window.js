@@ -164,12 +164,16 @@ async function plugin(imports, register) {
                         calling it by name answers exactly what a tool nobody registered does.
                     </p>
 
+                    {/* NO <tbody> OF OUR OWN. ../theme/components/ui.js wraps
+                        whatever it is given in one, and a second inside it is
+                        markup no browser accepts -- react says so and carries on
+                        drawing, which is why it looked fine. demo/window.test.js
+                        is what caught it, by opening every page and treating a
+                        console error as a page that did not render. */}
                     <Table className="mb-0">
-                        <tbody>
-                            <tr><th className="w-25">Tools</th><td>{names('tools')}</td></tr>
-                            <tr><th>Resources</th><td>{names('resources')}</td></tr>
-                            <tr><th>Prompts</th><td>{names('prompts')}</td></tr>
-                        </tbody>
+                        <tr><th className="w-25">Tools</th><td>{names('tools')}</td></tr>
+                        <tr><th>Resources</th><td>{names('resources')}</td></tr>
+                        <tr><th>Prompts</th><td>{names('prompts')}</td></tr>
                     </Table>
                 </Section>
 
@@ -178,24 +182,16 @@ async function plugin(imports, register) {
                         + (regions.length === 1 ? 'region' : 'regions') + ' where you are now'}>
 
                     {regions.length ? (
-                        <Table>
-                            <thead>
-                                <tr>
-                                    <th>What</th><th>Where</th>
-                                    <th className="text-end">Controls</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {regions.map(function (one, i) {
-                                    return (
-                                        <tr key={one.name + i}>
-                                            <td>{one.name}</td>
-                                            <td><code>{one.element}</code></td>
-                                            <td className="text-end">{one.controls}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
+                        <Table head={['What', 'Where', 'Controls']}>
+                            {regions.map(function (one, i) {
+                                return (
+                                    <tr key={one.name + i}>
+                                        <td>{one.name}</td>
+                                        <td><code>{one.element}</code></td>
+                                        <td className="text-end">{one.controls}</td>
+                                    </tr>
+                                );
+                            })}
                         </Table>
                     ) : (
                         <p className="text-body-secondary">
