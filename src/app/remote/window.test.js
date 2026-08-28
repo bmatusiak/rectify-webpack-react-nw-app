@@ -255,6 +255,67 @@ function plugin(imports, register) {
             assert.ok(out.refused, 'a mark on the wrapper was not read, so only closest() would');
         });
 
+        //---- and the one field nobody has to remember to mark --------------
+        //
+        //A RULE RATHER THAN A MARK. Measured on this app's own demo before it
+        //existed: `read "#f-plain"` handed back `hunter2` from an ORDINARY
+        //password field -- unguarded, in no region, in a development build,
+        //with no dialog and no record. Both marks could have covered it and
+        //both rely on somebody thinking of it for every field added later.
+
+        it('never reads a password back, mark or no mark', async function () {
+            var box = scratch();
+            var field = document.createElement('input');
+            field.id = 'probe-password';
+            field.type = 'password';
+            field.value = 'hunter2';
+            box.appendChild(field);
+
+            var out = await ask('read', { selector: '#probe-password' });
+            clear();
+
+            assert.notEqual(out.value, 'hunter2', 'a password came back over the wire');
+            assert.equal(out.value, null, 'the value was not withheld');
+            assert.ok(out.withheld, 'it was withheld without saying so, which reads as an empty field');
+        });
+
+        //THE VALUE ONLY. A password box still has to be findable, describable
+        //and contrast-checkable -- ../../../tools/drive.js measures every field
+        //on twenty pages, and a field it cannot see is a field nobody checks.
+        it('still says what the password field is and where', async function () {
+            var box = scratch();
+            var field = document.createElement('input');
+            field.id = 'probe-password-shape';
+            field.type = 'password';
+            field.setAttribute('aria-label', 'Passphrase');
+            box.appendChild(field);
+
+            var out = await ask('read', { selector: '#probe-password-shape' });
+            clear();
+
+            assert.equal(out.element, 'input#probe-password-shape');
+            assert.ok(out.text.indexOf('Passphrase') >= 0, 'it cannot even be named: ' + out.text);
+            assert.ok(out.contrast, 'it cannot be measured');
+        });
+
+        //AND AN ORDINARY FIELD BESIDE IT IS NOT TOUCHED. A rule that withheld
+        //every value would pass the two above and make the driver useless,
+        //which is a failure no test that only checks refusals can see.
+        it('reads an ordinary field beside it as it always did', async function () {
+            var box = scratch();
+            var field = document.createElement('input');
+            field.id = 'probe-not-password';
+            field.type = 'text';
+            field.value = 'ordinary';
+            box.appendChild(field);
+
+            var out = await ask('read', { selector: '#probe-not-password' });
+            clear();
+
+            assert.equal(out.value, 'ordinary', 'an ordinary field stopped being readable');
+            assert.ok(!out.withheld, 'it was withheld for no reason');
+        });
+
         //AND AN UNMARKED CONTROL IS STILL PRESSED. A guard that refused
         //everything would pass every check above and break the whole app --
         //which is the shape of failure a test that only asserts refusals

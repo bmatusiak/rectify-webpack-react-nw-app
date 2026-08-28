@@ -237,6 +237,33 @@ async function plugin(imports, register) {
             away.type = 'button';
             away.className = 'btn btn-sm btn-link text-body-secondary ms-auto';
             away.textContent = 'Not now';
+
+            //AND IT IS THE ONE CONTROL IN THIS DIALOG A CLOSED BUILD REACHES.
+            //
+            //THE MARK HAS TO MATCH THE MECHANISM. `answer(null, true)` above
+            //already lets ANYTHING press this, for the reason written there: a
+            //dialog only a person can dismiss sits over the app until somebody
+            //comes back, with a driven run wedged on it. In a closed build
+            //../../remote refuses every control that is not marked -- so without
+            //this the mechanism said yes and the stance said no, and the sentence
+            //above became false.
+            //
+            //MEASURED BY `npm run drive -- --closed`, which is what it is for: the
+            //run raised a question, was correctly refused an answer, and then
+            //could not take the question away.
+            //
+            //THE ANSWERS ARE NOT MARKED AND MUST NOT BE. Every answer that
+            //ALLOWS needs a person, or a driven click raises the question and a
+            //second driven click gets through it -- the prompt would be the way
+            //around the prompt. Refusing is the only thing that is safe from
+            //anybody, so refusing is the only thing that is reachable.
+            //
+            //ONLY WHEN CLOSED, so an open build draws no ring on it: there,
+            //everything is reachable and the mark would say nothing.
+            if (!BUILD_OPEN) {
+                away.className += ' is-open';
+                away.setAttribute('data-open', 'taking a question away');
+            }
             away.addEventListener('click', answer(null, true));
 
             row.appendChild(away);

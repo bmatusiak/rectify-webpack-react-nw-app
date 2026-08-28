@@ -221,3 +221,23 @@ with an exit code. Before that line existed, `node src/cli.js click` on a guarde
 control **printed nothing and exited 0** — measured — which reads exactly like a
 click that worked, and which anything counting exit codes would have scored as a
 pass.
+
+### a password is never read back, in any build
+
+`read` withholds `value` from any `input[type="password"]` in **either stance**.
+
+**A rule, not a mark**, and the difference is the whole point: a mark is
+forgettable and this one was forgotten. Measured on this app's own demo,
+`node src/cli.js read "#f-plain"` handed back `hunter2` from an ordinary password
+field — unguarded, in no region, in a development build, with no dialog and no
+record. `guard=` or a region would each have covered it, and both rely on
+somebody thinking of it for every field anybody adds afterwards. The browser
+already knows which inputs are secret, so this asks the browser.
+
+**The value only.** What the field is, whether it is on screen and what it
+measures all still come back, so a password box is still findable, describable
+and contrast-checked — `drive` measures every field on twenty pages, and a field
+it cannot see is a field nobody checks.
+
+**`fill` is untouched.** Typing into one is not reading it, and a driven login is
+a thing this plugin exists to do.

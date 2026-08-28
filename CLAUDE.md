@@ -61,9 +61,16 @@ nonexistent one get the same sentence (so the surface cannot be guessed at), an
 MCP tool that is not listed is not in `tools/list` at all, and `read` answers what
 an element IS while withholding `value` and `checked`.
 
-**To work on the closed stance, close a development build**: put
-`"app": { "open": false }` in package.json and `npm run restart` -- three seconds
-rather than the three minutes `npm run dist` costs. **`npm test` will then fail**,
+**`npm run drive -- --closed` is how the closed stance gets exercised.** It sets
+`APP_OPEN=0`, restarts into a closed build, drives it, and puts the open one back
+-- about twenty seconds, against four minutes for `npm run dist` plus
+`--package`. It refuses to run if the app comes up open, rather than reporting a
+suite about the stance it was not testing.
+
+**To work on it by hand, close a development build**: put
+`"app": { "open": false }` in package.json and `npm run restart` -- or set
+`APP_OPEN=0` for one launch, which touches no tracked file. **`npm test` will
+then fail**,
 and correctly: `selftest` is not on the open list, so the runner cannot ask the
 app for its suites. Put the key back to run the suites. The **Reachable** page and
 `node src/cli.js may` both list what the build allows, in either stance.
@@ -97,7 +104,8 @@ than one thing on a developer's machine; `Get-Process nw | Stop-Process` took an
 unrelated project down during this scaffold's own development. `npm run stop`
 signals the pid out of `.nw-instance.json`, which is this app's own.
 
-`npm run drive` takes the same `--build` / `--package` as `npm start`, plus `--shots` to
+`npm run drive` takes the same `--build` / `--package` as `npm start`, plus `--closed`
+to drive a closed build and put the open one back, and `--shots` to
 keep a screenshot of every page and `--swatches` to check all twenty-eight rather than
 three. It leaves the app running if it already was, and shuts it down if it started it.
 

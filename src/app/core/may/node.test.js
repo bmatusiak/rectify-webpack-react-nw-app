@@ -299,3 +299,44 @@ test('a listed name that nothing registers is reported', () => {
 test('an open build reports nothing stale', () => {
     assert.deepStrictEqual(stance.of(true, { commands: ['gone'] }).stale('commands', []), []);
 });
+
+//---- and the one override that exists so this can be tested at all --------
+//
+//WITHOUT IT THE CLOSED BRANCH RUNS ABOUT ONCE A RELEASE, because reaching it
+//means `npm run dist` and `npm run drive -- --package` -- four minutes. With it,
+//`npm run drive -- --closed` is twenty seconds. That is the difference between a
+//branch that is exercised and one that rots, which is this whole feature's
+//named risk.
+
+test('the environment can close a development build and open a package', () => {
+    assert.equal(stance.decided(false, {}, { APP_OPEN: '0' }), false, 'a dev build would not close');
+    assert.equal(stance.decided(true, {}, { APP_OPEN: '1' }), true, 'a package would not open');
+    assert.equal(stance.decided(false, {}, { APP_OPEN: 'false' }), false);
+    assert.equal(stance.decided(true, {}, { APP_OPEN: 'true' }), true);
+});
+
+//IT BEATS THE MANIFEST, which is what makes it usable: closing a build for one
+//run must not mean editing a tracked file and remembering to put it back.
+test('the environment beats the manifest, both ways round', () => {
+    assert.equal(stance.decided(false, { app: { open: true } }, { APP_OPEN: '0' }), false);
+    assert.equal(stance.decided(true, { app: { open: false } }, { APP_OPEN: '1' }), true);
+});
+
+//AND SAYING NOTHING IS NOT SAYING NO. An unset variable reads as undefined and
+//an empty one as '' -- treating either as false would close every build on every
+//machine that has never heard of this, which is the default nobody asked for.
+test('an environment that says nothing leaves the manifest to decide', () => {
+    for (const env of [{}, { APP_OPEN: undefined }, { APP_OPEN: '' }, null]) {
+        assert.equal(stance.decided(false, {}, env), true, JSON.stringify(env) + ' closed a dev build');
+        assert.equal(stance.decided(true, {}, env), false, JSON.stringify(env) + ' opened a package');
+    }
+});
+
+//EVERY ENVIRONMENT VARIABLE IS A STRING, so `APP_OPEN=false` is truthy and a
+//loose reading would OPEN a build somebody plainly meant to close. Refused,
+//naming the variable, exactly as a non-boolean manifest key is.
+test('an environment value nobody understands is refused rather than guessed at', () => {
+    assert.throws(() => stance.decided(true, {}, { APP_OPEN: 'yes' }), /APP_OPEN/);
+    assert.throws(() => stance.decided(true, {}, { APP_OPEN: 'no' }), /1, 0, true or false/);
+    assert.throws(() => stance.decided(true, {}, { APP_OPEN: 'closed' }), /APP_OPEN/);
+});

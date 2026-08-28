@@ -47,7 +47,7 @@ const constants = (isProduction) => new webpack.DefinePlugin({
     //constant that differs between the configs webpack is handed in a single
     //run -- and folding it out is what makes a closed build not CONTAIN the
     //branch that would have let something drive it.
-    BUILD_OPEN: JSON.stringify(stance.decided(isProduction, manifest))
+    BUILD_OPEN: JSON.stringify(stance.decided(isProduction, manifest, process.env))
 });
 
 module.exports = (env, argv = {}) => {

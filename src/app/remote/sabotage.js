@@ -88,6 +88,18 @@ module.exports = [
         replace: '        var no = null;'
     },
 
+    {
+        //THE ONE THING WITHHELD IN EITHER STANCE. A rule rather than a mark,
+        //because a mark is forgettable and this one was forgotten -- measured,
+        //`read "#f-plain"` handed back `hunter2` from an ordinary password
+        //field in a development build.
+        what: 'a password field hands its value over the wire again',
+        file: 'window.js',
+        check: 'remote/window',
+        find: "    return el && el.type === 'password'",
+        replace: '    return el && false'
+    },
+
     //---- and saying so ------------------------------------------------------
     {
         //A REFUSAL THAT PRINTS NOTHING AND EXITS 0 READS EXACTLY LIKE SUCCESS,

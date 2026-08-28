@@ -356,6 +356,35 @@ function marked(el) {
 //forgettable as marking each guarded one -- a button added to an open panel next
 //year would be silently unreachable, and nobody would find out until a tool
 //stopped working for a reason nothing prints.
+//AND ONE KIND OF FIELD NOBODY HAS TO REMEMBER TO MARK.
+//
+//A RULE RATHER THAN A MARK, and the difference is the whole point: a mark is
+//forgettable and this one was forgotten. Measured on this app's own demo,
+//`node src/cli.js read "#f-plain"` handed back `hunter2` from an ordinary
+//password field -- unguarded, outside no region, in a development build, with no
+//dialog and no record.
+//
+//THE MARKS COULD HAVE COVERED IT AND DID NOT. `guard=` or a region would each
+//have worked, and both rely on somebody thinking of it for every field anybody
+//adds afterwards. The browser already knows which inputs are secret, so this
+//asks the browser.
+//
+//IN EITHER STANCE, which is why it is not part of ./unreachable. A development
+//build is meant to be driven freely -- that is what the open stance is FOR -- and
+//reading a password back is not part of driving anything. Everything else about
+//an open build is untouched.
+//
+//THE VALUE ONLY. What the field IS, whether it is on screen and what it measures
+//all still come back, so a password box can still be found, described and
+//contrast-checked. `fill` is untouched as well: typing into one is not reading
+//it, and a driven login is a thing this tool exists to do.
+function password(el) {
+    return el && el.type === 'password'
+        ? 'a password field is never read over the wire, in any build. What it is and '
+            + 'where it is came back; what is in it did not.'
+        : null;
+}
+
 function reachable(el) {
     return el && el.closest ? el.closest('.is-open') : null;
 }
@@ -474,7 +503,7 @@ async function read(data, permit, shut) {
     //TEXT IS NOT WITHHELD, WHICH IS A REAL CHOICE AND NOT AN OVERSIGHT. A key
     //printed on screen as text would come back. Mark it: a region put round it
     //is what the mark is for, and the guard is what a single control has.
-    var withheld = shut ? shut(hit.el) : null;
+    var withheld = (shut ? shut(hit.el) : null) || password(hit.el);
 
     //AND THE GUARD IS NOT ASKED WHEN THE VALUE IS ALREADY BEING WITHHELD. The
     //question a guarded control raises about a `read` exists to protect exactly

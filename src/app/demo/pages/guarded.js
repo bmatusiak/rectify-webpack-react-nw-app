@@ -188,8 +188,29 @@ module.exports = function Guarded(props) {
                         Inside the region
                     </Button>
 
+                    {/* AND ONE THAT IS BOTH, WHICH IS THE INTERESTING CASE.
+
+                        The two marks are not the same question. `Reachable` says
+                        the DRIVER may touch this; `guard` says the capability is
+                        still somebody's to allow. A control inside an open region
+                        is reached and then ASKED about -- so this is where the
+                        rule that must never become `if (reachable) return null`
+                        is actually visible.
+
+                        IT IS ALSO WHAT KEEPS `npm run drive` HONEST IN A CLOSED
+                        BUILD. Its guarded pass presses a guarded control and
+                        waits for the dialog; with every guarded control outside
+                        every region, the stance refuses first and that pass
+                        quietly measures nothing. */}
+                    <Button id="guarded-and-reachable" variant="outline-warning"
+                        guard="snapshot"
+                        onClick={function () { toast('allowed', 'success', 'unlock'); }}>
+                        Reachable, and still guarded
+                    </Button>
+
                     <span className="text-body-secondary small">
                         marked open, so a closed build still lets a tool press this
+                        &mdash; and the one beside it is reached and then asked about
                     </span>
                 </Reachable>
 

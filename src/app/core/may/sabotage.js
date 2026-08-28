@@ -32,6 +32,37 @@ module.exports = [
         replace: '    return true;'
     },
     {
+        //THE OVERRIDE THAT EXISTS SO THE CLOSED BRANCH CAN BE RUN AT ALL.
+        //Ignore it and `npm run drive -- --closed` silently drives an OPEN app
+        //and passes -- a whole suite reporting green about the stance it was
+        //not testing, which is worse than the suite not existing.
+        what: 'the environment override is ignored, so a closed run drives an open app',
+        file: '../../../stance.js',
+        check: 'core/may/node',
+        find: '    if (said) {',
+        replace: '    if (false) {'
+    },
+    {
+        //EVERY ENVIRONMENT VARIABLE IS A STRING, so `APP_OPEN=false` is truthy
+        //and a loose reading OPENS a build somebody plainly meant to close.
+        //Refused, naming the variable -- the same rule as the manifest key.
+        what: 'an environment value nobody understands is read loosely',
+        file: '../../../stance.js',
+        check: 'core/may/node',
+        find: "        if (said === '1' || said === 'true') return true;",
+        replace: '        return !!said;'
+    },
+    {
+        //SAYING NOTHING IS NOT SAYING NO. Read `''` or a missing `env` as a
+        //value and every machine that has never heard of this closes every
+        //build it makes -- the default nobody asked for, arriving silently.
+        what: 'an empty or absent environment is read as an answer',
+        file: '../../../stance.js',
+        check: 'core/may/node',
+        find: '    var said = env && env.APP_OPEN;',
+        replace: "    var said = (env && env.APP_OPEN) || '0';"
+    },
+    {
         //A STRING IS TRUTHY, which is how `"open": "false"` would ship a build
         //the manifest plainly meant to close. Refused rather than guessed at.
         what: 'a manifest that says something odd is guessed at rather than refused',

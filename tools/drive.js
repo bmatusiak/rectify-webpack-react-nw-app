@@ -18,6 +18,7 @@
 
 const path = require('node:path')
 const fs = require('node:fs')
+const { spawnSync } = require('node:child_process')
 
 // The cli graph, the walk, the launcher and the wait all live in ./selftest.js,
 // because test/selftest.test.js needs the same four and two copies of them
@@ -30,7 +31,7 @@ const NEWLINE = String.fromCharCode(10)
 const ROOT = shared.ROOT
 const SHOTS = path.join(ROOT, 'shots')
 
-const OPTIONS = ['--shots', '--swatches', '--selftest']
+const OPTIONS = ['--shots', '--swatches', '--selftest', '--closed']
 
 // WHICH PAGE A SWATCH IS JUDGED ON. See swatches() for why it is pinned.
 const MEASURE_ON = 'Cheatsheet'
@@ -38,6 +39,25 @@ const passthrough = process.argv.slice(2).filter(a => OPTIONS.indexOf(a) < 0)
 const wantShots = process.argv.includes('--shots')
 const everySwatch = process.argv.includes('--swatches')
 const wantSelftest = process.argv.includes('--selftest')
+
+// DRIVE THE OTHER STANCE, WHICH IS THE ONE NOBODY WOULD OTHERWISE RUN.
+//
+// A closed build behaves differently from every build a developer starts, and
+// until this flag the only way to get one was `npm run dist` plus
+// `--package` -- about four minutes, so about once a release. That is the exact
+// shape of the rules this codebase has had to move out of closures after their
+// own sabotage survived.
+//
+// APP_OPEN IS READ WHEN THE BUILD IS MADE AND BY NOTHING ELSE -- see
+// src/stance.js. spawnSync inherits the environment, tools/nw.js spawns nw the
+// same way, and src/app/core/build/main.js runs webpack INSIDE that nw process,
+// so one variable reaches the off-disk boot and all three bundles at once.
+const wantClosed = process.argv.includes('--closed')
+if (wantClosed) process.env.APP_OPEN = '0'
+
+// THE STANCE THE APP ACTUALLY CAME UP IN, asked rather than assumed -- see the
+// note by `stance` in main().
+let isClosed = false
 
 //the app has to be started with it too: it decides at boot whether to load its
 //own test plugins, and the window is told by the url it is opened with
@@ -51,6 +71,15 @@ const READABLE = 4.5
 let passed = 0
 const failures = []
 const skipped = []
+
+// STOPPED BY PID AND NOT OVER IPC. `quit` is not on a closed build's open list,
+// so `ipc.call('quit')` is refused -- which would leave a closed app running
+// and every `npm test` after this one failing for a reason nobody would connect
+// to a drive run. tools/stop.js signals the pid out of .nw-instance.json, which
+// no stance can refuse.
+function stopIt () {
+  spawnSync(process.execPath, [path.join(__dirname, 'stop.js')], { stdio: 'ignore', cwd: ROOT })
+}
 
 // A SKIP IS NEITHER A PASS NOR A FAILURE, and reporting it as one of them is
 // how a run lies. `--shots` against a minimized window used to fail the page it
@@ -74,7 +103,24 @@ function note (line) { console.log(line) }
 async function main () {
   const { app, ipc, selftest: cli } = await shared.cliGraph({ withTests: wantSelftest })
 
-  const wasRunning = await ipc.running()
+  let wasRunning = await ipc.running()
+
+  // THE STANCE IS BAKED WHEN THE APP BOOTS, so an app that is already up is the
+  // wrong app whatever it is: it was started without APP_OPEN and its bundles
+  // carry the other constant. Stop it and start one that is the thing asked for.
+  //
+  // AND PUT IT BACK AFTERWARDS. Leaving a closed app running would mean the next
+  // `npm test` fails -- `selftest` is not on the open list -- for a reason nobody
+  // would connect to a drive run they had already forgotten about.
+  let restoreOpen = false
+
+  if (wantClosed && wasRunning) {
+    note('stopping the open app, and putting it back at the end')
+    stopIt()
+    restoreOpen = true
+    wasRunning = false
+  }
+
   if (!wasRunning) {
     note('starting the app' + (passthrough.length ? ' (' + passthrough.join(' ') + ')' : ''))
 
@@ -134,7 +180,7 @@ async function main () {
   if (trouble) {
     console.log(NEWLINE + trouble)
     console.log(NEWLINE + 'the app is showing an error overlay, so there is nothing worth measuring.')
-    return finish(wasRunning, ipc)
+    return finish(wasRunning, ipc, restoreOpen)
   }
 
   // "up" from tools/nw.js means the server is listening, which is earlier than
@@ -157,9 +203,40 @@ async function main () {
         + ' npm run log has the throw.'
       : ''))
 
-  if (!views.views.length) return finish(wasRunning, ipc)
+  if (!views.views.length) return finish(wasRunning, ipc, restoreOpen)
 
   note('driving ' + (views.views[0].title || 'the window'))
+
+  // WHICH STANCE THIS ACTUALLY IS, ASKED RATHER THAN ASSUMED.
+  //
+  // `--closed` sets an environment variable and hopes; this is the part that
+  // checks it landed. A dev build booted closed rebuilds its bundles as it
+  // starts, and driving through a stale one would measure the other app --
+  // main() already refuses `--package` against a running dev build for exactly
+  // this reason, and the sentence there is the one that applies: a pass that is
+  // about something else is worse than a failure.
+  //
+  // `may` IS ON THE SHIPPED OPEN LIST precisely so this works in a closed build.
+  const said = await ipc.call('may').catch(() => null)
+  const reach = said && said.reach
+
+  if (!reach) {
+    check('the app says which stance it is in', false,
+      'nothing answered `may`, so there is no way to know what is being driven')
+    return finish(wasRunning, ipc, restoreOpen)
+  }
+
+  isClosed = !reach.open
+
+  if (wantClosed && !isClosed) {
+    console.log(NEWLINE + 'you asked to drive a closed build and this one is open.')
+    console.log('APP_OPEN did not reach it -- see src/stance.js, and check that',
+      'nothing else started the app first.')
+    stopIt()
+    process.exit(1)
+  }
+
+  note('this build is ' + (isClosed ? 'closed' : 'open'))
 
   // A GUARDED CONTROL MUST REFUSE THE ONE THING THIS TOOL DOES.
   //
@@ -173,6 +250,8 @@ async function main () {
   // on that control has been promising something the app does not do -- which is
   // the exact failure the plugin it came from warns about and does not close.
   await guarded(ipc)
+
+  await stance(ipc, reach)
 
   // WHAT IS ON THE SIDEBAR, read off the app rather than listed here. A page
   // added to src/app/demo/pages is a page this drives, without being told.
@@ -239,7 +318,7 @@ async function main () {
 
   await swatches(ipc)
   await selftest(ipc, cli)
-  await finish(wasRunning, ipc)
+  await finish(wasRunning, ipc, restoreOpen)
 }
 
 // THE TWO CONTEXTS THAT CANNOT BE BOOTED FROM A TEST FILE.
@@ -396,13 +475,25 @@ async function guarded (ipc) {
     return skip('a guarded control refuses a driven press', 'the sidebar never drew')
   }
 
-  if (!sidebar.items.some(item => item.text === 'Buttons')) {
+  // WHICH GUARDED CONTROL, AND IT DEPENDS ON THE STANCE.
+  //
+  // A closed build refuses everything outside a marked region BEFORE the guard
+  // is ever asked -- so aiming at the Buttons page here would measure the stance
+  // refusing and report it as a guard that never asked anybody. The demo carries
+  // one control that is both marked open AND guarded, exactly so this pass keeps
+  // meaning the same thing in either build: reached, and then asked about.
+  const on = isClosed ? 'Guarded' : 'Buttons'
+  const target = isClosed
+    ? { selector: '#guarded-and-reachable' }
+    : { text: 'Write the page to a file' }
+
+  if (!sidebar.items.some(item => item.text === on)) {
     // the demo is deletable, and this check is about the demo's own page
-    return skip('a guarded control refuses a driven press', 'no Buttons page to look at')
+    return skip('a guarded control refuses a driven press', 'no ' + on + ' page to look at')
   }
 
   await ipc.call('click', {
-    selector: '.app-sidebar .nav-pills .nav-link', text: 'Buttons'
+    selector: '.app-sidebar .nav-pills .nav-link', text: on
   }).catch(() => null)
 
   // WAITED FOR RATHER THAN SLEPT THROUGH. A fixed pause is right until the
@@ -433,8 +524,19 @@ async function guarded (ipc) {
   // reads exactly like a guard that is not working.
   await settled(ipc)
 
-  const pressed = await ipc.call('click', { text: 'Write the page to a file' }).catch(e => ({ error: e.message }))
+  const pressed = await ipc.call('click', target).catch(e => ({ error: e.message }))
 
+  // A REFUSAL HERE IS NOT A FAILURE, AND READING IT AS ONE WAS A BUG I WROTE.
+  //
+  // The expected answer to this press IS `{ refused }`: remote/window.js raises
+  // the question, waits 2.5s for somebody to answer it, and refuses the CALLER
+  // with "a question is on screen" rather than holding the socket open for two
+  // minutes. The dialog appearing is the thing being checked, so the dialog is
+  // what decides -- and the refusal is only worth keeping as the detail for when
+  // there is no dialog to find.
+  //
+  // A REJECTION IS STILL A FAILURE, because that is the transport breaking
+  // rather than the app answering.
   if (pressed && pressed.error) {
     return check('a guarded control refuses a driven press', false, pressed.error)
   }
@@ -451,7 +553,9 @@ async function guarded (ipc) {
   }
 
   check('a driven press asks a person instead of going ahead', box.length > 0,
-    box.length ? box[0].slice(0, 60) : 'nothing was asked, so it either refused or just did it')
+    box.length ? box[0].slice(0, 60)
+      : ((pressed && pressed.refused) ||
+        'nothing was asked, so it either refused or just did it'))
 
   if (!box.length) return
 
@@ -479,6 +583,135 @@ async function guarded (ipc) {
   check('and can always take the question away', !gone.length, 'the dialog would not go')
 }
 
+// WHAT A CLOSED BUILD REACHES, AND WHAT IT WILL NOT.
+//
+// THE OTHER HALF OF `guarded` ABOVE. That one is about a capability somebody
+// can allow; this is about a build that reaches nothing except what was listed
+// before it shipped, and cannot be talked out of it.
+//
+// IT IS THE ONLY PLACE THE CLOSED BRANCH IS EXERCISED END TO END. Everything
+// else about the stance is a node test on src/stance.js and
+// src/app_plugins/mcp/showing.js -- correct rules, asked both ways in a
+// millisecond, and no proof at all that they are WIRED to anything.
+async function stance (ipc, reach) {
+  if (!isClosed) {
+    return skip('a closed build reaches only what it listed',
+      'this build is open -- run `npm run drive -- --closed`')
+  }
+
+  // THE LISTING AGREES WITH THE GATE. `commands` is the first thing anything
+  // driving an app asks for, and a caller that may not use one has no business
+  // being told it is there.
+  const listed = await ipc.call('commands').catch(() => null)
+
+  check('the listing names only what is open', Array.isArray(listed) &&
+    listed.length === reach.lists.commands.length && listed.length < reach.counts.commands,
+    (listed || []).length + ' listed, ' + reach.lists.commands.length + ' open, ' +
+    reach.counts.commands + ' registered')
+
+  // AND AN UNLISTED ONE IS REFUSED, saying where to look. `snapshot` is a real
+  // command in this app -- it writes the screen to a file -- and is not open.
+  const shut = await ipc.call('snapshot').then(() => null, e => e.message)
+
+  check('an unlisted command is refused', !!shut && /config\.may\.open/.test(shut),
+    shut || 'it ran')
+
+  // THE ONE THAT MAKES THE LIST WORTH HAVING. A refused command and a
+  // nonexistent one have to answer the SAME, or a caller can tell them apart
+  // and learn the whole surface a name at a time.
+  const nonsense = await ipc.call('no-such-command-at-all').then(() => null, e => e.message)
+
+  check('and answers the same as a command that does not exist',
+    !!nonsense && nonsense.replace(/no-such-command-at-all/g, 'X') === String(shut).replace(/snapshot/g, 'X'),
+    'refused: ' + shut + ' / unknown: ' + nonsense)
+
+  // MCP IS SHUT TWICE, and this is the outer one: `mcp:call` is not a listed
+  // command either, so a closed build offers a model nothing at all before the
+  // per-tool hiding is even reached.
+  const mcp = await ipc.call('mcp:describe').then(() => null, e => e.message)
+  check('the MCP surface is shut at the socket', !!mcp, mcp || 'it answered')
+
+  // ---- and the marks, which are the half with pixels --------------------
+  //
+  // ON THE DEMO'S OWN PAGE, because that is where a control inside a region and
+  // one outside it sit side by side on purpose. `skip` rather than fail if the
+  // demo is gone: it is deletable, and this is the demo's markup.
+  const nav = await ipc.call('read', { selector: '.app-sidebar .nav-pills .nav-link' }).catch(() => null)
+  const pages = ((nav && nav.items) || []).map(one => one.text)
+
+  if (pages.indexOf('Guarded') < 0) {
+    return skip('a control outside every open region refuses', 'no Guarded page to look at')
+  }
+
+  await ipc.call('click', { selector: '.app-sidebar .nav-pills .nav-link', text: 'Guarded' })
+    .catch(() => null)
+  await settled(ipc)
+
+  // NAVIGATION ITSELF PROVED THE SIDEBAR IS REACHABLE, which is not a given: it
+  // is a marked region in src/app/demo/window.js, and a closed build with that
+  // mark removed could not be driven to a second page at all.
+  const where = await ipc.call('read', { selector: '.app-sidebar .nav-link.active' }).catch(() => null)
+  check('a marked region can still be driven', where && where.text === 'Guarded',
+    'the active page is ' + ((where && where.text) || 'unreadable'))
+
+  const marks = saw(await ipc.call('read', { selector: '.is-open' }).catch(() => null))
+  check('the open marks are drawn', marks.length > 0,
+    marks.length + ' marked, and the driver obeys the same class')
+
+  // BOTH DIRECTIONS, AND THE SECOND ONE IS NOT PADDING. A stance that refused
+  // everything would pass every refusal check above and leave the app unusable,
+  // which is a failure no list of refusals can see.
+  // A REFUSED VERB IS A SUCCESSFUL IPC REPLY, WHICH IS NOT THE SAME AS A REFUSED
+  // COMMAND. The gate in core/ipc answers `ok: false` and `ipc.call` rejects; a
+  // verb that refuses has ALREADY been let through the gate and answers
+  // `{ refused }` with `ok: true`. Reading only the rejection scores a refusal
+  // as a press -- measured, right here: this check passed the stance and then
+  // reported that an unmarked control had been pressed when it had not.
+  //
+  // It is the same blind spot remote/cli.js had, which its own sabotage found by
+  // surviving. Two layers, two shapes of no.
+  const outside = await ipc.call('click', { selector: '#not-reachable' })
+    .then(out => (out && out.refused) || null, e => e.message)
+
+  check('a control outside every open region refuses',
+    !!outside && /closed/.test(outside), outside || 'it was pressed')
+
+  const inside = await ipc.call('click', { text: 'Inside the region' })
+    .then(out => out || {}, e => ({ error: e.message }))
+
+  check('and one inside a marked region is pressed', !inside.error && !inside.refused,
+    inside.error || inside.refused || 'pressed')
+
+  // READ IS THE VERB THAT IS NOT SHUT OUTRIGHT, and the split is where the risk
+  // is: the values are what leaked, the shape is what keeps a package
+  // diagnosable and is what every contrast check above is made of.
+  const seen = await ipc.call('read', { selector: '#not-reachable' }).catch(() => null)
+
+  check('read still says what a thing is', seen && !!seen.text && !!seen.contrast,
+    seen ? 'text and contrast came back' : 'nothing came back at all')
+
+  check('and withholds what is in it, saying so',
+    seen && seen.value === null && !!seen.withheld,
+    seen ? 'value=' + JSON.stringify(seen.value) + ' withheld=' + !!seen.withheld : 'no answer')
+
+  // AND THE SCREEN THAT SAYS ALL OF IT AGREES WITH THE APP. This is where
+  // ui/reachable's region reader is actually covered -- its own sabotage entry
+  // for pointing at the wrong class cannot fail in an open build, because there
+  // are no marks to miscount and both answers are zero.
+  if (pages.indexOf('Reachable') >= 0) {
+    await ipc.call('click', { selector: '.app-sidebar .nav-pills .nav-link', text: 'Reachable' })
+      .catch(() => null)
+    await settled(ipc)
+
+    const rows = saw(await ipc.call('read', { selector: 'main tbody tr' }).catch(() => null))
+    const onPage = saw(await ipc.call('read', { selector: '.is-open' }).catch(() => null))
+
+    check('the Reachable page counts the marks that are really there',
+      rows.length >= onPage.length && onPage.length > 0,
+      onPage.length + ' marked, ' + rows.length + ' rows on the page')
+  }
+}
+
 async function readable (ipc, page, selector, what) {
   const found = await ipc.call('read', { selector }).catch(() => null)
   if (!found) return
@@ -498,10 +731,18 @@ async function readable (ipc, page, selector, what) {
     worst.contrast.ratio + ':1 on ' + worst.element + ' "' + worst.text.slice(0, 30) + '"')
 }
 
-async function finish (wasRunning, ipc) {
-  if (!wasRunning) {
+async function finish (wasRunning, ipc, restoreOpen) {
+  if (restoreOpen) {
+    // PUT THE MACHINE BACK THE WAY IT WAS FOUND. By pid, because `quit` is not
+    // on a closed build's open list and would be refused.
+    note('\nshutting the closed build down and starting the open one again')
+    stopIt()
+    delete process.env.APP_OPEN
+    shared.start(passthrough)
+  } else if (!wasRunning) {
     note('\nshutting it down again')
-    await ipc.call('quit', {}).catch(() => {})
+    if (isClosed) stopIt()
+    else await ipc.call('quit', {}).catch(() => {})
   } else {
     note('\nleaving it running, since it was')
   }

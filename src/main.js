@@ -32,7 +32,7 @@ global.BUILD_SERVABLE = true;
 //MORE of; being driveable is a thing it does DIFFERENTLY -- so `"open": false`
 //has to work here, or the closed stance can only be reached by a three-minute
 //`npm run dist` and nobody will ever run it. See ./stance.js.
-global.BUILD_OPEN = require('./stance').decided(false, require('../package.json'));
+global.BUILD_OPEN = require('./stance').decided(false, require('../package.json'), process.env);
 
 var rectify = require('@bmatusiak/rectify');
 var fs = require('fs');
