@@ -88,6 +88,15 @@ module.exports = function makeGuarded(may, plain) {
             return React.createElement(Control, Object.assign({}, rest, {
                 className: [className, on ? 'is-guarded' : null].filter(Boolean).join(' ') || undefined,
 
+                //WHAT IT IS GUARDED BY, IN THE DOM.
+                //
+                //../../../remote refuses to read, fill or press a marked control
+                //without asking -- and it cannot ask about a capability it
+                //cannot name. The class says THAT something guards this; this
+                //says WHICH, so the question raised names the thing a person is
+                //actually agreeing to rather than "a guarded control".
+                'data-guard': on ? guard : undefined,
+
                 //THE LOCK REPLACES WHATEVER ICON WAS THERE. A control that is a
                 //person's to press has one thing to say about itself first.
                 icon: on && options.icon !== false ? 'lock-fill' : icon,
@@ -201,6 +210,12 @@ module.exports = function makeGuarded(may, plain) {
 
             return React.createElement(Control, Object.assign({}, rest, {
                 className: [className, on ? 'is-guarded' : null].filter(Boolean).join(' ') || undefined,
+
+                //WHAT IT IS GUARDED BY -- see the button above. It stays on the
+                //field after it has been unlocked, which is deliberate: a person
+                //opening a password box does not thereby agree that anything
+                //driving the window may read what they typed into it.
+                'data-guard': on ? guard : undefined,
 
                 readOnly: locked || rest.readOnly,
 

@@ -4,7 +4,7 @@ Click, fill and read the page — from the terminal, or from a test.
 
 | file | provides | consumes |
 |---|---|---|
-| `window.js` | `remote` | `io` |
+| `window.js` | `remote` | `io`, `may` |
 | `server.js` | — | `io`, `ipc`, `Plugin` |
 | `cli.js` | — | `cli`, `ipc` |
 
@@ -51,6 +51,42 @@ plumbing to reach it.
 It also **provides `remote`** in the window, because the three verbs are wanted
 in the page as well as over the wire — a test cannot use the socket to reach
 them, since emitting on it sends to the *server* rather than back to this window.
+
+## a guarded control is opaque to it
+
+`click`, `fill` and `read` all refuse an element carrying `.is-guarded` unless
+[`may`](../core/may/) allows it — and a **single-match `read` carries the
+element's `value`**, so this is the difference between the driver being able to
+press a password field and being able to *empty* it.
+
+**It used to be enforced in the component, and that was not enough.** The theme
+asked `may` before running a guarded button's `onClick`, so a driven press raised
+a question — but reading was never asked about at all. Measured on this app's own
+demo: `read "#f-guarded"` handed back the password a person had unlocked the
+field for and typed into, with no dialog and no record. The lock was on the one
+field where *reading* is the risk.
+
+Enforcing it here covers all three verbs at once, and covers a control the theme
+did not draw — a plain `<button>` somebody gave the class to — which the
+component version never could.
+
+**`data-guard` names the capability**, because a guard that cannot be named
+cannot be asked about; a mark with no name is refused rather than waved through.
+A many-match `read` still names and measures guarded elements, since it carries
+no values — that is what keeps `read ".is-guarded"` able to say how many there
+are.
+
+**It does not hold the caller while somebody decides.** A question stays up for
+two minutes and the cli gives a command five seconds, so waiting for the answer
+told the caller *"the view did not answer"* — which reads as a broken app rather
+than a question on screen. It waits a moment, then says what is happening and
+leaves the dialog up. `may` keeps one question per capability, so answering it
+and asking again is the whole loop.
+
+**It cannot stop something already inside the page**, which is the same limit
+`may` states about a shell: it is the same javascript context, and the element is
+right there. What this closes is the *socket* and the *service* being easier
+routes than the one a person watches.
 
 ## it is not an eval channel
 

@@ -6,10 +6,11 @@
 //have handed anything that can open a local socket the run of the app, which is
 //the exact thing nwjc was for. so: verbs, and only these.
 
-plugin.consumes = ['io'];
+plugin.consumes = ['io', 'may'];
 plugin.provides = ['remote'];
 async function plugin(imports, register) {
     var io = imports.io;
+    var may = imports.may;
 
     //the server picks which view to talk to, and there can be more than one:
     //`open in browser` makes a second. this is how it tells them apart.
@@ -34,24 +35,99 @@ async function plugin(imports, register) {
     io.on('connect', hello);//a server reload drops every socket and they come back
     io.on('remote:who', hello);//and the answer to that can arrive before it is up
 
+    //---- what this may not touch -------------------------------------------
+    //
+    //A GUARDED CONTROL IS OPAQUE TO THE DRIVER: not readable, not fillable, not
+    //pressable, unless a person says so.
+    //
+    //IT USED TO BE ENFORCED IN THE COMPONENT and that was not enough. The theme
+    //asked ../ui/may before running a guarded button's `onClick`, so a driven
+    //press raised a question -- but READING was never asked about at all.
+    //Measured: `read "#f-guarded"` handed back the value of a password field
+    //that a person had unlocked and typed into, with no dialog and no record.
+    //The lock was on the one field where reading IS the risk.
+    //
+    //SO IT IS ENFORCED HERE, at the door the outside comes through, and it now
+    //covers all three verbs at once. A control the theme did not draw -- a plain
+    //<button> somebody gave the class to -- is covered too, which the component
+    //version could never be.
+    //
+    //THE MARK AND THE REFUSAL ARE THE SAME FACT AGAIN. `.is-guarded` says that
+    //something guards this; `data-guard` says which, and without a name there is
+    //nothing to ask about -- so an unnamed mark is refused rather than waved
+    //through. A guard that cannot be named is a comment.
+    async function refusedFor(el) {
+        var mark = marked(el);
+        if (!mark) return null;
+
+        var name = mark.getAttribute('data-guard');
+
+        if (!name) {
+            return 'that control is marked guarded and does not say what by, so nothing can ask '
+                + 'about it. Give it a `guard` name.';
+        }
+
+        //NO EVENT, SO IT IS NEVER TAKEN FOR A PERSON. ../core/may/window.js
+        //short-circuits a trusted press and there is no press here -- this is
+        //the outside asking, which is exactly the case the dialog exists for.
+        //
+        //AND IT DOES NOT HOLD THE CALLER WHILE SOMEBODY DECIDES.
+        //
+        //A question stays up for two minutes and the cli gives a command five
+        //seconds, so waiting for the answer means the caller is told "the view
+        //did not answer" -- which reads as a broken app rather than as a
+        //question on screen. Measured: that is exactly what came back.
+        //
+        //SO IT WAITS A MOMENT AND THEN SAYS WHAT IS HAPPENING. The dialog stays
+        //up; ../core/may keeps ONE question per capability, so answering it and
+        //asking again is the whole loop -- and `always` or `for this run` means
+        //there is no second question at all.
+        var answered = await Promise.race([
+            may(name),
+            new Promise(function (r) { setTimeout(function () { r(null); }, 2500); })
+        ]);
+
+        if (!answered) {
+            return 'a question about "' + name + '" is on screen. Answer it in the window, then '
+                + 'ask again -- "always" or "for this run" will stop it being asked twice.';
+        }
+
+        return answered.allowed ? null : (answered.why || 'nobody allowed ' + name);
+    }
+
     function answer(fn) {
-        return function (data, ack) {
+        return async function (data, ack) {
             if (typeof ack != 'function') return;//nobody is waiting
-            try { ack(fn(data || {})); }
+            try { ack(await fn(data || {})); }
             catch (e) { ack({ error: (e && e.message) || String(e) }); }
         };
     }
 
-    io.on('remote:click', answer(click));
-    io.on('remote:fill', answer(fill));
-    io.on('remote:read', answer(read));
+    //EVERY VERB THE OUTSIDE CAN REACH GOES THROUGH THE SAME CHECK. Wiring them
+    //one at a time is how one of them ends up without it -- which is exactly
+    //what had happened to `read`.
+    io.on('remote:click', answer(function (data) { return click(data, refusedFor); }));
+    io.on('remote:fill', answer(function (data) { return fill(data, refusedFor); }));
+    io.on('remote:read', answer(function (data) { return read(data, refusedFor); }));
 
     await register(null, {
         //the three verbs as a service as well as over the socket. The socket is
         //how the terminal reaches them; this is how anything in the page does,
         //including the tests -- which cannot use the socket, because emitting
         //on it sends to the server rather than back to this window.
-        remote: { click: click, fill: fill, read: read },
+        //
+        //THE GUARD IS APPLIED HERE TOO, and that is not obvious. Something
+        //already inside the page could reach the element itself without asking
+        //anybody -- it is the same javascript context, and ../core/may says
+        //plainly that it cannot stop that. What this stops is the SERVICE being
+        //the easy way around the socket: a plugin that drives the app through
+        //`remote` gets the same answer the terminal does, so there is one rule
+        //rather than a rule and a back door.
+        remote: {
+            click: function (data) { return click(data, refusedFor); },
+            fill: function (data) { return fill(data, refusedFor); },
+            read: function (data) { return read(data, refusedFor); }
+        },
 
         onDestroy: function () {
             io.off('connect', hello);
@@ -233,15 +309,37 @@ function fire(el, type, x, y) {
     el.dispatchEvent(new Event_(type, init));
 }
 
-function click(data) {
+//`permit` IS HANDED IN RATHER THAN REACHED FOR. These three are module-scope
+//functions -- older than the guard and shared with the page's own service -- so
+//the check comes from the plugin that has ../core/may, and a caller that has no
+//guard to apply passes nothing.
+function refused(why) { return { refused: why }; }
+
+//WHAT GUARDS THIS, IF ANYTHING. The mark may be on the control or on something
+//around it -- a guarded button draws a lock on itself, but a wrapper is just as
+//valid a place to put the class, and `closest` reads both.
+function marked(el) {
+    return el && el.closest ? el.closest('.is-guarded') : null;
+}
+
+async function click(data, permit) {
     var hit = locate(data);
+
+    var no = permit ? await permit(hit.el) : null;
+    if (no) return refused(no);
+
     var where = press(hit.el);
     return { found: hit.found, at: where, clicked: describe(hit.el) };
 }
 
-function fill(data) {
+async function fill(data, permit) {
     var hit = locate(data);
     var el = hit.el;
+
+    //ASKED BEFORE ANYTHING IS TYPED, not after. A field that has already been
+    //written to and is then refused has been written to.
+    var no = permit ? await permit(el) : null;
+    if (no) return refused(no);
 
     if (el.type == 'checkbox' || el.type == 'radio') {
         var want = data.value === undefined ? !el.checked
@@ -276,7 +374,7 @@ function set(el, value) {
     el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-function read(data) {
+async function read(data, permit) {
     if (data.selector) {
         var many = [];
         try { many = Array.prototype.slice.call(document.querySelectorAll(data.selector)); }
@@ -286,18 +384,31 @@ function read(data) {
         //than quietly answering about the first. Each of them carries its own
         //contrast, because "is every heading on this page readable" is one
         //question and answering it one element at a time is not.
+        //A MANY-MATCH ANSWER CARRIES NO VALUES, only what a thing is called and
+        //how it measures -- so a guarded control among them is named and marked
+        //rather than withheld. That is what keeps `read ".is-guarded"` able to
+        //say how many there are, which is how anything checks the mark is
+        //drawn at all.
         if (many.length > 1) return {
             found: 'selector', count: many.length,
             items: many.slice(0, 40).map(function (el) {
                 var seen = describe(el);
                 seen.visible = !!visible([el]);
                 seen.contrast = contrast(el);
+                if (marked(el)) seen.guarded = marked(el).getAttribute('data-guard') || true;
                 return seen;
             })
         };
     }
 
     var hit = locate(data);
+
+    //AND ONE MATCH CARRIES ITS VALUE, which is the whole reason this is asked
+    //about. `read` answered with `el.value` for anything -- so a password a
+    //person had unlocked the field for and typed into came back over the wire
+    //with no dialog and no record of it. Measured, on this app's own demo.
+    var no = permit ? await permit(hit.el) : null;
+    if (no) return refused(no);
     var seen = describe(hit.el);
     return {
         found: hit.found, count: 1,
