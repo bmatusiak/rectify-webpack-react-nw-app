@@ -22,7 +22,7 @@ plugin.consumes = ['app', 'react', 'theme', 'appPackage', 'io', 'preferences', '
 plugin.provides = [];
 async function plugin(imports, register) {
     var { react, theme, appPackage, io, preferences, session, banner, pages, remember } = imports;
-    var { Page, Sidebar, Navbar, Footer, Button, Icon, Toasts } = theme.ui;
+    var { Page, Sidebar, Navbar, Footer, Button, Icon, Toasts, Reachable } = theme.ui;
 
     //EVERYTHING THIS PAGE NEEDS THAT THE SHELL CANNOT PASS, gathered once. The
     //demo's pages take a dozen services between them; a page registered by
@@ -173,10 +173,31 @@ async function plugin(imports, register) {
                     }
                     sidebar={function (sections) {
                         return (
-                            <Sidebar items={showing} active={page} onSelect={open}
-                                className="app-sidebar d-none d-md-flex"
-                                sections={sections} onJump={jump}
-                                footer={<span>{showing.length} pages, all live</span>} />
+                            //NAVIGATION IS OPEN IN A CLOSED BUILD, AND THAT IS A
+                            //CHOICE THIS APP MAKES RATHER THAN A DEFAULT.
+                            //
+                            //Moving between pages is the one thing a tool has to
+                            //be able to do before it can be useful about
+                            //anything else -- `npm run drive -- --package` opens
+                            //twenty pages and measures each, and a closed build
+                            //that cannot be navigated can only be checked for
+                            //refusing, which proves the lock works and nothing
+                            //about the app behind it.
+                            //
+                            //IT COSTS LITTLE BECAUSE LOOKING IS NOT DOING. What
+                            //is reachable through here is which page is on
+                            //screen; every control ON those pages is still shut,
+                            //and `read` still hands back no values.
+                            //
+                            //AND IT IS MARKED, so a person can see it. That is
+                            //the whole difference between this and the sidebar
+                            //simply having been forgotten.
+                            <Reachable name="the sidebar, so a tool can move between pages">
+                                <Sidebar items={showing} active={page} onSelect={open}
+                                    className="app-sidebar d-none d-md-flex"
+                                    sections={sections} onJump={jump}
+                                    footer={<span>{showing.length} pages, all live</span>} />
+                            </Reachable>
                         );
                     }}
                     footer={

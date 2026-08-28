@@ -59,8 +59,50 @@ async function plugin(imports, register) {
         return { remove: function () { if (handlers[name] === fn) delete handlers[name]; } };
     }
 
-    //so a client can ask what this build understands rather than guessing
-    handle('commands', function () { return Object.keys(handlers).sort(); });
+    //---- and what a closed build will not let through ----------------------
+    //
+    //A HOOK RATHER THAN A CONSUMED SERVICE, because the direction will not allow
+    //anything else: ../may consumes THIS, so this cannot consume ../may. The
+    //same shape as ../../remote/window.js being HANDED its `refusedFor` by the
+    //half that has the guard, rather than reaching for one.
+    //
+    //IT DEFAULTS TO LETTING EVERYTHING PAST, which is not a hole -- ../may
+    //installs the real one, and a build with no ../may in it is a build with no
+    //stance to enforce. What it must not do is fail open once something IS
+    //installed, so the gate is asked for every wire call and never cached.
+    var gates = [];
+
+    function gate(fn) {
+        gates.push(fn);
+
+        return { remove: function () {
+            var i = gates.indexOf(fn);
+            if (i >= 0) gates.splice(i, 1);
+        } };
+    }
+
+    //THE FIRST REFUSAL WINS AND THE REST ARE NOT ASKED. A gate that says no has
+    //said everything there is to say, and running the others would only invite
+    //a second opinion nobody wants.
+    function barred(name) {
+        for (var i = 0; i < gates.length; i++) {
+            var no = gates[i](name);
+            if (no) return no;
+        }
+
+        return null;
+    }
+
+    //so a client can ask what this build understands rather than guessing -- and
+    //in a closed build that is the OPEN ones and no more.
+    //
+    //ANSWERING WITH ALL OF THEM WOULD BE AN ENUMERATION ORACLE. It is the same
+    //surface `tools/list` is on the MCP side, where a hidden tool is not listed
+    //at all: a caller that cannot use a command has no business being told it
+    //is there, and a list is the first thing anything driving an app asks for.
+    handle('commands', function () {
+        return Object.keys(handlers).filter(function (name) { return !barred(name); }).sort();
+    });
 
     async function dispatch(line, reply, socket) {
         var msg;
@@ -78,6 +120,15 @@ async function plugin(imports, register) {
             id: msg.id, ok: false,
             error: 'not authenticated. the token is in ' + tokenFile
         });
+
+        //ASKED BEFORE THE HANDLER IS LOOKED UP, so a closed build answers a
+        //command it will not run and a command it has never heard of with the
+        //SAME sentence. Looking up first reads better and hands out a map: a
+        //caller could tell an unlisted command from a nonexistent one and learn
+        //the whole surface a name at a time, which is exactly what filtering
+        //`commands` above was for.
+        var no = barred(msg.command);
+        if (no) return reply({ id: msg.id, ok: false, error: no });
 
         var fn = handlers[msg.command];
         if (!fn) return reply({ id: msg.id, ok: false, error: 'unknown command: ' + msg.command });
@@ -165,7 +216,17 @@ async function plugin(imports, register) {
         ipc: self.api({
             address: address,
             handle: handle,
+
+            //WHAT IS REGISTERED, ALL OF IT, WHICH IS NOT WHAT THE WIRE IS TOLD.
+            //The `commands` HANDLER answers only the open ones in a closed
+            //build; this is the app asking itself, and the screen that lists
+            //what a tool can reach needs both lists to say which entries in the
+            //config no longer name anything.
             commands: function () { return Object.keys(handlers).sort(); },
+
+            //AND A PLACE TO REFUSE ONE. ../may installs the stance here; see
+            //`gate` above for why it is a hook and not a consumed service.
+            gate: gate,
 
             //calling a handler without going through a socket. The window and
             //the cli reach these over the wire; something in this process has

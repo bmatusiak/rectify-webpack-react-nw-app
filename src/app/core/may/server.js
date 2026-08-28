@@ -43,6 +43,28 @@ async function plugin(imports, register) {
             //paint a control as unguarded and then refuse the press.
             asks: function () { return true; },
 
+            //AND CLOSED, FOR THE SAME REASON ONE LINE UP. The stance is a
+            //build-time constant this half can perfectly well read -- but the
+            //LIST that goes with it is main's, so answering "open" here would
+            //be a half that reaches everything sitting behind a main that
+            //reaches three things. Refusing is the only answer that cannot be
+            //wrong in the direction that costs something.
+            reaches: function (kind, name) {
+                return 'nothing here knows whether "' + name + '" is reachable -- there is no '
+                    + 'main half behind this one, and the stance lives in core/may/main.js';
+            },
+
+            stale: function () { return []; },
+            stance: 'closed',
+
+            reach: function () {
+                return {
+                    open: false, closed: true, unreadable: null,
+                    lists: { commands: [], tools: [], resources: [] },
+                    stale: { commands: [] }, counts: { commands: 0 }
+                };
+            },
+
             decide: function () {
                 return {
                     refused: 'a decision cannot be made from the node half -- open the window and '

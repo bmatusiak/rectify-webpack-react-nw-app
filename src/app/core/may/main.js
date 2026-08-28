@@ -1,4 +1,5 @@
 var deciding = require('./deciding');
+var Stance = require('./stance');
 
 //---------------------------------------------------------------------------
 //WHAT THIS APP IS ALLOWED TO DO, AND WHO SAID SO.
@@ -37,9 +38,59 @@ var deciding = require('./deciding');
 
 plugin.consumes = ['state', 'log', 'ipc', 'bridge'];
 plugin.provides = ['may'];
-async function plugin(imports, register) {
+async function plugin(imports, register, config) {
     var { state, ipc, bridge } = imports;
     var say = imports.log.on('may');
+
+    //---- and the other half of it: what this build reaches at all ----------
+    //
+    //THE DECLARE/DECIDE MACHINERY ABOVE IS A DENY LIST, and every file in this
+    //app that has met one says the same thing about them -- ../log, ../events
+    //and ../../../profile.js each land on some version of "a deny list is a
+    //list somebody has to have got right". Everything not marked is reachable,
+    //and this app has twenty pages of controls with a handful marked.
+    //
+    //Measured, on this app's own demo: `node src/cli.js read "#f-plain"` handed
+    //back `hunter2` from an unguarded password field, with no dialog and no
+    //record. Not a bug in the guard -- the guard's premise.
+    //
+    //SO A CLOSED BUILD IS DEFAULT-DENY AND DOES NOT ASK. `once`/`run`/`always`
+    //are for a capability somebody weighs up; a default-deny that raised a
+    //dialog for every one of hundreds of controls would be answered `always` to
+    //everything inside a week, and then it would be a deny list again with
+    //extra steps. In a closed build the only way in is that somebody listed it
+    //before shipping.
+    //
+    //BUILD_OPEN IS A CONSTANT AND ../../../stance.js DECIDED IT. Development is
+    //open, a package is not, and the switch cannot be flipped by whoever runs
+    //the app -- which matters more here than anywhere, because the thing being
+    //shut off is the runtime.
+    //`config.may.open`, NOT `config.open`. The third argument is the WHOLE of
+    //src/config.js and every plugin indexes into it by the service it provides
+    //-- ../events reads `config.events`, ../tray reads `config.tray`. Written
+    //the short way this read `undefined`, which ./stance.js takes for "nobody
+    //listed anything" and answers by reaching NOTHING: a closed build that
+    //refuses its own open list, with no error anywhere. ../events/main.js
+    //carries the same note because it made the same mistake, and there it went
+    //unnoticed for as long as the defaults happened to agree.
+    var mine = Stance.of(BUILD_OPEN, config && config.may && config.may.open);
+
+    if (mine.unreadable) {
+        //SAID WHETHER OR NOT IT IS BEING CONSULTED. An open build does not read
+        //the list, so this is the only warning a developer gets before the
+        //package they ship reaches nothing at all.
+        say.warn('config.may.open could not be read (' + mine.unreadable + '), so a closed '
+            + 'build would reach nothing' + (mine.open ? '. This build is open, so it is not '
+                + 'being consulted -- but the package built from it would be' : ''));
+    }
+
+    say.info('this build is ' + (mine.open ? 'open: anything on the control socket may drive it'
+        : 'closed: ' + mine.lists.commands.length + ' commands are reachable and nothing else'));
+
+    //INSTALLED HERE RATHER THAN CHECKED IN ../ipc, because ../ipc cannot consume
+    //this -- this consumes it. The hook is ../ipc's and the rule is ours, which
+    //is the same cut as ../../remote/window.js being handed its `refusedFor`.
+    var gate = ipc.gate(function (name) { return mine.reaches('commands', name); });
 
     //WHAT THE CODE PROPOSED. Not stored: it is a fact about the code that is
     //running, so a capability that stops being declared stops being guarded --
@@ -271,6 +322,33 @@ async function plugin(imports, register) {
         });
     }
 
+    //---- and what a tool can reach, for a screen --------------------------
+    //
+    //ONE ANSWER, USED BY EVERY SURFACE THAT SHOWS IT. The page, the ipc command
+    //and the mirror the window keeps are three views of one fact, and three
+    //places assembling it is three chances for the screen that is supposed to
+    //say what a tool can reach to say something else.
+    function reach() {
+        //WHAT IS LISTED BUT NOT THERE. The only drift a list of names invites --
+        //a command renamed and the entry left behind, promising something
+        //reachable that does not exist. The other direction needs no help: a new
+        //command is closed until somebody lists it.
+        var here = ipc.commands();
+
+        return {
+            open: mine.open,
+            closed: mine.closed,
+            unreadable: mine.unreadable,
+            lists: mine.lists,
+            stale: { commands: mine.stale('commands', here) },
+
+            //SO THE SCREEN CAN SAY "3 of 27" RATHER THAN JUST NAMING THREE. The
+            //shape of what is shut is the reassurance; the names alone are only
+            //half of it.
+            counts: { commands: here.length }
+        };
+    }
+
     //---- and the command line can look, but not decide --------------------
 
     var command = ipc.handle('may', function (data, source) {
@@ -292,7 +370,11 @@ async function plugin(imports, register) {
             return went.refused ? { refused: went.refused } : went;
         }
 
-        return { decisions: decisions(), answers: deciding.ANSWERS };
+        //THE STANCE COMES BACK WITH THE DECISIONS, so `node src/cli.js may` is
+        //the whole inventory rather than half of it -- and `may` is on the
+        //shipped open list precisely so a person at a terminal can still ask a
+        //closed build what it allows. Reading that was never the risk.
+        return { decisions: decisions(), answers: deciding.ANSWERS, reach: reach() };
     });
 
     //---- and the page's side of the conversation --------------------------
@@ -334,7 +416,7 @@ async function plugin(imports, register) {
     }
 
     function tell(socket) {
-        try { (socket || bridge.io).emit('may:guards', { guards: published() }); }
+        try { (socket || bridge.io).emit('may:guards', { guards: published(), reach: reach() }); }
         catch (e) { /* the page is not there, which is not this plugin's problem */ }
     }
 
@@ -347,7 +429,7 @@ async function plugin(imports, register) {
         //guarded control painted itself unguarded. The same race ../io/window.js
         //documents for the bridge, one plugin further along.
         socket.on('may:list', function (said, ack) {
-            if (typeof ack == 'function') ack({ guards: published() });
+            if (typeof ack == 'function') ack({ guards: published(), reach: reach() });
         });
 
         socket.on('may:want', async function (said, ack) {
@@ -387,13 +469,23 @@ async function plugin(imports, register) {
             },
 
             asks: asks,
+
+            //THE OTHER HALF, AND IT IS NOT A QUESTION ANYBODY CAN ANSWER. `asks`
+            //is "would this need consent"; this is "does this build reach that
+            //at all", which was settled when the build was made. A caller gets
+            //null or a sentence, the same shape ./deciding.js answers in.
+            reaches: function (kind, name) { return mine.reaches(kind, name); },
+            stale: function (kind, present) { return mine.stale(kind, present); },
+            reach: reach,
+            stance: mine.open ? 'open' : 'closed',
+
             decide: decide,
             forget: forget,
             decisions: decisions,
             ANSWERS: deciding.ANSWERS
         }),
 
-        onDestroy: function () { command.remove(); }
+        onDestroy: function () { command.remove(); gate.remove(); }
     });
 }
 module.exports = plugin;

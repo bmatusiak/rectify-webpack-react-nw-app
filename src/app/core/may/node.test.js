@@ -158,3 +158,144 @@ test('only always and never are ever written down', () => {
 test('the answers are the four a person can give', () => {
     assert.deepStrictEqual(deciding.ANSWERS, ['once', 'run', 'always', 'never']);
 });
+
+//---- and whether this build is open at all --------------------------------
+//
+//THE OTHER HALF OF THE SAME QUESTION, and the reason ./stance.js is a module.
+//A closed build behaves differently from every build a developer ever runs, so
+//without this the closed branch is exercised once a release, by a package, on a
+//good day. Here both branches are asked on one machine with no build.
+
+const stance = require('./stance');
+
+test('a package is closed and a development build is not', () => {
+    assert.equal(stance.decided(true, {}), false, 'a packaged build was born open');
+    assert.equal(stance.decided(false, {}), true, 'development cannot be driven');
+});
+
+//ABSENT MEANS THE DEFAULT, which is what every app that has never heard of this
+//key gets: a working dev loop and a shut package.
+test('a manifest that says nothing gets the default both ways', () => {
+    assert.equal(stance.decided(true, null), false);
+    assert.equal(stance.decided(true, { app: {} }), false);
+    assert.equal(stance.decided(false, { app: { serve: true } }), true);
+});
+
+//BOTH OVERRIDES, and the second is the one that matters day to day: it is how
+//the closed stance is developed against in three seconds instead of the three
+//minutes a `dist` costs.
+test('the manifest can force it either way', () => {
+    assert.equal(stance.decided(true, { app: { open: true } }), true, 'a debug package stayed shut');
+    assert.equal(stance.decided(false, { app: { open: false } }), false,
+        'a dev build could not be closed, so the closed stance can only be reached by packaging');
+});
+
+//A STRING IS TRUTHY, which is exactly how `"open": "false"` would ship a build
+//the manifest plainly meant to close. Refused, naming the key.
+test('a manifest that says something else is refused rather than guessed at', () => {
+    assert.throws(() => stance.decided(true, { app: { open: 'false' } }), /"app": \{ "open" \}/);
+    assert.throws(() => stance.decided(true, { app: { open: 1 } }), /true or false/);
+});
+
+//---- what a closed build reaches ------------------------------------------
+
+test('an open build reaches everything, listed or not', () => {
+    const it = stance.of(true, { commands: ['health'] });
+
+    assert.equal(it.closed, false);
+    assert.equal(it.reaches('commands', 'health'), null);
+    assert.equal(it.reaches('commands', 'snapshot'), null, 'an open build refused something');
+});
+
+test('a closed build reaches what is listed and nothing else', () => {
+    const it = stance.of(false, { commands: ['health', 'may'], tools: ['screenshot'] });
+
+    assert.equal(it.closed, true);
+    assert.equal(it.reaches('commands', 'health'), null);
+    assert.equal(it.reaches('tools', 'screenshot'), null);
+
+    const no = it.reaches('commands', 'snapshot');
+    assert.ok(no, 'a closed build handed out a command nobody listed');
+    assert.ok(no.includes('config.may.open.commands'), 'the refusal does not say where to look: ' + no);
+});
+
+//THE LISTS DO NOT BLEED. A command called `screenshot` is not reachable because
+//an MCP tool of that name is -- they are different surfaces, and one list
+//standing in for the other is how a name gets reachable in a place nobody meant.
+test('one kind of name does not open another', () => {
+    const it = stance.of(false, { tools: ['screenshot'] });
+
+    assert.equal(it.reaches('tools', 'screenshot'), null);
+    assert.ok(it.reaches('commands', 'screenshot'), 'a tool name opened a command');
+});
+
+//NOTHING LISTED IS AN ORDINARY STATE and it refuses everything, which is what a
+//default-deny with an empty list has to mean.
+test('a closed build with no list reaches nothing', () => {
+    const it = stance.of(false, null);
+
+    assert.equal(it.unreadable, null, 'an absent list was called unreadable');
+    assert.ok(it.reaches('commands', 'health'));
+});
+
+//---- and the config being wrong -------------------------------------------
+//
+//FAIL SHUT, AND SAY WHICH KIND OF SHUT. Every list is empty when the config
+//cannot be read, so it would refuse anyway -- but it would refuse saying the
+//name is missing from a list somebody can see is right there.
+test('a config that cannot be read refuses everything and says so', () => {
+    for (const bad of [['health'], 'health', 42]) {
+        const it = stance.of(false, bad);
+        assert.ok(it.unreadable, JSON.stringify(bad) + ' was read as a list');
+        assert.ok(it.reaches('commands', 'health').includes('could not be read'));
+    }
+});
+
+test('a list that is not a list of names is refused', () => {
+    assert.ok(stance.of(false, { commands: 'health' }).unreadable);
+    assert.ok(stance.of(false, { commands: [1, 2] }).unreadable);
+    assert.ok(stance.of(false, { commands: ['health', ''] }).unreadable);
+});
+
+//A TYPO IS A LIST THAT DOES NOTHING. `command:` for `commands:` would leave
+//every command shut while the config plainly says otherwise, which reads as a
+//broken app rather than as a misspelling.
+test('a kind nobody understands is a typo, and is said out loud', () => {
+    const it = stance.of(false, { command: ['health'] });
+
+    assert.ok(it.unreadable, 'a misspelled kind was accepted in silence');
+    assert.ok(it.unreadable.includes('command'), it.unreadable);
+});
+
+test('a kind nobody understands cannot be asked about either', () => {
+    assert.ok(stance.of(false, { commands: ['x'] }).reaches('buttons', 'x'));
+});
+
+//AN OPEN BUILD DOES NOT CARE THAT THE LIST IS WRONG, because it reaches
+//everything anyway -- and refusing to boot over a config that is not being
+//consulted would be the stance breaking the dev loop it exists to protect.
+test('an open build is not stopped by a list it never reads', () => {
+    const it = stance.of(true, { command: ['health'] });
+
+    assert.ok(it.unreadable, 'the trouble should still be visible');
+    assert.equal(it.reaches('commands', 'health'), null, 'an open build refused something');
+});
+
+//---- what is listed but not there -----------------------------------------
+//
+//THE DRIFT A LIST OF NAMES INVITES. A command gets renamed and the entry stays,
+//saying something is reachable that does not exist -- so the screen that lists
+//what a tool can reach can mark it rather than lying quietly.
+test('a listed name that nothing registers is reported', () => {
+    const it = stance.of(false, { commands: ['health', 'gone'] });
+
+    assert.deepStrictEqual(it.stale('commands', ['health', 'may']), ['gone']);
+    assert.deepStrictEqual(it.stale('commands', ['health', 'gone']), []);
+});
+
+//AN OPEN BUILD HAS NO DRIFT TO REPORT, because the list is not what decides
+//anything there. Reporting it would put a warning on every developer's screen
+//about a list that is not in use.
+test('an open build reports nothing stale', () => {
+    assert.deepStrictEqual(stance.of(true, { commands: ['gone'] }).stale('commands', []), []);
+});

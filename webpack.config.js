@@ -16,7 +16,12 @@ const canServe = !(manifest.app && manifest.app.canServe === false);
 //validated into folder names by src/roots.js.
 const roots = require('./src/roots');
 
-//THE BUILD-TIME FACTS, THE SAME THREE IN ALL THREE BUNDLES.
+//and whether this build may be driven from outside at all -- ./src/stance.js,
+//which ./src/main.js reads too so the bundles and the boot nw loads off disk
+//cannot come to differ about it.
+const stance = require('./src/stance');
+
+//THE BUILD-TIME FACTS, IN ALL THREE BUNDLES.
 //
 //This used to be on the packaged main alone. The server config had no
 //DefinePlugin at all, which was invisible until a server-side plugin asked
@@ -35,7 +40,14 @@ const roots = require('./src/roots');
 const constants = (isProduction) => new webpack.DefinePlugin({
     BUILD_PROD: JSON.stringify(isProduction),
     BUILD_SERVABLE: JSON.stringify(canServe),
-    BUILD_ROOTS: JSON.stringify(roots)
+    BUILD_ROOTS: JSON.stringify(roots),
+
+    //THE FOURTH IS A FUNCTION OF THE MODE, which the other three are not. A
+    //package is closed and a development build is open, so this is the one
+    //constant that differs between the configs webpack is handed in a single
+    //run -- and folding it out is what makes a closed build not CONTAIN the
+    //branch that would have let something drive it.
+    BUILD_OPEN: JSON.stringify(stance.decided(isProduction, manifest))
 });
 
 module.exports = (env, argv = {}) => {

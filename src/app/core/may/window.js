@@ -54,9 +54,17 @@ async function plugin(imports, register) {
     var guarded = {};
     var watchers = [];
 
+    //AND WHAT A CLOSED BUILD REACHES, WHICH IS ONLY EVER DRAWN. The lists live
+    //in main because the commands and the MCP tools do; the page holds a copy so
+    //the screen that says what a tool can reach can render it without asking.
+    //
+    //NOTHING IS ENFORCED FROM THIS -- see `closed` below.
+    var reach = null;
+
     function apply(said) {
         guarded = {};
         ((said && said.guards) || []).forEach(function (one) { guarded[one.name] = one; });
+        if (said && said.reach) reach = said.reach;
         watchers.slice().forEach(function (fn) { try { fn(); } catch (e) { /* a watcher must not stop the rest */ } });
     }
 
@@ -72,6 +80,25 @@ async function plugin(imports, register) {
     io.emit('may:list', {}, apply);
 
     function asks(name) { return !!guarded[name]; }
+
+    //---- and whether this build may be driven at all -----------------------
+    //
+    //READ OFF THE CONSTANT, NOT OFF THE MIRROR, and that is the whole reason
+    //this is one line. Everything else here waits for main to send a list, and
+    //the note above `may:list` records what that cost: the first list went out
+    //before this plugin was listening, `asks` answered false for everything, and
+    //every guarded control painted itself plain.
+    //
+    //THAT FAILURE WAS SAFE AND THIS ONE WOULD NOT BE. A guarded control painted
+    //plain still refuses the press -- main holds the gate. But ../../remote
+    //enforces the STANCE here, in the page, so a window that thought it was open
+    //for the first few frames would be a closed build anything could drive
+    //during them.
+    //
+    //THERE IS NOTHING TO WAIT FOR. BUILD_OPEN is ../../../stance.js's answer
+    //folded into this bundle by webpack -- true before the first frame, the same
+    //in every context, and not something a message can arrive late with.
+    function closed() { return !BUILD_OPEN; }
 
     //WHAT HAS ALREADY BEEN ANSWERED, so a page can say so next to a control --
     //and so anything that wants to know whether a question would be raised can
@@ -259,6 +286,15 @@ async function plugin(imports, register) {
     await register(null, {
         may: Object.assign(may, {
             asks: asks,
+            closed: closed,
+            stance: BUILD_OPEN ? 'open' : 'closed',
+
+            //THE LISTS, FOR DRAWING AND FOR NOTHING ELSE. Null until main has
+            //sent them, which a screen shows as "asking" rather than as "this
+            //build reaches nothing" -- the second is a sentence that would be
+            //wrong for about a frame and alarming for all of it.
+            reach: function () { return reach; },
+
             answered: answered,
             undecided: undecided,
             decisions: decisions,

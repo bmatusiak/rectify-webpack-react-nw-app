@@ -101,3 +101,62 @@ test('the window is a web bundle and the server is a node one', () => {
     assert.equal(server.target, 'node');
     assert.equal(server.output.library.type, 'commonjs2');
 });
+
+// AND THE STANCE, WHICH IS THE ONE CONSTANT THAT DIFFERS BETWEEN THE CONFIGS OF
+// A SINGLE RUN.
+//
+// A closed build must not CONTAIN the branch that lets something drive it, which
+// only holds while the answer reaches the bundle as a define rather than being
+// read at runtime -- the same argument as BUILD_SERVABLE above, applied to the
+// surface a model actually arrives on.
+test('the packaged main is told whether it may be driven', () => {
+    const said = defineFor('BUILD_OPEN');
+
+    assert.notEqual(said, undefined, 'BUILD_OPEN never reaches the packaged bundle');
+    assert.ok(said === 'true' || said === 'false', 'it is ' + said);
+});
+
+// ABSENT FROM THE MANIFEST MEANS CLOSED WHEN PACKAGED AND OPEN IN DEVELOPMENT,
+// which is the only default safe in the direction that matters. Getting this
+// backwards ships a driveable binary and nothing says a word.
+test('a manifest that says nothing ships a closed package and an open dev build', () => {
+    const manifest = require('../package.json');
+    const said = manifest.app && manifest.app.open;
+
+    if (typeof said === 'boolean') {
+        assert.equal(defineFor('BUILD_OPEN'), String(said), 'the manifest is not being read');
+        return;
+    }
+
+    assert.equal(defineFor('BUILD_OPEN'), 'false',
+        'the manifest does not say, so a PACKAGE must be closed');
+
+    for (const c of [windowBundle, server]) {
+        const dev = c.plugins
+            .filter((p) => p.definitions)
+            .map((p) => p.definitions.BUILD_OPEN)
+            .filter((v) => v !== undefined)[0];
+
+        assert.equal(dev, 'true', c.name + ' cannot be driven in development');
+    }
+});
+
+// ONE RULE, READ TWICE. src/main.js is loaded off disk by nw and never goes
+// through webpack, so it works the answer out for itself -- and if it worked it
+// out DIFFERENTLY, a development build and its own window would disagree about
+// whether they are open, which has no symptom until something is quietly
+// reachable.
+test('the build and the boot nw reads off disk agree about the stance', () => {
+    const stance = require('../src/stance');
+    const manifest = require('../package.json');
+
+    assert.equal(String(stance.decided(false, manifest)), defineForIn(windowBundle, 'BUILD_OPEN'));
+    assert.equal(String(stance.decided(true, manifest)), defineFor('BUILD_OPEN'));
+});
+
+function defineForIn (config, name) {
+    return config.plugins
+        .filter((p) => p.definitions)
+        .map((p) => p.definitions[name])
+        .filter((v) => v !== undefined)[0];
+}

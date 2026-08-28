@@ -95,6 +95,32 @@ async function plugin(imports, register) {
         return answered.allowed ? null : (answered.why || 'nobody allowed ' + name);
     }
 
+    //---- and what a closed build will not let it touch at all --------------
+    //
+    //THE OTHER HALF, AND IT IS NOT A QUESTION. `refusedFor` above is a deny
+    //list -- a named capability, and a person who can say yes. This is the
+    //allow list: in a closed build nothing is reachable except what is marked
+    //open, and there is no dialog, because a default-deny that prompts for
+    //hundreds of controls gets answered `always` to everything inside a week.
+    //
+    //SYNCHRONOUS, BECAUSE THERE IS NOBODY TO ASK. The stance was settled when
+    //the build was made -- ../core/may/window.js reads it off BUILD_OPEN rather
+    //than off a message, so there is no frame in which this answers wrong.
+    //
+    //THE MARK IS A CLASS AND NOT A COMPONENT, exactly like `.is-guarded`: a
+    //plain <div class="is-open"> opens a subtree and a control outside the theme
+    //is covered too, which is the failure the guarded rewrite was for.
+    function unreachable(el) {
+        if (!may.closed()) return null;
+
+        var open = reachable(el);
+        if (open) return null;
+
+        return 'this build is closed and that control is not inside anything marked open. '
+            + 'A closed build cannot be opened while it is running -- see config.may.open '
+            + 'and the Reachable page.';
+    }
+
     function answer(fn) {
         return async function (data, ack) {
             if (typeof ack != 'function') return;//nobody is waiting
@@ -106,9 +132,9 @@ async function plugin(imports, register) {
     //EVERY VERB THE OUTSIDE CAN REACH GOES THROUGH THE SAME CHECK. Wiring them
     //one at a time is how one of them ends up without it -- which is exactly
     //what had happened to `read`.
-    io.on('remote:click', answer(function (data) { return click(data, refusedFor); }));
-    io.on('remote:fill', answer(function (data) { return fill(data, refusedFor); }));
-    io.on('remote:read', answer(function (data) { return read(data, refusedFor); }));
+    io.on('remote:click', answer(function (data) { return click(data, refusedFor, unreachable); }));
+    io.on('remote:fill', answer(function (data) { return fill(data, refusedFor, unreachable); }));
+    io.on('remote:read', answer(function (data) { return read(data, refusedFor, unreachable); }));
 
     await register(null, {
         //the three verbs as a service as well as over the socket. The socket is
@@ -124,9 +150,9 @@ async function plugin(imports, register) {
         //`remote` gets the same answer the terminal does, so there is one rule
         //rather than a rule and a back door.
         remote: {
-            click: function (data) { return click(data, refusedFor); },
-            fill: function (data) { return fill(data, refusedFor); },
-            read: function (data) { return read(data, refusedFor); }
+            click: function (data) { return click(data, refusedFor, unreachable); },
+            fill: function (data) { return fill(data, refusedFor, unreachable); },
+            read: function (data) { return read(data, refusedFor, unreachable); }
         },
 
         onDestroy: function () {
@@ -322,23 +348,44 @@ function marked(el) {
     return el && el.closest ? el.closest('.is-guarded') : null;
 }
 
-async function click(data, permit) {
+//AND WHAT MAKES THIS ONE REACHABLE, WHICH IS THE SAME QUESTION INVERTED. A
+//closed build reaches nothing except what somebody marked before shipping, and
+//the mark reads the same way: on the control, or on a region around it.
+//
+//A REGION IS THE UNIT THAT SURVIVES. Marking each button one at a time is as
+//forgettable as marking each guarded one -- a button added to an open panel next
+//year would be silently unreachable, and nobody would find out until a tool
+//stopped working for a reason nothing prints.
+function reachable(el) {
+    return el && el.closest ? el.closest('.is-open') : null;
+}
+
+//THE STANCE IS ASKED FIRST AND THE GUARD SECOND, and it is worth a line. Both
+//orders are equally safe -- either one refuses -- but a guarded control that a
+//closed build was never going to reach anyway would otherwise put a dialog on
+//somebody's screen about a press that is already decided.
+//
+//WHAT IT MUST NOT BECOME is `if (reachable(el)) return null`. An open region
+//says the DRIVER may touch this; it does not say a capability inside it stopped
+//being somebody's to allow, and skipping the guard there would quietly turn the
+//marks into the weaker of the two.
+async function click(data, permit, shut) {
     var hit = locate(data);
 
-    var no = permit ? await permit(hit.el) : null;
+    var no = (shut ? shut(hit.el) : null) || (permit ? await permit(hit.el) : null);
     if (no) return refused(no);
 
     var where = press(hit.el);
     return { found: hit.found, at: where, clicked: describe(hit.el) };
 }
 
-async function fill(data, permit) {
+async function fill(data, permit, shut) {
     var hit = locate(data);
     var el = hit.el;
 
     //ASKED BEFORE ANYTHING IS TYPED, not after. A field that has already been
     //written to and is then refused has been written to.
-    var no = permit ? await permit(el) : null;
+    var no = (shut ? shut(el) : null) || (permit ? await permit(el) : null);
     if (no) return refused(no);
 
     if (el.type == 'checkbox' || el.type == 'radio') {
@@ -374,7 +421,7 @@ function set(el, value) {
     el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-async function read(data, permit) {
+async function read(data, permit, shut) {
     if (data.selector) {
         var many = [];
         try { many = Array.prototype.slice.call(document.querySelectorAll(data.selector)); }
@@ -396,25 +443,54 @@ async function read(data, permit) {
                 seen.visible = !!visible([el]);
                 seen.contrast = contrast(el);
                 if (marked(el)) seen.guarded = marked(el).getAttribute('data-guard') || true;
+
+                //AND WHICH OF THEM A CLOSED BUILD REACHES. Absent in an open
+                //build because nothing is marked there -- everything is
+                //reachable, and a field saying so against every row would be
+                //noise on the one answer that has to stay readable.
+                if (reachable(el)) seen.open = reachable(el).getAttribute('data-open') || true;
+
                 return seen;
             })
         };
     }
 
     var hit = locate(data);
-
-    //AND ONE MATCH CARRIES ITS VALUE, which is the whole reason this is asked
-    //about. `read` answered with `el.value` for anything -- so a password a
-    //person had unlocked the field for and typed into came back over the wire
-    //with no dialog and no record of it. Measured, on this app's own demo.
-    var no = permit ? await permit(hit.el) : null;
-    if (no) return refused(no);
     var seen = describe(hit.el);
+
+    //---- a closed build answers WHAT it is and not WHAT IS IN IT ------------
+    //
+    //THE ONE VERB THAT IS NOT SHUT OUTRIGHT, and the split is where the risk
+    //actually is. `value` and `checked` are the leak -- measured on this app's
+    //own demo, `read "#f-plain"` handed `hunter2` back over the wire. The shape
+    //is not: what an element is, whether it is visible and what it measures are
+    //what keeps a packaged app diagnosable at all, and they are what
+    //`drive --package` checks contrast with.
+    //
+    //SO IT IS WITHHELD RATHER THAN REFUSED, and it SAYS it withheld. A `value`
+    //of null that might mean "empty field" and might mean "you may not have
+    //this" is the kind of answer a caller quietly gets wrong.
+    //
+    //TEXT IS NOT WITHHELD, WHICH IS A REAL CHOICE AND NOT AN OVERSIGHT. A key
+    //printed on screen as text would come back. Mark it: a region put round it
+    //is what the mark is for, and the guard is what a single control has.
+    var withheld = shut ? shut(hit.el) : null;
+
+    //AND THE GUARD IS NOT ASKED WHEN THE VALUE IS ALREADY BEING WITHHELD. The
+    //question a guarded control raises about a `read` exists to protect exactly
+    //what is not being handed over -- so asking would put a dialog on somebody's
+    //screen to decide something already decided.
+    if (!withheld) {
+        var no = permit ? await permit(hit.el) : null;
+        if (no) return refused(no);
+    }
+
     return {
         found: hit.found, count: 1,
         element: seen.element, text: seen.text,
-        value: hit.el.value === undefined ? null : hit.el.value,
-        checked: hit.el.checked === undefined ? null : hit.el.checked,
+        value: withheld ? null : (hit.el.value === undefined ? null : hit.el.value),
+        checked: withheld ? null : (hit.el.checked === undefined ? null : hit.el.checked),
+        withheld: withheld || undefined,
         visible: !!visible([hit.el]),
         contrast: contrast(hit.el)
     };

@@ -23,6 +23,17 @@ global.BUILD_PROD = false;
 //and still off by default.
 global.BUILD_SERVABLE = true;
 
+//AND WHETHER ANYTHING OUTSIDE MAY DRIVE IT. Absent from the manifest means yes
+//here and no in a package -- the dev loop and the command line are how this app
+//is worked on, and a shipped binary should reach only what it was listed for.
+//
+//IT IS READ FROM THE MANIFEST RATHER THAN HARDCODED `true` the way BUILD_SERVABLE
+//above is, and the difference is deliberate. Serving is a thing development does
+//MORE of; being driveable is a thing it does DIFFERENTLY -- so `"open": false`
+//has to work here, or the closed stance can only be reached by a three-minute
+//`npm run dist` and nobody will ever run it. See ./stance.js.
+global.BUILD_OPEN = require('./stance').decided(false, require('../package.json'));
+
 var rectify = require('@bmatusiak/rectify');
 var fs = require('fs');
 var path = require('path');

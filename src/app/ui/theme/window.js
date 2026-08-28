@@ -200,11 +200,22 @@ async function plugin(imports, register, config) {
 
     $theme.ui = Object.assign({}, ui, form, nav, layout, examples, overlays, disclosure, {
         Button: guarded.Button,
-        Input: guarded.Input
+        Input: guarded.Input,
+
+        //AND THE OTHER MARK, WHICH IS NOT A REPLACEMENT FOR ANYTHING. `Reachable`
+        //wraps a subtree in a closed build to say a tool may use what is inside
+        //without asking -- the inverse of a guard, and the unit that survives,
+        //because marking each control one at a time forgets the one added next
+        //year. It draws nothing at all in an open build.
+        Reachable: guarded.Reachable
     });
 
     //and the hook, for a page drawing something the kit has no component for
     $theme.useGuarded = guarded.useGuarded;
+
+    //and whether this build is closed, for a page deciding what to say about
+    //itself rather than what to draw
+    $theme.closed = guarded.closed;
 
     await register(null, { theme: $theme });
 }

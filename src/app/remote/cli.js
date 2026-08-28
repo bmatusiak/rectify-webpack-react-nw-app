@@ -12,6 +12,20 @@ async function plugin(imports, register) {
         return async function (data) {
             var out = await ipc.call(verb, data, 12000);
 
+            //A REFUSAL IS AN ANSWER AND HAS TO LOOK LIKE ONE.
+            //
+            //../window.js answers `{ refused }` for a guarded control and for a
+            //closed build, and this printed NEITHER: a refused click wrote
+            //nothing at all and exited 0, which reads exactly like a click that
+            //worked. Measured -- `node src/cli.js click Guarded` against a
+            //closed build was silent and successful.
+            //
+            //THROWN RATHER THAN PRINTED, so it goes out the way every other
+            //failure here does: ../core/cli prints it and the exit code says so.
+            //A driver reading exit codes is the whole reason this matters --
+            //`npm run drive` would otherwise count a refusal as a pass.
+            if (out.refused) throw new Error(out.refused);
+
             var what = out.clicked || out.filled;
             if (what) console.log(what.element + (what.text ? '  "' + what.text + '"' : ''));
 

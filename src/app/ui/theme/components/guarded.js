@@ -57,14 +57,49 @@ module.exports = function makeGuarded(may, plain) {
         return on;
     }
 
+    //---- and the mark that means the opposite ------------------------------
+    //
+    //`open` SAYS A TOOL MAY USE THIS WITHOUT ASKING ANYBODY, which is only worth
+    //saying in a build where that is unusual. In an open build everything is
+    //reachable and a mark on three controls would read as "and nothing else",
+    //which is the dangerous direction for a mark to be wrong in -- so it is
+    //drawn only when the build is closed.
+    //
+    //NOT A HOOK AND NOT A SUBSCRIPTION. The stance is BUILD_OPEN, folded into
+    //this bundle by webpack; it cannot change while the page is open, so there
+    //is nothing to watch and nothing to re-render for.
+    function closed() { return !!(may.closed && may.closed()); }
+
+    //WHAT THE MARK IS, given both props. A control that is guarded AND open
+    //shows GUARDED, and that is not a tie-break -- it is what the two words
+    //mean. `open` is "a tool may use this without asking"; a guarded control
+    //always asks. Drawing the open ring there would be the mark promising what
+    //the mechanism does not do, which is the one thing this file exists to
+    //avoid.
+    function marks(guarded, open) {
+        if (!closed() || !open || guarded) return null;
+        return open;
+    }
+
     function wrap(Control, options) {
         options = options || {};
 
         function Guarded(props) {
-            var { guard, onClick, onRefused, className, icon, ...rest } = props;
+            var { guard, open, onClick, onRefused, className, icon, ...rest } = props;
             var on = useGuarded(guard);
+            var reachable = marks(on, open);
 
-            if (!guard) return React.createElement(Control, props);
+            if (!guard) {
+                //NOT `props`. Rendering the original would put `open` on the dom
+                //as an attribute react does not know, and would drop the mark --
+                //the two things this branch exists to get right.
+                return React.createElement(Control, Object.assign({}, rest, {
+                    className: [className, reachable ? 'is-open' : null].filter(Boolean).join(' ') || undefined,
+                    'data-open': reachable || undefined,
+                    icon: reachable && options.icon !== false ? 'robot' : icon,
+                    onClick: onClick
+                }));
+            }
 
             async function press(event) {
                 //ASKED WITH THE EVENT, NOT WITH A BOOLEAN. `may` reads
@@ -86,7 +121,10 @@ module.exports = function makeGuarded(may, plain) {
             }
 
             return React.createElement(Control, Object.assign({}, rest, {
-                className: [className, on ? 'is-guarded' : null].filter(Boolean).join(' ') || undefined,
+                className: [className, on ? 'is-guarded' : null, reachable ? 'is-open' : null]
+                    .filter(Boolean).join(' ') || undefined,
+
+                'data-open': reachable || undefined,
 
                 //WHAT IT IS GUARDED BY, IN THE DOM.
                 //
@@ -111,8 +149,43 @@ module.exports = function makeGuarded(may, plain) {
         return Guarded;
     }
 
+    //A REGION, WHICH IS THE UNIT THAT SURVIVES A YEAR.
+    //
+    //Marking each button one at a time is exactly as forgettable as marking each
+    //guarded one, and it fails the dangerous way round: a button added to an
+    //open panel next year is silently UNREACHABLE, and the way anybody finds out
+    //is a tool that stopped working for a reason nothing prints.
+    //
+    //`../../../remote/window.js` READS IT WITH `closest`, so a region and a
+    //single control are the same fact at two sizes and there is one rule in the
+    //driver rather than two.
+    //
+    //A NAME, BECAUSE THE INVENTORY LISTS THESE. "3 open regions" is not an
+    //answer to "what can a tool reach"; "status panel, log controls, restart" is.
+    //An unnamed one still opens -- refusing would be a mark that quietly does
+    //the opposite of what it says -- but it says so where somebody will see it.
+    function Reachable(props) {
+        var { name, as, className, children, ...rest } = props;
+
+        if (!closed()) {
+            return React.createElement(as || 'div', Object.assign({}, rest,
+                { className: className || undefined }), children);
+        }
+
+        if (!name && typeof console != 'undefined') {
+            console.warn('[may] a Reachable region has no name, so the Reachable page cannot '
+                + 'list what it opens. Give it one.');
+        }
+
+        return React.createElement(as || 'div', Object.assign({}, rest, {
+            className: [className, 'is-open', 'is-open-region'].filter(Boolean).join(' '),
+            'data-open': name || 'unnamed'
+        }), children);
+    }
+
     return {
         Button: wrap(plain.Button),
+        Reachable: Reachable,
 
         //AN INPUT IS GUARDED BY BEING READ-ONLY UNTIL SOMEBODY OPENS IT, which
         //is not what guarding a button does -- see wrapInput below for why
@@ -120,6 +193,11 @@ module.exports = function makeGuarded(may, plain) {
         Input: wrapInput(plain.Input),
 
         useGuarded: useGuarded,
+
+        //SO A PAGE CAN ASK WITHOUT KNOWING WHERE THE ANSWER LIVES, and so the
+        //one place that decides whether a mark is drawn stays this file.
+        closed: closed,
+
         wrap: wrap
     };
 
@@ -146,14 +224,26 @@ module.exports = function makeGuarded(may, plain) {
     //like any other outside request, and the person is asked.
     function wrapInput(Control) {
         function GuardedInput(props) {
-            var { guard, onChange, onRefused, onUnlocked, className, ...rest } = props;
+            //`open` IS THE PROP AND `unlocked` IS THE STATE, which is why the
+            //state was renamed rather than the prop. This field's "has somebody
+            //touched it yet" flag was called `open`, and the mark that says a
+            //tool may reach a control has to be spelled the same on an Input as
+            //on a Button -- so the one that is nobody's interface gave way.
+            var { guard, open, onChange, onRefused, onUnlocked, className, ...rest } = props;
 
             var on = useGuarded(guard);
-            var [open, setOpen] = useState(false);
+            var [unlocked, setUnlocked] = useState(false);
+            var reachable = marks(on, open);
 
-            if (!guard) return React.createElement(Control, props);
+            if (!guard) {
+                return React.createElement(Control, Object.assign({}, rest, {
+                    className: [className, reachable ? 'is-open' : null].filter(Boolean).join(' ') || undefined,
+                    'data-open': reachable || undefined,
+                    onChange: onChange
+                }));
+            }
 
-            var locked = on && !open;
+            var locked = on && !unlocked;
 
             //A PERSON OPENS IT BY TOUCHING IT. `may` answers a trusted event
             //without asking anybody, so this is one round trip to nowhere and
@@ -168,7 +258,7 @@ module.exports = function makeGuarded(may, plain) {
                 var said = await may(guard, event);
                 if (!said.allowed) return;
 
-                setOpen(true);
+                setUnlocked(true);
                 if (onUnlocked) onUnlocked(said);
             }
 
@@ -201,7 +291,7 @@ module.exports = function makeGuarded(may, plain) {
 
                     //ALLOWED, SO IT STAYS OPEN. A tool that asked and was told
                     //yes should not have to ask again for the next character.
-                    setOpen(true);
+                    setUnlocked(true);
                     if (onUnlocked) onUnlocked(said);
                 }
 
@@ -209,7 +299,10 @@ module.exports = function makeGuarded(may, plain) {
             }
 
             return React.createElement(Control, Object.assign({}, rest, {
-                className: [className, on ? 'is-guarded' : null].filter(Boolean).join(' ') || undefined,
+                className: [className, on ? 'is-guarded' : null, reachable ? 'is-open' : null]
+                    .filter(Boolean).join(' ') || undefined,
+
+                'data-open': reachable || undefined,
 
                 //WHAT IT IS GUARDED BY -- see the button above. It stays on the
                 //field after it has been unlocked, which is deliberate: a person

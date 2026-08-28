@@ -319,3 +319,48 @@ code, pre, input, textarea {
 .btn.is-guarded > .bi-lock-fill {
     opacity: .9;
 }
+
+//---------------------------------------------------------------------------
+//AND THE OTHER MARK, WHICH MEANS THE OPPOSITE AND HAS TO LOOK IT.
+//
+//`.is-guarded` says something outside has to ask about this. `.is-open` says
+//something outside may simply use it, without asking anybody -- so in a closed
+//build it is a CAUTION and not a reassurance, and it is the answer to "I want to
+//know visually what you have access to".
+//
+//SOLID WHERE THE OTHER IS DASHED. Both are outlines in a token colour, so hue is
+//not what separates them -- twenty-eight swatches this app does not own rule
+//that out, and five of them already spend a purple. Solid against dashed reads
+//in greyscale, in a screenshot, and to somebody who cannot tell the two colours
+//apart at all.
+//
+//IT IS DRAWN ONLY IN A CLOSED BUILD, which is a decision made in
+//./components/guarded.js rather than here. In an open build everything is
+//reachable, and a mark on three controls would be a lie by omission -- the
+//dangerous direction, because it reads as "and nothing else".
+:root {
+    --bs-open: #0d6efd;
+}
+
+.is-open {
+    outline: 2px solid var(--bs-open);
+    outline-offset: 2px;
+}
+
+.is-open:focus,
+.is-open:focus-visible {
+    outline: 2px solid var(--bs-open);
+    outline-offset: 3px;
+}
+
+//A REGION IS NOT A CONTROL, so it gets the ring without the offset eating into
+//whatever is beside it, and a label rather than a glyph -- there is no icon slot
+//on a <div>.
+.is-open-region {
+    outline-offset: 0;
+    border-radius: .375rem;
+}
+
+.btn.is-open > .bi-robot {
+    opacity: .9;
+}

@@ -19,7 +19,7 @@ var { useState, useEffect, useCallback } = React;
 
 module.exports = function Guarded(props) {
     var { theme, may, toast } = props;
-    var { Section, Button, Badge, Table, Alert, Icon } = theme.ui;
+    var { Section, Button, Badge, Table, Alert, Icon, Reachable } = theme.ui;
 
     //THE MIRROR, NOT A QUESTION. ../../core/may/window.js keeps the list main
     //pushes it, so this renders on the first frame -- and main pushes a new one
@@ -155,6 +155,65 @@ module.exports = function Guarded(props) {
                                 yet, so the next outside caller asking about one raises a question
                                 here.</>
                         ) : null}
+                    </span>
+                </Alert>
+            </Section>
+
+            <Section title="The other way round, in a closed build" id="reachable"
+                lead="everything shut, and a marked few that are not">
+
+                <p className="text-body-secondary">
+                    Everything above is a <strong>deny list</strong>: a handful of capabilities are
+                    named and the rest of the app is reachable. That is the right shape for a
+                    development build &mdash; it is how this app is driven and tested &mdash; and
+                    the wrong one to ship. A packaged build is <strong>closed</strong>: nothing is
+                    reachable except what somebody marked before shipping, and there is no dialog,
+                    because a question raised for every control on twenty pages is a question people
+                    learn to answer <code>always</code>.
+                </p>
+
+                <p className="text-body-secondary">
+                    It is decided when the build is made &mdash; <code>src/stance.js</code>, folded
+                    in as a constant the way <code>canServe</code> is &mdash; so it cannot be
+                    turned off by whatever is doing the driving. To see it here, put
+                    <code>"app": &#123; "open": false &#125;</code> in <code>package.json</code> and
+                    restart.
+                </p>
+
+                <Reachable name="the demo's own controls"
+                    className="d-flex flex-wrap align-items-center gap-2 p-3 mb-3">
+
+                    <Button variant="outline-primary"
+                        onClick={function () { toast('pressed', 'success', 'robot'); }}>
+                        Inside the region
+                    </Button>
+
+                    <span className="text-body-secondary small">
+                        marked open, so a closed build still lets a tool press this
+                    </span>
+                </Reachable>
+
+                <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <Button id="not-reachable" variant="outline-secondary"
+                        onClick={function () { toast('pressed', 'success', 'hand-index'); }}>
+                        Outside it
+                    </Button>
+
+                    <span className="text-body-secondary small">
+                        unmarked, so in a closed build <code>click</code> refuses and
+                        <code>read</code> answers what it is without what is in it
+                    </span>
+                </div>
+
+                <Alert variant="info" className="d-flex align-items-start gap-2 mb-0">
+                    <Icon name="robot" className="mt-1" />
+                    <span>
+                        <strong>The mark is drawn only in a closed build.</strong> In this one
+                        everything is reachable, and a ring round three controls would read as
+                        &ldquo;and nothing else&rdquo; &mdash; which is the dangerous direction for
+                        a mark to be wrong in. The lock above says <em>something has to ask</em>;
+                        this one would say <em>a tool may simply use it</em>, and that is a caution
+                        rather than a reassurance.
                     </span>
                 </Alert>
             </Section>
