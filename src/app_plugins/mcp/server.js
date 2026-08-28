@@ -48,6 +48,8 @@ if (BUILD_SERVABLE) mountHttp = require('./http');
 //to consume `may`, call it, or interpret the answer -- the registry does it, so
 //the guard cannot be forgotten at the call site while the tool still looks
 //guarded in the listing.
+var showing = require('./showing');
+
 plugin.consumes = ['ipc', 'appPackage', 'app', 'Plugin', 'may'];
 plugin.provides = ['mcp'];
 async function plugin(imports, register) {
@@ -220,20 +222,34 @@ async function plugin(imports, register) {
     //protocol's, so tools/mcp.js is an envelope and a socket rather than a
     //second implementation of everything above.
 
-    function listed(map, drop) {
-        return Object.keys(map).sort().map(function (key) {
-            var copy = Object.assign({}, map[key]);
-            drop.forEach(function (field) { delete copy[field]; });
+    //---- and what a closed build does not admit exists ---------------------
+    //
+    //HIDDEN, NOT REFUSED, and that is the one place this differs from the
+    //command line. ../../app/core/ipc refuses a wire call with a sentence
+    //naming the config key, because whoever is at a terminal has a token and a
+    //file to read anyway. THIS is the surface a model arrives on with nothing
+    //but the list -- and the note at the top of this file already says the tool
+    //list "is where that list stops being a list of things it may simply take".
+    //A tool a model cannot see is one it cannot be talked into trying, and one
+    //that cannot turn up in a description somebody else wrote.
+    //
+    //LISTING AND CALLING AGREE, which is the part that has to be right:
+    //`tools/list` leaves it out and calling it by name answers `unknown`, the
+    //same as a tool nobody ever registered. A door that is invisible from one
+    //side and answers from the other is not hidden, it is a guessing game.
+    function hidden(kind, name) { return !!may.reaches(kind, name); }
 
-            //undefined fields are omitted rather than sent as null, because a
-            //client reading `title: null` has to decide what that means
-            Object.keys(copy).forEach(function (field) {
-                if (copy[field] === undefined) delete copy[field];
-            });
-
-            return copy;
-        });
+    //THE FILTER AND THE SCRUB ARE IN ./showing.js, and the predicate is what
+    //this file adds. That is not tidying: hiding happens ONLY in a closed build,
+    //and every machine this is developed on runs an open one -- as a closure in
+    //here the whole rule could be broken with every check still green. Handed a
+    //predicate, ./node.test.js sees both answers with no app.
+    function by(kind) {
+        return kind ? function (name) { return hidden(kind, name); } : null;
     }
+
+    function listed(map, drop, kind) { return showing.listed(map, drop, by(kind)); }
+    function shown(map, kind) { return showing.shown(map, by(kind)); }
 
     var handlers = [
         ipc.handle('mcp:describe', function () {
@@ -247,10 +263,15 @@ async function plugin(imports, register) {
                 //DECLARED FROM WHAT IS ACTUALLY REGISTERED. Announcing `tools`
                 //when nothing registered one makes a client show an empty menu
                 //and wonder what it did wrong.
+                //AND COUNTED AFTER THE HIDING, not before. Announcing `tools`
+                //and then listing none is a client showing an empty menu and
+                //wondering what it did wrong -- the same failure this block was
+                //written for, one layer along.
                 capabilities: {
-                    tools: Object.keys(tools).length ? {} : undefined,
-                    resources: (Object.keys(resources).length || templates.length) ? {} : undefined,
-                    prompts: Object.keys(prompts).length ? {} : undefined
+                    tools: shown(tools, 'tools').length ? {} : undefined,
+                    resources: (shown(resources, 'resources').length
+                        || shown(templates, 'resources').length) ? {} : undefined,
+                    prompts: shown(prompts, 'prompts').length ? {} : undefined
                 },
 
                 //`needs` IS OURS AND DOES NOT GO ON THE WIRE. It is not a field
@@ -258,15 +279,22 @@ async function plugin(imports, register) {
                 //right to reject it. What a model actually needs to know is in
                 //the DESCRIPTION -- see `tool` above, which says so in a
                 //sentence rather than in a field nobody's schema knows.
-                tools: listed(tools, ['run', 'needs']),
-                resources: listed(resources, ['read', 'needs']),
-                resourceTemplates: templates.map(function (one) {
+                tools: listed(tools, ['run', 'needs'], 'tools'),
+                resources: listed(resources, ['read', 'needs'], 'resources'),
+
+                //A TEMPLATE IS A RESOURCE NOBODY LISTED, which is what makes it
+                //the easy one to leave open -- `app://readme/{plugin}` reads a
+                //file off disk by name. It is gated under `resources` by the
+                //template's own name, because that is the only handle it has.
+                resourceTemplates: templates.filter(function (one) {
+                    return !hidden('resources', one.name);
+                }).map(function (one) {
                     var copy = Object.assign({}, one);
                     delete copy.read; delete copy.match; delete copy.needs;
                     Object.keys(copy).forEach(function (f) { if (copy[f] === undefined) delete copy[f]; });
                     return copy;
                 }),
-                prompts: listed(prompts, ['get'])
+                prompts: listed(prompts, ['get'], 'prompts')
             };
         }),
 
@@ -277,7 +305,10 @@ async function plugin(imports, register) {
         //distinction is made here, where the difference is known.
         ipc.handle('mcp:call', async function (data, from) {
             data = data || {};
-            var found = tools[data.name];
+            //THE SAME ANSWER AS A TOOL NOBODY REGISTERED, on purpose. It is
+            //missing from `tools/list` too, and a name that answers differently
+            //from a nonsense one is a list anybody can work around by guessing.
+            var found = hidden('tools', data.name) ? null : tools[data.name];
             if (!found) return { unknown: true };
 
             //BEFORE IT RUNS, NOT AFTER. A tool that has already photographed the
@@ -301,12 +332,13 @@ async function plugin(imports, register) {
         ipc.handle('mcp:read', async function (data, from) {
             data = data || {};
             var uri = String(data.uri || '');
-            var found = resources[uri];
+            var found = hidden('resources', uri) ? null : resources[uri];
 
             //a listed resource first, then anything a template claims
             if (!found) {
                 var shape = templates.filter(function (one) {
-                    return typeof one.match == 'function' && one.match(uri);
+                    return typeof one.match == 'function' && one.match(uri)
+                        && !hidden('resources', one.name);
                 })[0];
                 //THE SHAPE'S `needs` COMES WITH IT. A template is a resource
                 //nobody listed, which makes it the easy one to leave open --
@@ -353,7 +385,7 @@ async function plugin(imports, register) {
 
         ipc.handle('mcp:prompt', async function (data) {
             data = data || {};
-            var found = prompts[data.name];
+            var found = hidden('prompts', data.name) ? null : prompts[data.name];
             if (!found) return { unknown: true };
 
             var missing = found.arguments.filter(function (one) {

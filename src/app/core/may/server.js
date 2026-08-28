@@ -1,4 +1,5 @@
 var deciding = require('./deciding');
+var Stance = require('./stance');
 
 //WHAT THIS APP IS ALLOWED TO DO, SEEN FROM THE HALF THAT KEEPS RESTARTING.
 //
@@ -15,10 +16,23 @@ var deciding = require('./deciding');
 
 plugin.consumes = ['app'];
 plugin.provides = ['may'];
-async function plugin(imports, register) {
+async function plugin(imports, register, config) {
     var real = imports.app.host && imports.app.host.may;
 
     if (real) return register(null, { may: real });
+
+    //---- except the stance, which this half can answer for itself ----------
+    //
+    //IT IS NOT MAIN'S TO KNOW AND OURS TO ASK FOR. A DECISION needs main -- it
+    //is written down there, and "for this run" means main's run. The stance
+    //needs nothing: BUILD_OPEN is a constant webpack folded into this bundle
+    //and the list is in ../../../config.js, which every context has.
+    //
+    //SO REFUSING IT WOULD BE FALSE PRUDENCE, and expensive. A graph with no main
+    //behind it -- test/server-graph.test.js is one -- would report that it
+    //reaches nothing, and ../../../app_plugins/mcp would list no tools at all:
+    //an app that looks broken rather than one that looks shut.
+    var mine = Stance.of(BUILD_OPEN, config && config.may && config.may.open);
 
     function nothingKnows(name) {
         return {
@@ -43,25 +57,17 @@ async function plugin(imports, register) {
             //paint a control as unguarded and then refuse the press.
             asks: function () { return true; },
 
-            //AND CLOSED, FOR THE SAME REASON ONE LINE UP. The stance is a
-            //build-time constant this half can perfectly well read -- but the
-            //LIST that goes with it is main's, so answering "open" here would
-            //be a half that reaches everything sitting behind a main that
-            //reaches three things. Refusing is the only answer that cannot be
-            //wrong in the direction that costs something.
-            reaches: function (kind, name) {
-                return 'nothing here knows whether "' + name + '" is reachable -- there is no '
-                    + 'main half behind this one, and the stance lives in core/may/main.js';
-            },
-
-            stale: function () { return []; },
-            stance: 'closed',
+            //AND THE STANCE, ANSWERED PROPERLY. See the note above `mine`: this
+            //is the one thing here that does not need main, so it is the one
+            //thing here that is not a refusal.
+            reaches: function (kind, name) { return mine.reaches(kind, name); },
+            stale: function (kind, present) { return mine.stale(kind, present); },
+            stance: mine.open ? 'open' : 'closed',
 
             reach: function () {
                 return {
-                    open: false, closed: true, unreadable: null,
-                    lists: { commands: [], tools: [], resources: [] },
-                    stale: { commands: [] }, counts: { commands: 0 }
+                    open: mine.open, closed: mine.closed, unreadable: mine.unreadable,
+                    lists: mine.lists, stale: {}, counts: {}
                 };
             },
 

@@ -229,3 +229,69 @@ test('an unknown method is -32601', async () => {
     const answer = await call('nonsense/method', {});
     assert.equal(answer.error.code, -32601);
 });
+
+//---- what a closed build admits to having ---------------------------------
+//
+//THE BRANCH NO DEVELOPER RUNS. Hiding happens only in a closed build and every
+//machine this is written on runs an open one -- so as a closure inside
+//./server.js the whole rule could be broken with every check still green. The
+//predicate is handed in, which is what lets both answers be had here.
+
+const showing = require('./showing');
+
+const TOOLS = {
+    screenshot: { name: 'screenshot', description: 'a picture', run: () => {}, needs: null },
+    click: { name: 'click', description: 'press something', run: () => {}, needs: 'drive' },
+    quit: { name: 'quit', description: 'stop the app', run: () => {}, needs: 'quit' }
+};
+
+const only = (...names) => (name) => names.indexOf(name) < 0;
+
+test('an open build hides nothing', () => {
+    assert.deepStrictEqual(showing.shown(TOOLS, null), ['screenshot', 'click', 'quit']);
+    assert.equal(showing.listed(TOOLS, ['run', 'needs'], null).length, 3);
+});
+
+test('a closed build lists only what is open', () => {
+    assert.deepStrictEqual(showing.shown(TOOLS, only('screenshot')), ['screenshot']);
+
+    const out = showing.listed(TOOLS, ['run', 'needs'], only('screenshot'));
+    assert.equal(out.length, 1);
+    assert.equal(out[0].name, 'screenshot');
+});
+
+//A CLOSED BUILD WITH NOTHING LISTED ADMITS TO NOTHING, which is what lets
+//./server.js drop the `tools` capability rather than announce a menu and then
+//serve an empty one.
+test('nothing open means nothing listed at all', () => {
+    assert.deepStrictEqual(showing.shown(TOOLS, () => true), []);
+    assert.deepStrictEqual(showing.listed(TOOLS, ['run'], () => true), []);
+});
+
+//`needs` IS A MAP OF WHAT IS GUARDED, and the one caller it is guarded against
+//is the one being handed the list. It is not a field the protocol has either.
+test('our own fields never reach the wire, hidden or not', () => {
+    for (const isHidden of [null, only('screenshot')]) {
+        showing.listed(TOOLS, ['run', 'needs'], isHidden).forEach((one) => {
+            assert.equal(one.run, undefined, 'the implementation went out on the wire');
+            assert.equal(one.needs, undefined, 'what guards it went out on the wire');
+        });
+    }
+});
+
+//RESOURCE TEMPLATES ARE AN ARRAY CARRYING THEIR OWN NAMES, not a map keyed by
+//them -- and one function reads both, because two would come to disagree about
+//what a build says it has.
+test('templates are filtered by the same rule as the maps', () => {
+    const templates = [{ name: 'readme', uriTemplate: 'app://readme/{plugin}' },
+        { name: 'page', uriTemplate: 'app://page/{name}' }];
+
+    assert.deepStrictEqual(showing.shown(templates, null), ['readme', 'page']);
+    assert.deepStrictEqual(showing.shown(templates, only('page')), ['page']);
+});
+
+test('an empty registry is not an error in either stance', () => {
+    assert.deepStrictEqual(showing.shown({}, null), []);
+    assert.deepStrictEqual(showing.shown(undefined, () => true), []);
+    assert.deepStrictEqual(showing.listed({}, ['run'], null), []);
+});

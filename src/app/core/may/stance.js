@@ -29,7 +29,12 @@
 
 //WHAT CAN BE LISTED. The keys are the config's, so there is one vocabulary
 //rather than a set of names here and a map to the names over there.
-var KINDS = ['commands', 'tools', 'resources'];
+//
+//PROMPTS ARE THEIR OWN KIND rather than being folded in with resources. They
+//are a different surface -- a template a model asks for by name, which can put
+//the app's own data into a conversation -- and one list standing in for another
+//is how a name becomes reachable somewhere nobody meant.
+var KINDS = ['commands', 'tools', 'resources', 'prompts'];
 
 //---------------------------------------------------------------------------
 //READING THE LIST.

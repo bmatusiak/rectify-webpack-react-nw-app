@@ -73,8 +73,15 @@ module.exports = function () {
         may: {
             open: {
                 commands: ['commands', 'health', 'may', 'views', 'click', 'fill', 'read'],
+
+                //AND NOTHING AT ALL ON THE MODEL-FACING SIDE, which is not an
+                //oversight. `mcp:call` is not in `commands` above either, so a
+                //closed build shuts MCP twice -- and what is hidden here is
+                //hidden from `tools/list`, so a model cannot ask for what it
+                //cannot see and cannot be talked into trying.
                 tools: [],
-                resources: []
+                resources: [],
+                prompts: []
             }
         },
 
