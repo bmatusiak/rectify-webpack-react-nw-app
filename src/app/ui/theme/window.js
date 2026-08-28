@@ -128,12 +128,11 @@ async function plugin(imports, register, config) {
 
     var listeners = [];
 
-    //what a swatch painted, rather than what it was asked to paint
-    function isDark(colour) {
-        var parts = String(colour).match(/[0-9]+(\.[0-9]+)?/g);
-        if (!parts || parts.length < 3) return false;
-        return (parts[0] * 299 + parts[1] * 587 + parts[2] * 114) / 1000 < 128;
-    }
+    //what a swatch painted, rather than what it was asked to paint. The rule is
+    //in ./isDark.js, where something can ask it -- it was a closure here, and
+    //the only test that could reach it ran against whatever swatch happened to
+    //be on.
+    var isDark = require('./isDark');
 
     var $theme = {
         bs: bootstrap,

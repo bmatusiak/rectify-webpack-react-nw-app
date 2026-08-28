@@ -76,6 +76,76 @@ function plugin(imports, register) {
             assert.ok(theme.swatches.indexOf('default') >= 0, theme.swatches.join(', '));
         });
 
+        //THE LINK GOES FIRST IN `head`, BEFORE ANYTHING style-loader PUT THERE
+        //OR WILL PUT THERE -- and that ordering is the whole reason the kit's
+        //own rules can correct a swatch.
+        //
+        //APPENDED, THE SWATCH COMES LAST and its
+        //`.text-body-secondary { ... !important }` beats ours on source order
+        //alone: same specificity, same importance, later wins. That is how the
+        //active sidebar pill became unreadable on thirteen of the twenty-eight,
+        //which `npm run drive -- --swatches` found and nothing here did.
+        //
+        //ITS OWN SABOTAGE SAID SO by surviving -- the insert was turned into an
+        //append and every check passed.
+        it('puts the swatch before the kit, not after it', function () {
+            var link = document.getElementById('theme-swatch');
+            assert.ok(link, 'there is no swatch link at all');
+
+            //BEFORE THE KIT'S OWN RULES, WHICH IS THE ORDERING THAT MATTERS --
+            //not before every style on the page.
+            //
+            //ASSERTING IT WAS LITERALLY FIRST WAS WRONG, and a full run said so:
+            //../editor's ace injects `<style id="ace-tomorrow-night">` at the
+            //top of head, so the link is second and nothing is broken. A test
+            //that pins an invariant tighter than the invariant fails on a
+            //neighbour doing something reasonable.
+            var kit = [].slice.call(document.head.querySelectorAll('style'))
+                .filter(function (el) { return /is-guarded|--bs-guarded/.test(el.textContent); })[0];
+
+            assert.ok(kit, 'the kit own stylesheet is not in head, so the ordering proves nothing');
+
+            //`DOCUMENT_POSITION_FOLLOWING` is 4: the kit comes AFTER the link,
+            //which is what lets `.text-body-secondary { ... !important }` in the
+            //kit correct a swatch that set the same thing.
+            assert.ok(link.compareDocumentPosition(kit) & 4,
+                'the swatch comes after the kit that corrects it, so it wins on source order alone');
+        });
+
+        //A NAME NOBODY SHIPS FALLS BACK TO `default`, rather than to a link with
+        //nothing behind it: an href that 404s leaves the page wearing whatever
+        //it had, silently, while `swatch` names something that is not on screen.
+        it('refuses a swatch nobody ships, rather than wearing nothing', function () {
+            var was = theme.swatch;
+
+            try {
+                var applied = theme.setSwatch('probe-no-such-swatch');
+
+                assert.equal(applied, 'default', 'it claimed to apply ' + applied);
+                assert.equal(theme.swatch, 'default', 'the name on record is ' + theme.swatch);
+
+                assert.ok(String(document.getElementById('theme-swatch').href)
+                    .indexOf('probe-no-such-swatch') < 0, 'the dead href was set anyway');
+            } finally { theme.setSwatch(was); }
+        });
+
+        //`modeLocked` IS NOT CHECKED HERE, and that is a decision rather than
+        //an omission.
+        //
+        //Proving it needs the window to WEAR a dark-only swatch and be asked
+        //for light -- and this suite shares one live window with every other
+        //test in it. Four of them measure colours, so a swatch changed halfway
+        //through is a page they never asked for: the attempt failed the sidebar
+        //contrast check at 1.51:1, twice, on a state no test had set up.
+        //Restoring it is not a matter of putting the name back either, because
+        //asking for a stylesheet does not remove the one already applied.
+        //
+        //IT IS COVERED WHERE IT COSTS NOTHING TO COVER. `npm run drive --
+        //--swatches` wears all twenty-eight in turn, in a window of its own,
+        //and measures each -- which is where the eight dark-only designs
+        //actually get exercised. A unit test that fights the other tests for
+        //the same window is a worse version of a check that already exists.
+
         it('paints the shell from the body colours, not bootstrap tertiary', function () {
             //the bug this was written for: bg-body-tertiary is only redefined
             //for dark by the dark swatches, so the sidebar stayed pale while
